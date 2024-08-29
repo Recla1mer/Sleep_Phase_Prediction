@@ -127,6 +127,167 @@ def interpolate_signal(signal: list, signal_frequency: float, target_frequency: 
     return interpolated_signal
 
 
+def scale_classification_signal(
+        signal: list, 
+        signal_frequency: float,
+        target_frequency: float
+    ) -> np.ndarray:
+    """
+    This function resamples a classification signal to a target frequency.
+
+    Returns:
+    --------
+    target_signal: np.ndarray
+        The resampled signal.
+    
+    Parameters:
+    -----------
+    signal: list
+        The signal to be resampled.
+    signal_frequency: float
+        The frequency of the input signal.
+    target_frequency: float
+        The frequency to resample the signal to.
+    """
+
+    signal = np.array(signal) # type: ignore
+
+    # Calculate number of datapoints in target signal
+    signal_duration_seconds = len(signal) / signal_frequency
+    datapoints_in_target_signal = round(signal_duration_seconds * target_frequency)
+
+    # Assign time points to each datapoint
+    original_signal_time = [i / signal_frequency for i in range(len(signal))]
+    target_signal_time = [i / target_frequency for i in range(datapoints_in_target_signal)]
+
+    # Initialize target signal
+    target_signal = np.empty((0), signal.dtype) # type: ignore
+
+    # Assign values to target signal (use nearest value in original signal)
+    for time_point in target_signal_time:
+        nearest_index = np.argmin(np.abs(np.array(original_signal_time) - time_point))
+        target_signal = np.append(target_signal, signal[nearest_index])
+    
+    return target_signal
+
+
+def scale_continuous_signal(
+        signal: list, 
+        signal_frequency: float,
+        target_frequency: float
+    ) -> np.ndarray:
+    """
+    This function resamples a continuous signal to a target frequency.
+
+    Fun Fact: After testing it, I realized that this function is the same as 'interpolate_signal'.
+
+    Returns:
+    --------
+    target_signal: np.ndarray
+        The resampled signal.
+    
+    Parameters:
+    -----------
+    signal: list
+        The signal to be resampled.
+    signal_frequency: float
+        The frequency of the input signal.
+    target_frequency: float
+        The frequency to resample the signal to.
+    """
+
+    signal = np.array(signal) # type: ignore
+    signal_data_type = signal.dtype # type: ignore
+
+    # Calculate number of datapoints in target signal
+    signal_duration_seconds = len(signal) / signal_frequency
+    datapoints_in_target_signal = round(signal_duration_seconds * target_frequency)
+
+    # Assign time points to each datapoint
+    original_signal_time = [i / signal_frequency for i in range(len(signal))]
+    target_signal_time = [i / target_frequency for i in range(datapoints_in_target_signal)]
+
+    # Initialize target signal
+    target_signal = np.empty((0), signal.dtype) # type: ignore
+
+    for time in target_signal_time:
+        index_before = -1
+        index_after = -1
+        same_value_found = False
+
+        for i in range(len(original_signal_time)):
+            if original_signal_time[i] < time:
+                index_before = i
+            if original_signal_time[i] == time:
+                target_signal = np.append(target_signal, signal[i])
+                same_value_found = True
+                break
+            if original_signal_time[i] > time:
+                index_after = i
+                break
+        
+        if same_value_found:
+            continue
+        
+        if index_before == -1:
+            # Case: any signal_time > target_time -> target_time is before start of signal
+            target_signal = np.append(target_signal, signal[0])
+        elif index_after == -1:
+            # Case: any signal_time < target_time -> target_time is after end of signal
+            target_signal = np.append(target_signal, signal[-1])
+        else:
+            # Case: target_time is between two signal_time points
+            time_before = original_signal_time[index_before]
+            time_after = original_signal_time[index_after]
+            value_before = signal[index_before]
+            value_after = signal[index_after]
+
+            target_value = value_before + (value_after - value_before) * ((time - time_before) / (time_after - time_before))
+            target_signal = np.append(target_signal, target_value)
+        
+        if signal_data_type == int:
+            target_signal = np.round(target_signal).astype(int)
+    
+    return target_signal
+
+
+def scale_signal(
+        signal: list, 
+        signal_frequency: float,
+        target_frequency: float,
+        signal_type: str = "feature"
+    ) -> np.ndarray: # type: ignore
+    """
+    This function resamples a signal to a target frequency.
+
+    Returns:
+    --------
+    target_signal: np.ndarray
+        The resampled signal.
+    
+    Parameters:
+    -----------
+    signal: list
+        The signal to be resampled.
+    signal_frequency: float
+        The frequency of the input signal.
+    target_frequency: float
+        The frequency to resample the signal to.
+    signal_type: str
+        The type of signal. Either 'feature' or 'target'.
+    """
+
+    signal = np.array(signal) # type: ignore
+
+    if signal_frequency == target_frequency:
+        return signal # type: ignore
+    
+    if signal_type == "feature":
+        return interpolate_signal(signal, signal_frequency, target_frequency)
+    elif signal_type == "target":
+        return scale_classification_signal(signal, signal_frequency, target_frequency)
+
+
 def calculate_optimal_shift_length(
         signal_length: int, 
         desired_length: int, 
@@ -207,6 +368,7 @@ def split_long_signal(
         signal: list, 
         sampling_frequency: int,
         target_frequency: int,
+        signal_type: str = "feature",
         nn_signal_duration_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
         absolute_shift_deviation_seconds: int = 1800
@@ -235,6 +397,8 @@ def split_long_signal(
         The frequency of the input signal.
     target_frequency: int
         The frequency to resample the signal to. Frequency of signal in the neural network.
+    signal_type: str
+        The type of signal. Either 'feature' or 'target'.
     
     nn_signal_duration_seconds: int
         The duration of the signal that will be passed to the neural network.
@@ -254,10 +418,11 @@ def split_long_signal(
 
     # Scale number of datapoints in signal if sampling frequency is not equal to target frequency
     if sampling_frequency != target_frequency:
-        signal = interpolate_signal(
+        signal = scale_signal(
             signal = signal, # type: ignore
-            signal_frequency = sampling_frequency, 
-            target_frequency = target_frequency
+            signal_frequency = sampling_frequency,
+            target_frequency = target_frequency,
+            signal_type = signal_type
             )
         
     # Calculate number of datapoints from signal length in seconds
@@ -380,6 +545,7 @@ def reshape_signal(
         window_duration_seconds: int = 120, 
         overlap_seconds: int = 90,
         signal_type: str = "feature",
+        priority_order: list = [0, 1, 2, 3, 4, 5],
         nn_signal_duration_seconds: int = 10*3600,
     ) -> np.ndarray:
     """
@@ -427,10 +593,11 @@ def reshape_signal(
 
     # Scale number of datapoints in signal if sampling frequency is not equal to target frequency
     if sampling_frequency != target_frequency:
-        signal = interpolate_signal(
+        signal = scale_signal(
             signal = signal, # type: ignore
-            signal_frequency = sampling_frequency, 
-            target_frequency = target_frequency
+            signal_frequency = sampling_frequency,
+            target_frequency = target_frequency,
+            signal_type = signal_type
             )
         
     # Calculate number of datapoints from signal length in seconds
@@ -464,7 +631,8 @@ def reshape_signal(
             signal = signal, # type: ignore
             datapoints_per_window = datapoints_per_window,
             window_overlap = window_overlap, 
-            signal_type = signal_type
+            signal_type = signal_type,
+            priority_order = priority_order
             )
     
     # check if signal_windows has the correct shape
@@ -632,6 +800,7 @@ if __name__ == "__main__":
     #     output = model(ecg, mad)
     #     print("Output shape:", output.shape)
 
+"""
 length = 1000
 frequency = 1 / 30
 target_freq = 1 / 30
@@ -654,3 +823,4 @@ print(f"Shape of new array: {reshaped_array.shape}")
 print(f" Datapoints in new array: {reshaped_array.shape[0]}")
 print(f"Unique Datapoints in new array: {120 * target_freq + (reshaped_array.shape[0] - 1) * (120 - 90) * target_freq}")
 print(f" Datapoints in scaled original array: {length/frequency*target_freq}")
+"""
