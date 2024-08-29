@@ -127,86 +127,6 @@ def interpolate_signal(signal: list, signal_frequency: float, target_frequency: 
     return interpolated_signal
 
 
-def signal_to_windows(
-        signal: list,   
-        datapoints_per_window: int,
-        window_overlap: int,
-        signal_type: str = "feature",
-        priority_order: list = [0, 1, 2, 3, 4, 5]
-    ) -> np.ndarray:
-    """
-    This function splits a signal into windows of length 'datapoints_per_window' that overlap by 
-    'window_overlap'.
-
-    Returns:
-    --------
-    windows: np.ndarray
-        The signal split into overlapping windows.
-    
-    Parameters:
-    -----------
-    signal: np.ndarray
-        The signal to be split into windows.
-    datapoints_per_window: int
-        The number of datapoints in each window.
-    window_overlap: int
-        The number of overlapping datapoints between windows.
-    signal_type: str
-        The type of signal. Either 'feature' or 'target'.
-            If 'feature':   The windows will be 2D arrays that will contain the same datapoints as the signal,
-                            works like described above.
-            If 'target':    The signal is assumed to contain classification labels. Each window will be reduced
-                            to represent a single value (i.e., the 'label' that was most common in the window).
-                            The returned windows will therefore be 1D arrays.
-    priority_order: list
-        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target'.
-    
-    Attention: signal_type = 'target' is a very specific transformation, only useful for our classification task.
-    """
-
-    signal = np.array(signal) # type: ignore
-    step_size = datapoints_per_window - window_overlap
-
-    # Check if signal_type is valid
-    if signal_type not in ["feature", "target"]:
-        raise ValueError("Parameter 'mode' must be either 'signal' or 'target'.")
-
-    # Initialize windows
-    if signal_type == "feature":
-        windows = np.empty((0, datapoints_per_window), signal.dtype) # type: ignore
-    elif signal_type == "target":
-        windows = np.empty((0), signal.dtype) # type: ignore
-    
-    # Split signal into windows
-    for i in range(0, len(signal)-datapoints_per_window+1, step_size):
-        this_window = signal[i:i+datapoints_per_window]
-        
-        if signal_type == "feature":
-            windows = np.append(windows, [this_window], axis=0)
-
-        elif signal_type == "target":
-            # collect unique labels and their counts
-            different_labels, label_counts = np.unique(this_window, return_counts=True)
-
-            # remove labels that did not appear the most
-            max_count = max(label_counts)
-            most_common_labels = different_labels[label_counts == max_count]
-
-            # prioritize labels in priority_order
-            not_appended = True
-            for class_label in priority_order:
-                if class_label in most_common_labels:
-                    not_appended = False
-                    windows = np.append(windows, class_label)
-                    break
-            
-            if not_appended:
-                print(f"\nWARNING: No label found in priority order. Appending first label. Better terminate and recheck priority_order.\n Labels: {most_common_labels}")
-                windows = np.append(windows, most_common_labels[0])
-    
-    return windows
-
-
 def calculate_optimal_shift_length(
         signal_length: int, 
         desired_length: int, 
@@ -370,6 +290,86 @@ def split_long_signal(
     splitted_signals = np.append(splitted_signals, [signal[-number_nn_datapoints:]], axis=0)
     
     return splitted_signals, optimal_shift_length
+
+
+def signal_to_windows(
+        signal: list,   
+        datapoints_per_window: int,
+        window_overlap: int,
+        signal_type: str = "feature",
+        priority_order: list = [0, 1, 2, 3, 4, 5]
+    ) -> np.ndarray:
+    """
+    This function splits a signal into windows of length 'datapoints_per_window' that overlap by 
+    'window_overlap'.
+
+    Returns:
+    --------
+    windows: np.ndarray
+        The signal split into overlapping windows.
+    
+    Parameters:
+    -----------
+    signal: np.ndarray
+        The signal to be split into windows.
+    datapoints_per_window: int
+        The number of datapoints in each window.
+    window_overlap: int
+        The number of overlapping datapoints between windows.
+    signal_type: str
+        The type of signal. Either 'feature' or 'target'.
+            If 'feature':   The windows will be 2D arrays that will contain the same datapoints as the signal,
+                            works like described above.
+            If 'target':    The signal is assumed to contain classification labels. Each window will be reduced
+                            to represent a single value (i.e., the 'label' that was most common in the window).
+                            The returned windows will therefore be 1D arrays.
+    priority_order: list
+        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target'.
+    
+    Attention: signal_type = 'target' is a very specific transformation, only useful for our classification task.
+    """
+
+    signal = np.array(signal) # type: ignore
+    step_size = datapoints_per_window - window_overlap
+
+    # Check if signal_type is valid
+    if signal_type not in ["feature", "target"]:
+        raise ValueError("Parameter 'mode' must be either 'signal' or 'target'.")
+
+    # Initialize windows
+    if signal_type == "feature":
+        windows = np.empty((0, datapoints_per_window), signal.dtype) # type: ignore
+    elif signal_type == "target":
+        windows = np.empty((0), signal.dtype) # type: ignore
+    
+    # Split signal into windows
+    for i in range(0, len(signal)-datapoints_per_window+1, step_size):
+        this_window = signal[i:i+datapoints_per_window]
+        
+        if signal_type == "feature":
+            windows = np.append(windows, [this_window], axis=0)
+
+        elif signal_type == "target":
+            # collect unique labels and their counts
+            different_labels, label_counts = np.unique(this_window, return_counts=True)
+
+            # remove labels that did not appear the most
+            max_count = max(label_counts)
+            most_common_labels = different_labels[label_counts == max_count]
+
+            # prioritize labels in priority_order
+            not_appended = True
+            for class_label in priority_order:
+                if class_label in most_common_labels:
+                    not_appended = False
+                    windows = np.append(windows, class_label)
+                    break
+            
+            if not_appended:
+                print(f"\nWARNING: No label found in priority order. Appending first label. Better terminate and recheck priority_order.\n Labels: {most_common_labels}")
+                windows = np.append(windows, most_common_labels[0])
+    
+    return windows
 
 
 def reshape_signal(
