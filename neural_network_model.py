@@ -1,5 +1,190 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+from torchvision.transforms import ToTensor
+
+
+class CustomArrayDataset(Dataset):
+    def __init__(self, ecg_data, mad_data, labels, transform=None):
+        self.ecg_data = ecg_data
+        self.mad_data = mad_data
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.ecg_data)
+
+    def __getitem__(self, idx):
+        ecg_sample = self.ecg_data[idx]
+        mad_sample = self.mad_data[idx]
+        labels = self.labels[idx]
+
+        if self.transform:
+            ecg_sample = self.transform(ecg_sample)
+            mad_sample = self.transform(mad_sample)
+
+        return ecg_sample, mad_sample, labels
+
+
+# Example usage
+if __name__ == "__main__":
+    # Sample ECG data: 3D array (e.g., 2 nights, each with 5 windows, each window with a 1D array of shape (6,))
+    ecg_data = np.array([[[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                          [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+                          [13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
+                          [19.0, 20.0, 21.0, 22.0, 23.0, 24.0],
+                          [25.0, 26.0, 27.0, 28.0, 29.0, 30.0]],
+                         [[31.0, 32.0, 33.0, 34.0, 35.0, 36.0],
+                          [37.0, 38.0, 39.0, 40.0, 41.0, 42.0],
+                          [43.0, 44.0, 45.0, 46.0, 47.0, 48.0],
+                          [49.0, 50.0, 51.0, 52.0, 53.0, 54.0],
+                          [55.0, 56.0, 57.0, 58.0, 59.0, 60.0]]])
+
+    # Sample MAD data: 3D array (e.g., 2 nights, each with 5 windows, each window with a 1D array of shape (3,))
+    mad_data = np.array([[[0.1, 0.2, 0.3],
+                          [0.4, 0.5, 0.6],
+                          [0.7, 0.8, 0.9],
+                          [1.0, 1.1, 1.2],
+                          [1.3, 1.4, 1.5]],
+                         [[1.6, 1.7, 1.8],
+                          [1.9, 2.0, 2.1],
+                          [2.2, 2.3, 2.4],
+                          [2.5, 2.6, 2.7],
+                          [2.8, 2.9, 3.0]]])
+
+    # Corresponding labels for each window (e.g., 2 nights, each with 5 windows, each window with 1 label)
+    labels = torch.tensor([[0, 1, 0, 1, 0],
+                           [1, 0, 1, 0, 1]])
+
+    # Create dataset
+    dataset = CustomArrayDataset(ecg_data, mad_data, labels, transform=ToTensor())
+
+    # Create DataLoader
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+
+    # for batch, (ecg, mad, y) in enumerate(dataloader):
+    #     # print shape of data and labels:
+    #     print(f"Batch {batch}:")
+    #     print("ECG Data:", ecg)
+    #     print("MAD Data:", mad)
+    #     print("Labels:", y)
+    #     print("ECG Data shape:", ecg.shape)
+    #     print("MAD Data shape:", mad.shape)
+    #     print("Labels shape:", y.shape)
+
+
+
+
+    # for batch, (ecg, mad, y) in enumerate(dataloader):
+    #     print(f"Batch {batch}:")
+    #     print("ECG Data:", ecg)
+    #     print("MAD Data:", mad)
+    #     print("Labels:", y)
+    #     print("ECG Data shape:", ecg.shape)
+    #     print("MAD Data shape:", mad.shape)
+    #     print("Labels shape:", y.shape)
+
+    #     output = model(ecg, mad)
+    #     print("Output shape:", output.shape)
+
+
+        
+    # # Sample ECG and MAD data
+    # ecg_data = np.array([[[31.0, 32.0, 33.0, 34.0, 35.0, 36.0],
+    #                       [37.0, 38.0, 39.0, 40.0, 41.0, 42.0],
+    #                       [43.0, 44.0, 45.0, 46.0, 47.0, 48.0],
+    #                       [49.0, 50.0, 51.0, 52.0, 53.0, 54.0],
+    #                       [55.0, 56.0, 57.0, 58.0, 59.0, 60.0]],
+    #                      [[61.0, 62.0, 63.0, 64.0, 65.0, 66.0],
+    #                       [67.0, 68.0, 69.0, 70.0, 71.0, 72.0],
+    #                       [73.0, 74.0, 75.0, 76.0, 77.0, 78.0],
+    #                       [79.0, 80.0, 81.0, 82.0, 83.0, 84.0],
+    #                       [85.0, 86.0, 87.0, 88.0, 89.0, 90.0]]])
+
+    # mad_data = np.array([[[0.1, 0.2, 0.3],
+    #                       [0.4, 0.5, 0.6],
+    #                       [0.7, 0.8, 0.9],
+    #                       [1.0, 1.1, 1.2],
+    #                       [1.3, 1.4, 1.5]],
+    #                      [[1.6, 1.7, 1.8],
+    #                       [1.9, 2.0, 2.1],
+    #                       [2.2, 2.3, 2.4],
+    #                       [2.5, 2.6, 2.7],
+    #                       [2.8, 2.9, 3.0]]])
+
+    # labels = torch.tensor([[0, 1, 0, 1, 0],
+    #                        [1, 0, 1, 0, 1]])
+
+    # class CustomArrayDataset(Dataset):
+    #     def __init__(self, ecg_data, mad_data, labels, transform=None):
+    #         self.ecg_data = ecg_data
+    #         self.mad_data = mad_data
+    #         self.labels = labels
+    #         self.transform = transform
+
+    #     def __len__(self):
+    #         return len(self.ecg_data)
+
+    #     def __getitem__(self, idx):
+    #         ecg = self.ecg_data[idx]
+    #         mad = self.mad_data[idx]
+    #         label = self.labels[idx]
+    #         if self.transform:
+    #             ecg = self.transform(ecg)
+    #             mad = self.transform(mad)
+    #         return ecg, mad, label
+
+    # class ToTensor:
+    #     def __call__(self, sample):
+    #         return torch.tensor(sample, dtype=torch.float32)
+
+    # dataset = CustomArrayDataset(ecg_data, mad_data, labels, transform=ToTensor())
+
+    # dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+
+    # model = SleepStageModel()
+    # criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # for batch, (ecg, mad, y) in enumerate(dataloader):
+    #     print(f"Batch {batch}:")
+    #     print("ECG Data:", ecg)
+    #     print("MAD Data:", mad)
+    #     print("Labels:", y)
+    #     print("ECG Data shape:", ecg.shape)
+    #     print("MAD Data shape:", mad.shape)
+    #     print("Labels shape:", y.shape)
+
+    #     output = model(ecg, mad)
+    #     print("Output shape:", output.shape)
+
+"""
+length = 1000
+frequency = 1 / 30
+target_freq = 1 / 30
+
+import random
+
+random_array = [random.randint(0, 5) for _ in range(length)]
+reshaped_array = reshape_signal(
+    signal = random_array, # type: ignore
+    sampling_frequency = frequency,
+    target_frequency = target_freq, 
+    number_windows = 1197, 
+    window_duration_seconds = 120, 
+    overlap_seconds = 90,
+    signal_type = "target",
+    nn_signal_duration_seconds = 10*3600,
+    )
+
+print(f"Shape of new array: {reshaped_array.shape}")
+print(f" Datapoints in new array: {reshaped_array.shape[0]}")
+print(f"Unique Datapoints in new array: {120 * target_freq + (reshaped_array.shape[0] - 1) * (120 - 90) * target_freq}")
+print(f" Datapoints in scaled original array: {length/frequency*target_freq}")
+"""
 
 
 # conv, relu, conv, relu, pool
