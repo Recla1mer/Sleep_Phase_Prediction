@@ -1,6 +1,13 @@
 import numpy as np
 
 
+"""
+
+Section 1: Operations on Signals
+
+"""
+
+
 def calculate_overlap(signal_length: int, number_windows: int, datapoints_per_window: int) -> float:
     """
     Calculate the overlap between windows of length 'datapoints_per_window' in a signal of
@@ -250,7 +257,7 @@ def scale_signal(
         signal: list, 
         signal_frequency: float,
         target_frequency: float,
-        signal_type: str = "feature"
+        signal_type: str = "continuous"
     ) -> np.ndarray: # type: ignore
     """
     This function resamples a signal to a target frequency.
@@ -269,7 +276,7 @@ def scale_signal(
     target_frequency: float
         The frequency to resample the signal to.
     signal_type: str
-        The type of signal. Either 'feature' or 'target'.
+        The type of signal. Either 'continuous' or 'classification'.
     """
 
     signal = np.array(signal) # type: ignore
@@ -277,9 +284,9 @@ def scale_signal(
     if signal_frequency == target_frequency:
         return signal # type: ignore
     
-    if signal_type == "feature":
+    if signal_type == "continuous":
         return interpolate_signal(signal, signal_frequency, target_frequency)
-    elif signal_type == "target":
+    elif signal_type == "classification":
         return scale_classification_signal(signal, signal_frequency, target_frequency)
 
 
@@ -363,7 +370,6 @@ def split_long_signal(
         signal: list, 
         sampling_frequency: int,
         target_frequency: int,
-        signal_type: str = "feature",
         nn_signal_duration_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
         absolute_shift_deviation_seconds: int = 1800
@@ -373,8 +379,7 @@ def split_long_signal(
     length 'nn_signal_duration_seconds'. The signal will only be shifted by a certain amount though, to
     create more data.
 
-    Attention:  If sampling_frequency is not equal to target_frequency, the signal will be resampled to the
-                target frequency, before splitting.
+    Attention:  'sampling_frequency' must be equal to 'target_frequency'
     
     Returns:
     --------
@@ -408,17 +413,10 @@ def split_long_signal(
         raise ValueError("The absolute shift deviation must be smaller than the wanted shift length.")
     if absolute_shift_deviation_seconds < 0:
         raise ValueError("The absolute shift deviation must be a positive number.")
+    if sampling_frequency != target_frequency:
+        raise ValueError("Signal must be resampled to target frequency before splitting.")
 
     signal = np.array(signal) # type: ignore
-
-    # Scale number of datapoints in signal if sampling frequency is not equal to target frequency
-    if sampling_frequency != target_frequency:
-        signal = scale_signal(
-            signal = signal, # type: ignore
-            signal_frequency = sampling_frequency,
-            target_frequency = target_frequency,
-            signal_type = signal_type
-            )
         
     # Calculate number of datapoints from signal length in seconds
     number_nn_datapoints = int(nn_signal_duration_seconds * target_frequency)
@@ -450,6 +448,52 @@ def split_long_signal(
     splitted_signals = np.append(splitted_signals, [signal[-number_nn_datapoints:]], axis=0)
     
     return splitted_signals, optimal_shift_length
+
+
+def split_signals_within_dictionary(
+        data_dict: dict,
+        id_key: str,
+        valid_signal_keys: list,
+        signal_frequencies: list,
+        signal_target_frequencies: list,
+        nn_signal_duration_seconds: int,
+        wanted_shift_length_seconds: int,
+        absolute_shift_deviation_seconds: int):
+    """
+    Split signals within a dictionary of signals.
+    """
+    splitted_signals = list()
+
+    # split signals if they are too long
+    for signal_key_index in range(0, len(valid_signal_keys)):
+        signal_key = valid_signal_keys[signal_key_index]
+
+        this_splitted_signal, this_shift_length = split_long_signal(
+            signal = data_dict[signal_key], # type: ignore
+            sampling_frequency = signal_frequencies[signal_key_index],
+            target_frequency = signal_target_frequencies[signal_key_index],
+            nn_signal_duration_seconds = nn_signal_duration_seconds,
+            wanted_shift_length_seconds = wanted_shift_length_seconds,
+            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
+            )
+        
+        splitted_signals.append(this_splitted_signal)
+        this_shift_length_seconds = int(this_shift_length / signal_target_frequencies[signal_key_index])
+        del this_splitted_signal
+
+    # create new dictionaries for splitted signals
+    new_dictionaries_for_splitted_signals = list()
+    for i in range(len(splitted_signals[0][0])):
+        splitted_data_dict = dict()
+        for key in data_dict:
+            if key in valid_signal_keys:
+                splitted_data_dict[key] = splitted_signals[valid_signal_keys.index(key)][i]
+            else:
+                splitted_data_dict[key] = data_dict[key]
+        splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_{this_shift_length_seconds}s_x{i}"
+        new_dictionaries_for_splitted_signals.append(splitted_data_dict)
+    
+    return new_dictionaries_for_splitted_signals
 
 
 def signal_to_windows(
@@ -532,7 +576,7 @@ def signal_to_windows(
     return windows
 
 
-def reshape_signal(
+def reshape_signal_to_overlapping_windows(
         signal: list, 
         sampling_frequency: float,
         target_frequency: float, 
@@ -560,8 +604,8 @@ def reshape_signal(
         The signal to be split into windows.
     
     -----
-    If signal was recorded with a different frequency than the neural network expects, the signal will be
-    resampled to the target frequency, using following parameters:
+    Attention: 'sampling_frequency' must match 'target_frequency' before transforming is useful. 
+    Check uses following parameters:
     -----
 
     sampling_frequency: int
@@ -602,15 +646,6 @@ def reshape_signal(
     """
     
     signal = np.array(signal) # type: ignore
-
-    # Scale number of datapoints in signal if sampling frequency is not equal to target frequency
-    if sampling_frequency != target_frequency:
-        signal = scale_signal(
-            signal = signal, # type: ignore
-            signal_frequency = sampling_frequency,
-            target_frequency = target_frequency,
-            signal_type = signal_type
-            )
         
     # Calculate number of datapoints from signal length in seconds
     number_nn_datapoints = nn_signal_duration_seconds * target_frequency
@@ -618,6 +653,9 @@ def reshape_signal(
     window_overlap = overlap_seconds * target_frequency
     
     # Check parameters
+    if sampling_frequency != target_frequency:
+        raise ValueError("Signal must be resampled to target frequency before reshaping.")
+    
     if int(number_nn_datapoints) != number_nn_datapoints:
         raise ValueError("Number of datapoints must be an integer. Choose 'nn_signal_duration_seconds' and 'target_frequency' accordingly.")
     number_nn_datapoints = int(number_nn_datapoints)
@@ -701,3 +739,415 @@ def alter_slp_labels(
         altered_labels = altered_labels.astype(int)
     
     return altered_labels
+
+
+"""
+
+Section 2: Managing Data
+
+"""
+
+import pickle
+import os
+import inspect
+
+def save_to_pickle(data, file_name):
+    """
+    Save data to a pickle file, overwriting the file if it already exists.
+
+    ARGUMENTS:
+    --------------------------------
+    data: any
+        data to be saved
+    file_name: str
+        path to the pickle file
+    
+    RETURNS:
+    --------------------------------
+    None
+    """
+    with open(file_name, "wb") as f:
+        pickle.dump(data, f)
+
+
+def append_to_pickle(data, file_name):
+    """
+    Append data to a pickle file, without deleting previous data.
+
+    ARGUMENTS:
+    --------------------------------
+    data: any
+        data to be saved
+    file_name: str
+        path to the pickle file
+    
+    RETURNS:
+    --------------------------------
+    None
+    """
+    with open(file_name, "ab") as f:
+        pickle.dump(data, f)
+
+
+def load_from_pickle(file_name: str):
+    """
+    Load data from a pickle file as a generator.
+
+    ARGUMENTS:
+    --------------------------------
+    file_name: str
+        path to the pickle file
+    key: str
+        key of the data to be loaded
+    
+    RETURNS:
+    --------------------------------
+    any
+        data from the pickle file
+    """
+    # with open(file_name, "rb") as f:
+    #     data = pickle.load(f)
+    # return data
+    with open(file_name, "rb") as f:
+        while True:
+            try:
+                yield pickle.load(f)
+            except EOFError:
+                break
+
+
+def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
+    """
+    Find a path that does not exist yet by adding a number to the end of the path.
+
+    ARGUMENTS:
+    --------------------------------
+    path_without_file_type: str
+        path without the file type
+    file_type: str
+        file type of the file to be saved
+    
+    RETURNS:
+    --------------------------------
+    str
+        path that does not exist yet
+    """
+    if not os.path.exists(f"{path_without_file_type}.{file_type}"):
+        return f"{path_without_file_type}.{file_type}"
+    i = 0
+    while os.path.exists(f"{path_without_file_type}_{i}.{file_type}"):
+        i += 1
+    return f"{path_without_file_type}_{i}.{file_type}"
+
+
+class DataManager:
+    # Define class variables
+    valid_datapoint_keys = ["ID", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency"]
+    signal_keys = ["RRI", "MAD", "SLP"]
+    
+    default_file_info = dict()
+    default_file_info["RRI_frequency"] = 4
+    default_file_info["MAD_frequency"] = 1
+    default_file_info["SLP_frequency"] = 1/30
+    default_file_info["signal_length_seconds"] = 36000
+    default_file_info["wanted_shift_length_seconds"] = 3600
+    default_file_info["absolute_shift_deviation_seconds"] = 1800
+    default_file_info["contained_data"] = "main" # main (means data was not divided yet), train, validation, test
+    default_file_info["main_file_path"] = "unassigned"
+    default_file_info["signal_in_windows"] = False
+    default_file_info["number_windows"] = 1197
+    default_file_info["window_duration_seconds"] = 120
+    default_file_info["overlap_seconds"] = 90
+
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+        # load general information from file
+        file_generator = load_from_pickle(self.file_path)
+        self.file_info = next(file_generator)
+        del file_generator
+
+    # Getter and setter for file_path
+    @property
+    def file_path(self):
+        return self._file_path
+
+    @file_path.setter
+    def file_path(self, value):
+        self._file_path = value
+
+        # Check if file exists, if not create it and save default file information
+        if not os.path.exists(self._file_path):
+            save_to_pickle(data = self.default_file_info, file_name = self._file_path)
+    
+
+    def save_data(self, new_data, overwrite_id = True):
+        """
+        Save data to the file. If the ID already exists in the file, the existing data will be overwritten
+        with new values, if allowed.
+        """
+
+        # INSPECT NEW DATAPOINT:
+        # ----------------------
+
+        # Check if new_data is a dictionary
+        if not isinstance(new_data, dict):
+            raise ValueError("The datapoint must be a dictionary!")
+        
+        # Check ID key was provided
+        if "ID" not in new_data:
+            raise ValueError("The ID key: \"ID\" must be provided in the datapoint.")
+        
+        # Check if ID key is misleading
+        if new_data["ID"] in self.valid_datapoint_keys:
+            raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
+        
+        # Check if key in new_data is unknown
+        for new_data_key in new_data:
+            if new_data_key not in self.valid_datapoint_keys:
+                raise ValueError(f"Unknown key in datapoint: {new_data_key}")
+        
+        # Check if frequency keys are provided if signal keys are provided
+        for signal_key in self.signal_keys:
+            if signal_key in new_data and f"{signal_key}_frequency" not in new_data:
+                raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_key}_frequency\" !")
+            
+        
+        # ALTER ENTRIES IN NEW DATAPOINT:
+        # -------------------------------
+
+        # make sure sampling frequency matches the one in the file, rescale if necessary
+        for signal_key in self.signal_keys:
+            if signal_key in new_data and new_data[f"{signal_key}_frequency"] != self.file_info[f"{signal_key}_frequency"]:
+                this_signal_type = "classification" if signal_key == "SLP" else "continuous"
+                new_data[signal_key] = scale_signal(
+                    signal = new_data[signal_key],
+                    signal_frequency = new_data[f"{signal_key}_frequency"],
+                    target_frequency = self.file_info[f"{signal_key}_frequency"],
+                    signal_type = this_signal_type
+                    )
+                del this_signal_type
+
+        # make sure signal length is not longer than the one in the file
+        splitted_signals = list()
+        splitted_signal_keys = list()
+
+        # split signals if they are too long
+        for signal_key in self.signal_keys:
+            if signal_key in new_data:
+                this_splitted_signal, this_shift_length = split_long_signal(
+                        signal = new_data[signal_key], # type: ignore
+                        sampling_frequency = new_data[f"{signal_key}_frequency"],
+                        target_frequency = self.file_info[f"{signal_key}_frequency"],
+                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
+                        wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"],
+                        absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
+                        )
+                splitted_signals.append(this_splitted_signal)
+                splitted_signal_keys.append(signal_key)
+                del this_splitted_signal
+
+        # create new dictionaries for splitted signals
+        new_dictionaries_for_splitted_signals = list()
+        for i in range(len(splitted_signals[0][0])):
+            splitted_data_dict = dict()
+            for key in new_data:
+                if key in splitted_signal_keys:
+                    splitted_data_dict[key] = splitted_signals[splitted_signal_keys.index(key)][0][i]
+                else:
+                    splitted_data_dict[key] = new_data[key]
+            new_dictionaries_for_splitted_signals.append(splitted_data_dict)
+        
+
+        
+        # Remove frequency keys from new_data
+        if "RRI_frequency" in new_data:
+            del new_data["RRI_frequency"]
+        if "MAD_frequency" in new_data:
+            del new_data["MAD_frequency"]
+        if "SLP_frequency" in new_data:
+            del new_data["SLP_frequency"]
+        
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        overwrite_denied = False
+        not_appended = True
+
+        # Check if ID already exists in the data file, then overwrite keys if allowed
+        for data_point in file_generator:
+            if data_point["ID"] == new_data["ID"]:
+                not_appended = False
+                if overwrite_id:
+                    new_data_point = dict()
+                    for possible_key in self.valid_datapoint_keys:
+                        if possible_key in new_data:
+                            new_data_point[possible_key] = new_data[possible_key]
+                        elif possible_key in data_point:
+                            new_data_point[possible_key] = data_point[possible_key]
+                else:
+                    new_data_point = data_point
+                    overwrite_denied = True
+            else:
+                new_data_point = data_point
+            
+            # Append data point to the working file
+            append_to_pickle(data = new_data_point, file_name = working_file_path)
+        
+        # Append new data point if ID was not found
+        if not_appended:
+            append_to_pickle(data = new_data, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        if overwrite_denied:
+            raise ValueError("ID already existed in the data file and Overwrite was denied. Data was not saved.")
+
+
+    def load_data(self, id):
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        id_found = False
+        for data_point in file_generator:
+            if data_point["ID"] == id:
+                id_found = True
+                return data_point
+        
+        del file_generator
+        
+        if not id_found:
+            raise ValueError(f"ID {id} not found in the data file")
+    
+
+    def __len__(self):
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        count = 0
+        for _ in file_generator:
+            count += 1
+        
+        del file_generator
+
+        return count
+    
+
+    def __contains__(self, id):
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        id_found = False
+        for data_point in file_generator:
+            if data_point["ID"] == id:
+                id_found = True
+                break
+        
+        del file_generator
+
+        return id_found
+    
+
+    def __iter__(self):
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        for data_point in file_generator:
+            yield data_point
+        
+        del file_generator
+    
+
+    def __getitem__(self, key):        
+
+        if key in self.valid_datapoint_keys:
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
+
+            values_for_key_from_all_data_points = list()
+            count_data_points_missing_key = 0
+
+            for data_point in file_generator:
+                if key in data_point:
+                    values_for_key_from_all_data_points.append(data_point[key])
+                else:
+                    count_data_points_missing_key += 1
+            
+            del file_generator
+
+            if count_data_points_missing_key > 0:
+                print(f"Attention: {count_data_points_missing_key} data points are missing the key {key}")
+            
+            return values_for_key_from_all_data_points
+
+
+# shhs_data_manager = DataManager(file_path = "messing_around.pkl")
+# shhs_data_manager = DataManager(file_path = "messing_around_2.pkl")
+
+#raise SystemExit
+
+# shhs_data_manager.save_data(new_data = {"ID": 1, "RRI": [1, 2, 3], "MAD": [5, 6, 7]}, overwrite_id = True)
+# shhs_data_manager.save_data(new_data = {"ID": 2, "RRI": [2, 3, 4], "MAD": [6, 7, 8]}, overwrite_id = True)
+# shhs_data_manager.save_data(new_data = {"ID": 3, "RRI": [3, 4, 5], "MAD": [7, 8, 9]}, overwrite_id = True)
+
+"""
+print(len(shhs_data_manager))
+
+for data_point in shhs_data_manager:
+    print(data_point)
+
+print(shhs_data_manager.load_data(id = 2))
+
+print(shhs_data_manager["RRI"])
+
+print(shhs_data_manager['1'])
+
+# let getitem retrieve also ids
+# change so that sampling frequency must always be the same
+# maybe create first dictionary that holds information like sampling frequency, etc.
+# which is not transformable by the user
+import inspect
+
+class DataManager:
+    _instance_registry = {}
+
+    def __init__(self, file_path):
+        self._file_path = file_path
+        self._register_instance()
+
+    def _register_instance(self):
+        # Get the name of the variable assigned to this instance
+        frame = inspect.currentframe().f_back
+        variable_name = None
+        for name, value in frame.f_locals.items():
+            if value is self:
+                variable_name = name
+                break
+
+        if variable_name:
+            if variable_name in DataManager._instance_registry:
+                raise ValueError(f"Variable '{variable_name}' is already assigned to an instance of DataManager.")
+            DataManager._instance_registry[variable_name] = self
+
+# Example usage:
+try:
+    dm1 = DataManager(file_path="file1.pkl")
+    dm1 = DataManager(file_path="file2.pkl")  # This will raise a ValueError
+except ValueError as e:
+    print(e)
+
+try:
+    dm2 = DataManager(file_path="file3.pkl")
+except ValueError as e:
+    print(e)
+"""
