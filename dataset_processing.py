@@ -460,7 +460,39 @@ def split_signals_within_dictionary(
         wanted_shift_length_seconds: int,
         absolute_shift_deviation_seconds: int):
     """
-    Split signals within a dictionary of signals.
+    You might handle with data where multiple signals are stored in a dictionary. If those signals are too long,
+    they all need to be split, using 'split_long_signal'. After splitting, you have more datapoints than before, 
+    for which you need to create new dictionaries with different ID's.
+
+    This function splits all signals in a dictionary that are too long and creates new dictionaries for each
+    splitted signal with a unique ID.
+
+    ATTENTION: The order of the signals in 'valid_signal_keys' must be the same as the order of the frequencies
+    in 'signal_frequencies' and 'signal_target_frequencies'.
+
+    Returns:
+    --------
+    new_dictionaries_for_splitted_signals: list
+        The new dictionaries for the splitted signals.
+    
+    Parameters:
+    -----------
+    data_dict: dict
+        The dictionary containing the signals.
+    id_key: str
+        The key of the ID in the dictionary.
+    valid_signal_keys: list
+        The keys of the signals that should be split.
+    signal_frequencies: list
+        The frequencies of the above signals.
+    signal_target_frequencies: list
+        The target frequencies of the above signals.
+    nn_signal_duration_seconds: int
+        The duration of the signal that will be passed to the neural network.
+    wanted_shift_length_seconds: int
+        The shift length that is desired by user.
+    absolute_shift_deviation_seconds: int
+        The allowed deviation from the wanted shift length.
     """
     splitted_signals = list()
 
@@ -476,21 +508,22 @@ def split_signals_within_dictionary(
             wanted_shift_length_seconds = wanted_shift_length_seconds,
             absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
             )
-        
+
         splitted_signals.append(this_splitted_signal)
         this_shift_length_seconds = int(this_shift_length / signal_target_frequencies[signal_key_index])
         del this_splitted_signal
 
     # create new dictionaries for splitted signals
     new_dictionaries_for_splitted_signals = list()
-    for i in range(len(splitted_signals[0][0])):
+    for i in range(0, len(splitted_signals[0])):
         splitted_data_dict = dict()
         for key in data_dict:
             if key in valid_signal_keys:
                 splitted_data_dict[key] = splitted_signals[valid_signal_keys.index(key)][i]
             else:
                 splitted_data_dict[key] = data_dict[key]
-        splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_{this_shift_length_seconds}s_x{i}"
+        if i > 0:
+            splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_{this_shift_length_seconds}s_x{i}"
         new_dictionaries_for_splitted_signals.append(splitted_data_dict)
     
     return new_dictionaries_for_splitted_signals
@@ -840,10 +873,14 @@ def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
     return f"{path_without_file_type}_{i}.{file_type}"
 
 
-class DataManager:
+class SleepDataManager:
     # Define class variables
-    valid_datapoint_keys = ["ID", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency"]
     signal_keys = ["RRI", "MAD", "SLP"]
+    signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency"] # same order is important
+    
+    valid_datapoint_keys = ["ID"]
+    valid_datapoint_keys.extend(signal_keys)
+    valid_datapoint_keys.extend(signal_frequency_keys)
     
     default_file_info = dict()
     default_file_info["RRI_frequency"] = 4
@@ -882,10 +919,10 @@ class DataManager:
             save_to_pickle(data = self.default_file_info, file_name = self._file_path)
     
 
-    def save_data(self, new_data, overwrite_id = True):
+    def _correct_datapoint(self, new_data):
         """
-        Save data to the file. If the ID already exists in the file, the existing data will be overwritten
-        with new values, if allowed.
+        The datapoint will be altered to match the file's signal frequencies and signal length. If the signal
+        is too long, it will be split into multiple signals.
         """
 
         # INSPECT NEW DATAPOINT:
@@ -909,71 +946,86 @@ class DataManager:
                 raise ValueError(f"Unknown key in datapoint: {new_data_key}")
         
         # Check if frequency keys are provided if signal keys are provided
-        for signal_key in self.signal_keys:
-            if signal_key in new_data and f"{signal_key}_frequency" not in new_data:
-                raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_key}_frequency\" !")
+        for signal_key_index in range(0, len(self.signal_keys)):
+            signal_key = self.signal_keys[signal_key_index]
+            signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+            if signal_key in new_data and signal_frequency_key not in new_data:
+                raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
             
         
         # ALTER ENTRIES IN NEW DATAPOINT:
         # -------------------------------
 
-        # make sure sampling frequency matches the one in the file, rescale if necessary
-        for signal_key in self.signal_keys:
-            if signal_key in new_data and new_data[f"{signal_key}_frequency"] != self.file_info[f"{signal_key}_frequency"]:
+        # make sure sampling frequency matches the one in the file, rescale signal if necessary
+        for signal_key_index in range(0, len(self.signal_keys)):
+            signal_key = self.signal_keys[signal_key_index]
+            signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+            if signal_key in new_data and new_data[signal_frequency_key] != self.file_info[signal_frequency_key]:
                 this_signal_type = "classification" if signal_key == "SLP" else "continuous"
                 new_data[signal_key] = scale_signal(
                     signal = new_data[signal_key],
-                    signal_frequency = new_data[f"{signal_key}_frequency"],
-                    target_frequency = self.file_info[f"{signal_key}_frequency"],
+                    signal_frequency = new_data[signal_frequency_key],
+                    target_frequency = self.file_info[signal_frequency_key],
                     signal_type = this_signal_type
                     )
                 del this_signal_type
+                new_data[signal_frequency_key] = self.file_info[signal_frequency_key]
+
 
         # make sure signal length is not longer than the one in the file
-        splitted_signals = list()
-        splitted_signal_keys = list()
+            # check if signal is too long
+        split_signals_needed = False
+        for signal_key_index in range(0, len(self.signal_keys)):
+            signal_key = self.signal_keys[signal_key_index]
+            signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+            if signal_key in new_data:   
+                if len(new_data[signal_key]) > self.file_info["signal_length_seconds"] * new_data[signal_frequency_key]:
+                    split_signals_needed = True
+                    break
+                
+            # split signals in dictionary and create new data dictionaries with unique ID, pass each 
+            # dictionary again to save_data
+        if split_signals_needed:
+            signal_keys_in_new_data = [key for key in self.signal_keys if key in new_data]
+            signal_frequency_keys_in_new_data = [key for key in self.signal_frequency_keys if key in new_data]
+            corresponding_frequencies = [new_data[key] for key in signal_frequency_keys_in_new_data]
+            corresponding_target_frequencies = [self.file_info[key] for key in signal_frequency_keys_in_new_data]
 
-        # split signals if they are too long
-        for signal_key in self.signal_keys:
-            if signal_key in new_data:
-                this_splitted_signal, this_shift_length = split_long_signal(
-                        signal = new_data[signal_key], # type: ignore
-                        sampling_frequency = new_data[f"{signal_key}_frequency"],
-                        target_frequency = self.file_info[f"{signal_key}_frequency"],
-                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
-                        wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"],
-                        absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
-                        )
-                splitted_signals.append(this_splitted_signal)
-                splitted_signal_keys.append(signal_key)
-                del this_splitted_signal
+            splitted_data_dictionaries = split_signals_within_dictionary(
+                data_dict = new_data,
+                id_key = "ID",
+                valid_signal_keys = signal_keys_in_new_data,
+                signal_frequencies = corresponding_frequencies,
+                signal_target_frequencies = corresponding_target_frequencies,
+                nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
+                wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"],
+                absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
+                ) # returns a list of dictionaries, len == 1 if signal was not split
 
-        # create new dictionaries for splitted signals
-        new_dictionaries_for_splitted_signals = list()
-        for i in range(len(splitted_signals[0][0])):
-            splitted_data_dict = dict()
-            for key in new_data:
-                if key in splitted_signal_keys:
-                    splitted_data_dict[key] = splitted_signals[splitted_signal_keys.index(key)][0][i]
-                else:
-                    splitted_data_dict[key] = new_data[key]
-            new_dictionaries_for_splitted_signals.append(splitted_data_dict)
+            return splitted_data_dictionaries
+        else:
+            return [new_data]
+    
+
+    def _save_datapoint(self, new_data, overwrite_id = True):
+        """
+        Save single datapoint to the file. If the ID already exists in the file, the existing data will be overwritten
+        with new values, if allowed.
+        """
         
-
+        # Remove frequency keys from new_data (frequency should match the one in the file, saving it is unnecessary)
+        for signal_frequency_key in self.signal_frequency_keys:
+            if signal_frequency_key in new_data:
+                del new_data[signal_frequency_key]
         
-        # Remove frequency keys from new_data
-        if "RRI_frequency" in new_data:
-            del new_data["RRI_frequency"]
-        if "MAD_frequency" in new_data:
-            del new_data["MAD_frequency"]
-        if "SLP_frequency" in new_data:
-            del new_data["SLP_frequency"]
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
         
         # Create temporary file to save data in progress
         working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
 
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        # save file information to working file
+        save_to_pickle(data = next(file_generator), file_name = working_file_path)
 
         overwrite_denied = False
         not_appended = True
@@ -1012,27 +1064,160 @@ class DataManager:
 
         if overwrite_denied:
             raise ValueError("ID already existed in the data file and Overwrite was denied. Data was not saved.")
+    
+
+    def save(self, data_dict, overwrite_id = True):
+        """
+        Save data to the file. If the ID already exists in the file, the existing data will be overwritten
+        with new values, if allowed.
+
+        New datapoint will be altered to match the file's signal frequencies and signal length. If the signal
+        is too long, it will be split into multiple signals.
+        """
+        corrected_data_dicts = self._correct_datapoint(data_dict)
+        for corrected_data_dict in corrected_data_dicts:
+            self._save_datapoint(corrected_data_dict, overwrite_id)
+        
 
 
-    def load_data(self, id):
+    def load_data(self, key_id_index):
+        """
+        Loads data from file path. The data can be loaded by ID, key, or index.
+        """
+        # check if key_id_index is an id, a key, or an index
+        load_keys = False
+        load_id = False
+        load_index = False
+
+        if isinstance(key_id_index, str):
+            if key_id_index in self.valid_datapoint_keys:
+                load_keys = True
+            else:
+                load_id = True
+        elif isinstance(key_id_index, int):
+            load_index = True
+        else:
+            raise ValueError("\'key_id_index\' must be a string, integer, or a key from the valid_datapoint_keys (also a string).")
+
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
-        id_found = False
-        for data_point in file_generator:
-            if data_point["ID"] == id:
-                id_found = True
-                return data_point
+        # Skip file information
+        next(file_generator)
+
+        if load_id:
+            id_found = False
+            for data_point in file_generator:
+                if data_point["ID"] == key_id_index:
+                    id_found = True
+                    return data_point
+            
+            if not id_found:
+                raise ValueError(f"ID {key_id_index} not found in the data file.")
         
+        elif load_keys:
+            values_for_key_from_all_data_points = list()
+            count_data_points_missing_key = 0
+
+            for data_point in file_generator:
+                if key_id_index in data_point:
+                    values_for_key_from_all_data_points.append(data_point[key_id_index])
+                else:
+                    count_data_points_missing_key += 1
+            
+            if count_data_points_missing_key > 0:
+                print(f"Attention: {count_data_points_missing_key} data points are missing the key {key_id_index}")
+            
+            return values_for_key_from_all_data_points
+
+        elif load_index:
+            count = 0
+            for data_point in file_generator:
+                if count == key_id_index:
+                    return data_point
+                count += 1
+            
+            raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+
         del file_generator
+    
+
+    def remove_data(self, key_id_index):
+        """
+        Remove data from the file path. The data can be removed by ID, key, or index.
+        """
+        # check if key_id_index is an id, a key, or an index
+        remove_keys = False
+        remove_id = False
+        remove_index = False
+
+        if isinstance(key_id_index, str):
+            if key_id_index in self.valid_datapoint_keys:
+                remove_keys = True
+            else:
+                remove_id = True
+        elif isinstance(key_id_index, int):
+            remove_index = True
+        else:
+            raise ValueError("\'key_id_index\' must be a string, integer, or a key from the valid_datapoint_keys (also a string).")
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+
+        # Remove data point from the working file
+        if remove_id:
+            id_found = False
+            for data_point in file_generator:
+                if data_point["ID"] == key_id_index:
+                    id_found = True
+                else:
+                    append_to_pickle(data = data_point, file_name = working_file_path)
+            
+            if not id_found:
+                raise ValueError(f"ID {key_id_index} not found in the data file.")
         
-        if not id_found:
-            raise ValueError(f"ID {id} not found in the data file")
+        elif remove_keys:
+            for data_point in file_generator:
+                if key_id_index in data_point:
+                    del data_point[key_id_index]
+                append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        elif remove_index:
+            count = 0
+            index_out_of_bounds = True
+            for data_point in file_generator:
+                if count != key_id_index:
+                    append_to_pickle(data = data_point, file_name = working_file_path)
+                else:
+                    index_out_of_bounds = False
+                count += 1
+            
+            if index_out_of_bounds:
+                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        del file_generator
     
 
     def __len__(self):
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
+
+        # Skip file information
+        next(file_generator)
 
         count = 0
         for _ in file_generator:
@@ -1046,6 +1231,9 @@ class DataManager:
     def __contains__(self, id):
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
+
+        # Skip file information
+        next(file_generator)
 
         id_found = False
         for data_point in file_generator:
@@ -1062,6 +1250,9 @@ class DataManager:
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
+        # Skip file information
+        next(file_generator)
+
         for data_point in file_generator:
             yield data_point
         
@@ -1073,6 +1264,9 @@ class DataManager:
         if key in self.valid_datapoint_keys:
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
+
+            # Skip file information
+            next(file_generator)
 
             values_for_key_from_all_data_points = list()
             count_data_points_missing_key = 0
