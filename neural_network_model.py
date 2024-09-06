@@ -1,3 +1,11 @@
+"""
+Author: Johannes Peter Knoll
+
+Python File for implementing a custom PyTorch Dataset and a Deep Convolutional Neural Network for Sleep Stage 
+Prediction.
+"""
+
+# IMPORTS:
 import numpy as np
 
 import torch
@@ -5,6 +13,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import ToTensor
+
+# LOCAL IMPORTS:
+from dataset_processing import *
 
 
 class CustomArrayDataset(Dataset):

@@ -1,10 +1,26 @@
+"""
+Author: Johannes Peter Knoll
+
+This file contains functions we need to preprocess the data for the neural network.
+
+The most important part is the class 'SleepDataManager', which will help us to store the data from multiple
+sources in one place. It will make sure that the data is uniform and that we can access it in a 
+memory-efficient way.
+
+All of this files functions and the class are thoroughly described and tested in 'Processing_Demo.ipynb'.
+
+If you trust me on the code below and just want to get a quick start into Sleep Stage Prediction, 
+then head to 'Classification_Demo.ipynb' and follow the instructions there.
+"""
+
+# IMPORTS:
 import numpy as np
 
 
 """
-
-Section 1: Operations on Signals
-
+----------------------
+Operating on Signals
+----------------------
 """
 
 
@@ -441,8 +457,12 @@ def split_long_signal(
     optimal_shift_length = int(optimal_shift_length)
     
     # Split signal into multiple signals by shifting, transform to windows and append to reshaped_signals
-    for start_index in range(0, len(signal)-number_nn_datapoints-optimal_shift_length+1, optimal_shift_length):
-        splitted_signals = np.append(splitted_signals, [signal[start_index:start_index+number_nn_datapoints]], axis=0)
+    if optimal_shift_length > 0:
+        for start_index in range(0, len(signal)-number_nn_datapoints-optimal_shift_length+1, optimal_shift_length):
+            splitted_signals = np.append(splitted_signals, [signal[start_index:start_index+number_nn_datapoints]], axis=0)
+    else:
+        splitted_signals = np.append(splitted_signals, [signal[0:number_nn_datapoints]], axis=0)
+
     
     # Append last 'number_nn_datapoints' of signal to reshaped_signals
     splitted_signals = np.append(splitted_signals, [signal[-number_nn_datapoints:]], axis=0)
@@ -534,7 +554,7 @@ def signal_to_windows(
         datapoints_per_window: int,
         window_overlap: int,
         signal_type: str = "feature",
-        priority_order: list = [0, 1, 2, 3, 4, 5]
+        priority_order: list = [0, 1, 2, 3, 5, -1]
     ) -> np.ndarray:
     """
     This function splits a signal into windows of length 'datapoints_per_window' that overlap by 
@@ -619,7 +639,7 @@ def reshape_signal_to_overlapping_windows(
         window_duration_seconds: int = 120, 
         overlap_seconds: int = 90,
         signal_type: str = "feature",
-        priority_order: list = [0, 1, 2, 3, 4, 5],
+        priority_order: list = [0, 1, 2, 3, 5, -1],
     ) -> np.ndarray:
     """
     Reshape a signal with shape (n <= nn_signal_duration_seconds * target_frequency) to 
@@ -653,7 +673,7 @@ def reshape_signal_to_overlapping_windows(
 
     nn_signal_duration_seconds: int
         The duration of the signal that will be passed to the neural network.
-    pad_with: int
+    pad_with:
         The value to pad the signal with, if it is shorter than 'nn_signal_duration_seconds'.
     
     -----
@@ -740,9 +760,46 @@ def reshape_signal_to_overlapping_windows(
     return signal_windows
 
 
+def slp_label_transformation(
+        current_labels: dict,
+        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1},
+    ) -> dict:
+    """
+    Create transformation dictionary to alter the labels that classify the sleep stage.
+
+    Returns:
+    --------
+    transformation_dict: dict
+        The transformation dictionary.
+    
+    Parameters:
+    -----------
+    current_labels: dict
+        The current labels that classify the sleep stage. Values must be lists of strings or integers.
+    desired_labels: dict
+        The desired labels that classify the sleep stage. Values must be strings or integers.
+    """
+    # make sure values are strings.
+    for key in desired_labels:
+        desired_labels[key] = str(desired_labels[key])
+    for key in current_labels:
+        for i in range(len(current_labels[key])):
+            current_labels[key][i] = str(current_labels[key][i])
+
+    transformation_dict = dict()
+    for key in current_labels:
+        for entry in current_labels[key]:
+            if entry in transformation_dict:
+                raise ValueError(f"Label '{entry}' already found in transformation dictionary. Be sure not to assign multiple values to the same classification.")
+            transformation_dict[entry] = desired_labels[key]
+    
+    return transformation_dict
+
+
 def alter_slp_labels(
-        shhs_labels: list,
-        transformation: dict
+        slp_labels: list,
+        current_labels: dict,
+        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1},
     ) -> np.ndarray:
     """
     Alter the labels that classify the sleep stage.
@@ -756,18 +813,36 @@ def alter_slp_labels(
     -----------
     labels: list
         The labels to be altered.
-    transformation: dict
-        The transformation that should be applied to the labels. The keys are the original labels and the values
-        are the new labels. Both keys and values must be strings. If the original labels are integers, the altered
-        labels will be converted back
+    current_labels: dict
+        The current labels that classify the sleep stage.
+    desired_labels: dict
+        The desired labels that classify the sleep stage.
     """
-    shhs_labels = np.array(shhs_labels) # type: ignore
-    signal_data_type = shhs_labels.dtype # type: ignore
+    transformation = slp_label_transformation(current_labels, desired_labels)
+
+    slp_labels = np.array(slp_labels) # type: ignore
+    signal_data_type = slp_labels.dtype # type: ignore
+    slp_labels = slp_labels.astype(str) # type: ignore
+
     altered_labels = np.empty((0), str) # type: ignore
 
-    for label in shhs_labels:
-        altered_labels = np.append(altered_labels, transformation[str(label)])
+    transform_all_other = False
+    if "other" in transformation:
+        transform_all_other = True
     
+    if transform_all_other:
+        for label in slp_labels:
+            if label in transformation:
+                altered_labels = np.append(altered_labels, transformation[label])
+            else:
+                altered_labels = np.append(altered_labels, transformation["other"])
+    else:
+        for label in slp_labels:
+            if label in transformation:
+                altered_labels = np.append(altered_labels, transformation[label])
+            else:
+                raise ValueError(f"Label '{label}' not found in transformation dictionary.")
+        
     if signal_data_type == int:
         altered_labels = altered_labels.astype(int)
     
@@ -782,7 +857,9 @@ Section 2: Managing Data
 
 import pickle
 import os
-import inspect
+from sklearn.model_selection import train_test_split
+import copy
+
 
 def save_to_pickle(data, file_name):
     """
@@ -873,28 +950,64 @@ def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
     return f"{path_without_file_type}_{i}.{file_type}"
 
 
+def create_directories_along_path(file_path: str):
+    """
+    Create all directories along a given path that do not exist yet.
+
+    ARGUMENTS:
+    --------------------------------
+    file_path: str
+        path to a file
+    
+    RETURNS:
+    --------------------------------
+    None
+    """
+    if "/" in file_path:
+        path_parts = file_path.split("/")
+        for i in range(1, len(path_parts)):
+            path = "/".join(path_parts[:i])
+            if not os.path.exists(path):
+                os.mkdir(path)
+
+
+"""
+-------------------
+Data-Manager Class
+-------------------
+"""
+
 class SleepDataManager:
     # Define class variables
     signal_keys = ["RRI", "MAD", "SLP"]
     signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency"] # same order is important
     
-    valid_datapoint_keys = ["ID"]
-    valid_datapoint_keys.extend(signal_keys)
-    valid_datapoint_keys.extend(signal_frequency_keys)
+    valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency"]
     
     default_file_info = dict()
     default_file_info["RRI_frequency"] = 4
     default_file_info["MAD_frequency"] = 1
     default_file_info["SLP_frequency"] = 1/30
+
+    default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}
+
     default_file_info["signal_length_seconds"] = 36000
     default_file_info["wanted_shift_length_seconds"] = 3600
     default_file_info["absolute_shift_deviation_seconds"] = 1800
-    default_file_info["contained_data"] = "main" # main (means data was not divided yet), train, validation, test
-    default_file_info["main_file_path"] = "unassigned"
+
     default_file_info["signal_in_windows"] = False
     default_file_info["number_windows"] = 1197
     default_file_info["window_duration_seconds"] = 120
     default_file_info["overlap_seconds"] = 90
+    default_file_info["pad_target_with"] = 0
+    default_file_info["pad_feature_with"] = 0
+    default_file_info["priority_order"] = [0, 1, 2, 3, 5, -1]
+
+    default_file_info["train_val_test_split_applied"] = False
+    default_file_info["main_file_path"] = "unassigned"
+    default_file_info["train_file_path"] = "unassigned"
+    default_file_info["validation_file_path"] = "unassigned"
+    default_file_info["test_file_path"] = "unassigned"
 
 
     def __init__(self, file_path):
@@ -905,6 +1018,14 @@ class SleepDataManager:
         self.file_info = next(file_generator)
         del file_generator
 
+        # edit some general information
+        if self.file_info["main_file_path"] == "unassigned":
+            self.file_info["main_file_path"] = self.file_path
+            self.file_info["train_file_path"] = self.file_path[:-4] + "_training_pid.pkl"
+            self.file_info["validation_file_path"] = self.file_path[:-4] + "_validation_pid.pkl"
+            self.file_info["test_file_path"] = self.file_path[:-4] + "_test_pid.pkl"
+
+
     # Getter and setter for file_path
     @property
     def file_path(self):
@@ -912,6 +1033,12 @@ class SleepDataManager:
 
     @file_path.setter
     def file_path(self, value):
+        # check if file is a pickle file
+        if value[-4:] != ".pkl":
+            raise ValueError("File must be a pickle file.")
+
+        create_directories_along_path(value)
+
         self._file_path = value
 
         # Check if file exists, if not create it and save default file information
@@ -922,7 +1049,19 @@ class SleepDataManager:
     def _correct_datapoint(self, new_data):
         """
         The datapoint will be altered to match the file's signal frequencies and signal length. If the signal
-        is too long, it will be split into multiple signals.
+        is too long, it will be split into multiple signals. It will also correct the sleep labels if necessary.
+
+        ATTENTION:  Never call this function manually. It will not do any damage, but it is not useful.
+
+        Returns:
+        --------
+        splitted_data_dictionaries: list
+            The new dictionaries for the splitted signals.
+        
+        Parameters:
+        -----------
+        new_data: dict
+            The datapoint to be corrected.
         """
 
         # INSPECT NEW DATAPOINT:
@@ -951,10 +1090,26 @@ class SleepDataManager:
             signal_frequency_key = self.signal_frequency_keys[signal_key_index]
             if signal_key in new_data and signal_frequency_key not in new_data:
                 raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
+            if signal_frequency_key in new_data and signal_key not in new_data:
+                raise ValueError(f"What sense does it make to provide a sampling frequency \"{signal_frequency_key}\" without the corresponding signal \"{signal_key}\" ?")
+        
+        # Check if declaration of sleep stage labels was provided when SLP signal is provided
+        if "SLP" in new_data and "sleep_stage_label" not in new_data:
+            raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
+        if "sleep_stage_label" in new_data and "SLP" not in new_data:
+            raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
             
         
         # ALTER ENTRIES IN NEW DATAPOINT:
         # -------------------------------
+
+        # make sure ID is a string
+        new_data["ID"] = str(new_data["ID"])
+
+        # transform signals to np.ndarray
+        for signal_key in self.signal_keys:
+            if signal_key in new_data:
+                new_data[signal_key] = np.array(new_data[signal_key])
 
         # make sure sampling frequency matches the one in the file, rescale signal if necessary
         for signal_key_index in range(0, len(self.signal_keys)):
@@ -970,7 +1125,14 @@ class SleepDataManager:
                     )
                 del this_signal_type
                 new_data[signal_frequency_key] = self.file_info[signal_frequency_key]
-
+        
+        # make sure sleep stage labels match the ones in the file
+        if "SLP" in new_data:
+            new_data["SLP"] = alter_slp_labels(
+                slp_labels = new_data["SLP"],
+                current_labels = new_data["sleep_stage_label"],
+                desired_labels = self.file_info["sleep_stage_label"]
+                )
 
         # make sure signal length is not longer than the one in the file
             # check if signal is too long
@@ -1007,90 +1169,227 @@ class SleepDataManager:
             return [new_data]
     
 
-    def _save_datapoint(self, new_data, overwrite_id = True):
+    def _save_datapoint(self, new_data, overwrite_id = True, unique_id = False):
         """
         Save single datapoint to the file. If the ID already exists in the file, the existing data will be overwritten
         with new values, if allowed.
+
+        If user requested transformation to windows prior to saving, the signal will also be transformed to 
+        windows.
+
+        ATTENTION:  NEVER CALL THIS FUNCTION MANUALLY. USE save() INSTEAD.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        new_data: dict
+            The datapoint to be saved.
+        overwrite_id: bool
+            If True, the existing data will be overwritten with new values if the ID already exists in the file.
+            If False, the data will not be saved if the ID already exists in the file.
+        unique_id: bool
+            If True, the ID will be expected to be unique and directly appended to the file.
+            if False, current files will be checked to see if the ID already exists.
         """
+
+        # add signal in windows if requested
+        if self.file_info["signal_in_windows"]:
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                window_key = f"{signal_key}_windows"
+                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                this_signal_type = "target" if signal_key == "SLP" else "feature"
+                this_padding = self.file_info["pad_target_with"] if signal_key == "SLP" else self.file_info["pad_feature_with"]
+
+                if signal_key in new_data:
+                    new_data[window_key] = reshape_signal_to_overlapping_windows(
+                        signal = new_data[signal_key],
+                        sampling_frequency = new_data[signal_frequency_key],
+                        target_frequency = self.file_info[signal_frequency_key],
+                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
+                        pad_with = this_padding,
+                        number_windows = self.file_info["number_windows"],
+                        window_duration_seconds = self.file_info["window_duration_seconds"],
+                        overlap_seconds = self.file_info["overlap_seconds"],
+                        signal_type = this_signal_type,
+                        priority_order = self.file_info["priority_order"]
+                        )
         
         # Remove frequency keys from new_data (frequency should match the one in the file, saving it is unnecessary)
         for signal_frequency_key in self.signal_frequency_keys:
             if signal_frequency_key in new_data:
                 del new_data[signal_frequency_key]
         
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        # Remove sleep stage label key from new_data (label should match the one in the file, saving it is unnecessary)
+        if "sleep_stage_label" in new_data:
+            del new_data["sleep_stage_label"]
         
-        # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
-
-        # save file information to working file
-        save_to_pickle(data = next(file_generator), file_name = working_file_path)
-
-        overwrite_denied = False
-        not_appended = True
-
-        # Check if ID already exists in the data file, then overwrite keys if allowed
-        for data_point in file_generator:
-            if data_point["ID"] == new_data["ID"]:
-                not_appended = False
-                if overwrite_id:
-                    new_data_point = dict()
-                    for possible_key in self.valid_datapoint_keys:
-                        if possible_key in new_data:
-                            new_data_point[possible_key] = new_data[possible_key]
-                        elif possible_key in data_point:
-                            new_data_point[possible_key] = data_point[possible_key]
-                else:
-                    new_data_point = data_point
-                    overwrite_denied = True
-            else:
-                new_data_point = data_point
+        if unique_id:
+            # Append new data point to the file
+            append_to_pickle(data = new_data, file_name = self.file_path)
+        else:
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
             
-            # Append data point to the working file
-            append_to_pickle(data = new_data_point, file_name = working_file_path)
-        
-        # Append new data point if ID was not found
-        if not_appended:
-            append_to_pickle(data = new_data, file_name = working_file_path)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
+            # Create temporary file to save data in progress
+            working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
 
-        os.rename(working_file_path, self.file_path)
+            # save file information to working file
+            save_to_pickle(data = next(file_generator), file_name = working_file_path)
 
-        if overwrite_denied:
-            raise ValueError("ID already existed in the data file and Overwrite was denied. Data was not saved.")
+            overwrite_denied = False
+            not_appended = True
+
+            # Check if ID already exists in the data file, then overwrite keys if allowed
+            for data_point in file_generator:
+                if data_point["ID"] == new_data["ID"]:
+                    not_appended = False
+                    if overwrite_id:
+                        for key in new_data:
+                            data_point[key] = new_data[key]
+                    else:
+                        overwrite_denied = True
+                
+                # Append data point to the working file
+                append_to_pickle(data = data_point, file_name = working_file_path)
+            
+            # Append new data point if ID was not found
+            if not_appended:
+                append_to_pickle(data = new_data, file_name = working_file_path)
+            
+            # Remove the old file and rename the working file
+            try:
+                os.remove(self.file_path)
+            except:
+                pass
+
+            os.rename(working_file_path, self.file_path)
+
+            if overwrite_denied:
+                raise ValueError("ID already existed in the data file and Overwrite was denied. Data was not saved.")
     
 
-    def save(self, data_dict, overwrite_id = True):
+    def save(self, data_dict, overwrite_id = True, unique_id = False):
         """
         Save data to the file. If the ID already exists in the file, the existing data will be overwritten
         with new values, if allowed.
 
         New datapoint will be altered to match the file's signal frequencies and signal length. If the signal
         is too long, it will be split into multiple signals.
+
+        If user requested transformation to windows prior to saving, the signal will also be transformed to
+        windows.
+
+        data_dict must have the following structure and can contain the following keys:
+        {
+            "ID": str,                  # always required
+            "RRI": np.ndarray,
+            "MAD": np.ndarray,
+            "SLP": np.ndarray,
+            "RRI_frequency": int,       # required if RRI signal is provided
+            "MAD_frequency": int,       # required if MAD signal is provided
+            "SLP_frequency": int,       # required if SLP signal is provided
+            "sleep_stage_label": list   # required if SLP signal is provided
+        }
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        data_dict: dict
+            The datapoint to be saved.
+        overwrite_id: bool
+            If True, the existing data will be overwritten with new values if the ID already exists in the file.
+            If False, the data will not be saved if the ID already exists in the file.
+        unique_id: bool
+            If True, the ID will be expected to be unique and directly appended to the file.
+            if False, current files will be checked to see if the ID already exists.
         """
+
+        # prevent runnning this function from secondary files (train, validation, test)
+        if self.file_path != self.file_info["main_file_path"]:
+            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
+
+        # Warn user that data will remain in main file and won't forwarded into training, validation, or test file automatically
+        if self.file_info["train_val_test_split_applied"]:
+            print("Attention: Data will remain in the main file and won't be forwarded into training, validation, or test file automatically. If you want to include this data, fuse files using 'fuse_train_test_validation' and resaparate again.")
+
         corrected_data_dicts = self._correct_datapoint(data_dict)
         for corrected_data_dict in corrected_data_dicts:
-            self._save_datapoint(corrected_data_dict, overwrite_id)
+            self._save_datapoint(corrected_data_dict, overwrite_id, unique_id)
+    
+
+    def check_if_ids_are_unique(self, ids: list):
+        """
+        Check if the IDs in the list are unique. 
         
+        Returns:
+        --------
+        None, but prints information to console
+
+        Parameters:
+        -----------
+        ids: list
+            List of IDs to be checked.
+        """
+
+        ids_in_database = self.load("ID")
+        new_ids = list()
+        multiple_ids = list()
+        multiple_weird = list()
+
+        for id in ids:
+            if id in ids_in_database:
+                multiple_ids.append(id)
+            if id in new_ids:
+                multiple_weird.append(id)
+            new_ids.append(id)
+        
+        if len(multiple_ids) > 0:
+            print("Following IDs are not unique between your new ids and the database:")
+            print(multiple_ids)
+            raise ValueError("IDs are not unique.")
+        if len(multiple_weird) > 0:
+            print("Following IDs are not unique in your new ids:")
+            print(multiple_weird)
+            raise ValueError("IDs are not unique.")
+        if len(multiple_ids) == 0 and len(multiple_weird) == 0:
+            print("All IDs are unique.")
 
 
-    def load_data(self, key_id_index):
+    def load(self, key_id_index):
         """
         Loads data from file path. The data can be loaded by ID, key, or index.
+
+        Returns:
+        --------
+        data_point: dict
+            The data point that was loaded.
+        
+                        OR
+
+        values_for_key_from_all_data_points: list
+            The values for the key from all data points.
+        
+        Parameters:
+        -----------
+        key_id_index: str, int
+            The ID, key, or index of the data to be loaded.
         """
+
         # check if key_id_index is an id, a key, or an index
         load_keys = False
+        valid_keys = ["ID", "RRI", "MAD", "SLP", "RRI_windows", "MAD_windows", "SLP_windows"]
         load_id = False
         load_index = False
 
         if isinstance(key_id_index, str):
-            if key_id_index in self.valid_datapoint_keys:
+            if key_id_index in valid_keys:
                 load_keys = True
             else:
                 load_id = True
@@ -1142,17 +1441,28 @@ class SleepDataManager:
         del file_generator
     
 
-    def remove_data(self, key_id_index):
+    def remove(self, key_id_index):
         """
         Remove data from the file path. The data can be removed by ID, key, or index.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        key_id_index: str, int
+            The ID, key, or index of the data to be removed.
         """
+
         # check if key_id_index is an id, a key, or an index
         remove_keys = False
+        valid_keys = ["ID", "RRI", "MAD", "SLP", "RRI_windows", "MAD_windows", "SLP_windows"]
         remove_id = False
         remove_index = False
 
         if isinstance(key_id_index, str):
-            if key_id_index in self.valid_datapoint_keys:
+            if key_id_index in valid_keys:
                 remove_keys = True
             else:
                 remove_id = True
@@ -1212,7 +1522,534 @@ class SleepDataManager:
         del file_generator
     
 
+    def _update_file_info(self):
+        """
+        Was used to update the file information in the file. Now replaced by a quicker way.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        None
+        """
+
+        raise NotImplementedError("This functions purpose was replaced differently.")
+    
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # Update file information
+        self.file_info = next(file_generator)
+
+        del file_generator
+    
+
+    def _edit_file_info(self, new_file_info):
+        """
+        Was used to edit the file information in the file. Now replaced by a quicker way.
+
+        ATTENTION:  NEVER CALL THIS FUNCTION MANUALLY. IT IS CALLED AUTOMATICALLY BY THE FUNCTIONS THAT
+                    NEED TO CHANGE THE FILE INFORMATION.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        new_file_info: dict
+            The new file information.
+        """
+
+        raise NotImplementedError("This functions purpose was replaced differently.")
+    
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        old_file_info = next(file_generator)
+
+        # Make sure no new keys are added to the file information
+        for key in old_file_info:
+            if key in new_file_info:
+                old_file_info[key] = new_file_info[key]
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = old_file_info, file_name = working_file_path)
+
+        # Append data points to the working file
+        for data_point in file_generator:
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        del file_generator
+
+        self._update_file_info()
+    
+
+    def transform_signals_to_windows(
+            self, 
+            number_windows: int = 1197, 
+            window_duration_seconds: int = 120, 
+            overlap_seconds: int = 90, 
+            priority_order: list = [0, 1, 2, 3, 5, -1]
+        ):
+        """
+        Transform all signals in the file to overlapping windows using 'reshape_signal_to_overlapping_windows' 
+        function.
+
+        Sets 'signal_in_windows' (file information) to True. From now on, saving signals will add the 
+        transformation to windows automatically, using these parameters.
+
+        (Sets 'number_windows', 'window_duration_seconds', 'overlap_seconds', and 'priority_order' in 
+        the file information to the given parameters, to be able to apply the transformation with these
+        parameters to newly saved data, as stated above.)
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        number_windows: int
+            The number of windows to split the signal into.
+        window_duration_seconds: int
+            The window length in seconds.
+        overlap_seconds: int
+            The overlap between windows in seconds.
+        priority_order: list
+            The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target'
+            (will be passed to 'reshape_signal_to_overlapping_windows' automatically, depending on signal).
+        """
+
+        # prevent runnning this function from secondary files (train, validation, test)
+        if self.file_path != self.file_info["main_file_path"]:
+            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
+
+        # prevent running this function if data was split into training, validation, and test data
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called if the data was not split into training, validation, and test pids.")
+
+        # Change file information
+        new_file_info = {
+            "signal_in_windows": True, 
+            "number_windows": number_windows, 
+            "window_duration_seconds": window_duration_seconds, 
+            "overlap_seconds": overlap_seconds, 
+            "priority_order": priority_order
+            }
+        
+        for key in new_file_info:
+            self.file_info[key] = new_file_info[key]
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # Transform all signals in the file to windows
+        for data_point in file_generator:
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                window_key = f"{signal_key}_windows"
+                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                this_signal_type = "target" if signal_key == "SLP" else "feature"
+                this_padding = self.file_info["pad_target_with"] if signal_key == "SLP" else self.file_info["pad_feature_with"]
+
+                if signal_key in data_point:
+                    data_point[window_key] = reshape_signal_to_overlapping_windows(
+                        signal = data_point[signal_key],
+                        sampling_frequency = self.file_info[signal_frequency_key],
+                        target_frequency = self.file_info[signal_frequency_key],
+                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
+                        pad_with = this_padding,
+                        number_windows = number_windows,
+                        window_duration_seconds = window_duration_seconds,
+                        overlap_seconds = overlap_seconds,
+                        signal_type = this_signal_type,
+                        priority_order = priority_order
+                        )
+        
+            # Append data point to the working file
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        del file_generator
+    
+
+    def remove_signals_in_windows(self):
+        """
+        Remove all signal to window transformations from the database. 
+        
+        Sets 'signal_in_windows' (file information) to False. From now on, saving signals will not add 
+        the transformation to windows automatically.
+
+        Also resets 'number_windows', 'window_duration_seconds', 'overlap_seconds', and 'priority_order'
+        in the file information to the default values.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        None
+        """
+
+        # prevent runnning this function from secondary files (train, validation, test)
+        if self.file_path != self.file_info["main_file_path"]:
+            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
+
+        # prevent running this function if data was split into training, validation, and test data
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called if the data was not split into training, validation, and test pids.")
+
+        # Change file information
+        new_file_info = {
+            "signal_in_windows": False, 
+            "number_windows": self.default_file_info["number_windows"], 
+            "window_duration_seconds": self.default_file_info["window_duration_seconds"], 
+            "overlap_seconds": self.default_file_info["overlap_seconds"], 
+            "priority_order": self.default_file_info["priority_order"]
+            }
+        
+        for key in new_file_info:
+            self.file_info[key] = new_file_info[key]
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # Remove all windows from the file
+        for data_point in file_generator:
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                window_key = f"{signal_key}_windows"
+
+                if window_key in data_point:
+                    del data_point[window_key]
+        
+            # Append data point to the working file
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        del file_generator
+    
+
+    def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows"]):
+        """
+        Order the keys in the datapoints of the database for better readability when printing.
+        Quite useless I know... But you know, maybe there is someone out there who appreciates this feature.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        custom_order: list
+            The order in which the keys should be ordered.
+        """
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+        
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+
+        # order keys in datapoints
+        for datapoint in file_generator:
+            ordered_datapoint = dict()
+            ordered_datapoint["ID"] = datapoint["ID"]
+            for key in custom_order:
+                if key in datapoint:
+                    ordered_datapoint[key] = datapoint[key]
+            append_to_pickle(data = ordered_datapoint, file_name = working_file_path)
+        
+        # delete old file and rename working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+        os.rename(working_file_path, self.file_path)
+    
+
+    def separate_train_test_validation(
+            self, 
+            train_size = 0.8, 
+            validation_size = 0.1, 
+            test_size = 0.1, 
+            random_state = None, 
+            shuffle = True
+        ):
+        """
+        Separate the data in the file into training, validation, and test data. New files will be created
+        in the same directory as the main file. The file information will be saved to each file.
+
+        Data that can not be used to train the network (i.e. missing "RRI" and "SLP") will be left in the
+        main file. As we have data with "RRI" and "MAD" and data with "RRI" only, the algorithm makes sure
+        that the ratio between the two types of data is about the same in all files.
+
+        The individual files can be accessed by another instance of this class. 
+
+        ATTENTION:  The instances on all files will have reduced functionality from now on. As the data should
+                    be fully prepared for the network now, the instances are designed to only load data and
+                    not save or edit it.
+
+                    The functionality of the instance on the main file is not as restricted as the ones on the
+                    training, validation, and test files. The main file instance can additionally save data
+                    (only to main file, won't be forwarded to training, validation, or test files), reshuffle 
+                    the data in the secondary files or pull them back into the main file for further processing.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        train_size: float
+            The ratio of the training data.
+        validation_size: float
+            The ratio of the validation data.
+        test_size: float
+            The ratio of the test data.
+        random_state: int
+            The random state for the train_test_split function.
+        shuffle: bool
+            If True, the data will be shuffled before splitting.
+        """
+
+        # prevent runnning this function from secondary files (train, validation, test)
+        if self.file_path != self.file_info["main_file_path"]:
+            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
+
+        # Fuse data back together if train_val_test_split_applied is True
+        if self.file_info["train_val_test_split_applied"]:
+            self.fuse_train_test_validation()
+
+        # check arguments:
+        if train_size + validation_size + test_size != 1:
+            raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # collect ID's of all valid datapoints (needs to contain "RRI" and "SLP"), divide into ones 
+        # that contain "RRI" and ones that contain "RRI" and "MAD"
+        id_with_rri_and_mad = list()
+        id_with_rri = list()
+
+        for data_point in file_generator:
+            if "SLP" in data_point and "RRI" in data_point:
+                if "MAD" in data_point:
+                    id_with_rri_and_mad.append(data_point["ID"])
+                else:
+                    id_with_rri.append(data_point["ID"])
+        
+        del file_generator
+
+        # Separate data
+        train_data_rri_and_mad, rest_data_rri_and_mad = train_test_split(id_with_rri_and_mad, train_size = train_size, random_state = random_state, shuffle = shuffle)
+        val_data_rri_and_mad, test_data_rri_and_mad = train_test_split(rest_data_rri_and_mad, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
+
+        train_data_rri, rest_data_rri = train_test_split(id_with_rri, train_size = train_size, random_state = random_state, shuffle = shuffle)
+        test_data_rri, val_data_rri = train_test_split(rest_data_rri, train_size = test_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
+
+        # # relocate datapoints if ratio between val and test data is off
+        # more_val = False
+        # if len(val_data_rri_and_mad) / len(test_data_rri_and_mad) > validation_size / test_size:
+        #     more_val = True
+        
+        # more_val_rri = False
+        # if len(val_data_rri) / len(test_data_rri) > validation_size / test_size:
+        #     more_val_rri = True
+        
+        # if more_val and more_val_rri:
+        #     test_data_rri = np.append(test_data_rri, [val_data_rri[0]])
+        # if not more_val and not more_val_rri:
+        #     val_data_rri = np.append(val_data_rri, [test_data_rri[0]])
+
+        # Change file information
+        self.file_info["train_val_test_split_applied"] = True
+
+        # Create files and save file information to it
+        for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"], self.file_info["test_file_path"]]:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            
+            save_to_pickle(data = self.file_info, file_name = file_path)
+        
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # skip file information
+        next(file_generator)
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        for data_point in file_generator:
+            if data_point["ID"] in train_data_rri_and_mad or data_point["ID"] in train_data_rri:
+                append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
+            elif data_point["ID"] in val_data_rri_and_mad or data_point["ID"] in val_data_rri:
+                append_to_pickle(data = data_point, file_name = self.file_info["validation_file_path"])
+            elif data_point["ID"] in test_data_rri_and_mad or data_point["ID"] in test_data_rri:
+                append_to_pickle(data = data_point, file_name = self.file_info["test_file_path"])
+            else:
+                append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+            
+        os.rename(working_file_path, self.file_path)
+    
+
+    def fuse_train_test_validation(self):
+        """
+        Fuses the training, validation, and test data back into the main file.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        None
+        """
+
+        # Check if train_val_test_split_applied is True
+        if not self.file_info["train_val_test_split_applied"]:
+            raise ValueError("Train-Validation-Test split was not applied to the data file. Therefore, it cannot be fused back.")
+        
+        # edit file information
+        self.file_info["train_val_test_split_applied"] = False
+
+        # Create temporary file to save data in progress
+        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # Append data points from main file
+        main_file_generator = load_from_pickle(self.file_info["main_file_path"])
+        next(main_file_generator)
+        for data_point in main_file_generator:
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove main file
+        try:
+            os.remove(self.file_info["main_file_path"])
+        except:
+            pass
+
+        # Append data points from training file
+        training_file_generator = load_from_pickle(self.file_info["train_file_path"])
+        next(training_file_generator)
+        for data_point in training_file_generator:
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove training file
+        try:
+            os.remove(self.file_info["train_file_path"])
+        except:
+            pass
+        
+        # Append data points from validation file
+        validation_file_generator = load_from_pickle(self.file_info["validation_file_path"])
+        next(validation_file_generator)
+        for data_point in validation_file_generator:
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove validation file
+        try:
+            os.remove(self.file_info["validation_file_path"])
+        except:
+            pass
+        
+        # Append data points from test file
+        test_file_generator = load_from_pickle(self.file_info["test_file_path"])
+        next(test_file_generator)
+        for data_point in test_file_generator:
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove test file
+        try:
+            os.remove(self.file_info["test_file_path"])
+        except:
+            pass
+        
+        # Rename the working file
+        os.rename(working_file_path, self.file_info["main_file_path"])
+    
+
     def __len__(self):
+        """
+        Returns the number of data points in the file. Usage: len(data_manager_instance)
+
+        Returns:
+        --------
+        count: int
+            The number of data points in the file.
+        
+        Parameters:
+        -----------
+        None
+        """
+
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
@@ -1229,6 +2066,20 @@ class SleepDataManager:
     
 
     def __contains__(self, id):
+        """
+        Check if the ID is in the file. Usage: id in data_manager_instance:
+
+        Returns:
+        --------
+        id_found: bool
+            True if the ID is in the file, False otherwise.
+        
+        Parameters:
+        -----------
+        id: str
+            The ID to be checked.
+        """
+
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
@@ -1247,6 +2098,19 @@ class SleepDataManager:
     
 
     def __iter__(self):
+        """
+        Iterate over all data points in the file. Usage: for data_point in data_manager_instance:
+
+        Returns:
+        --------
+        data_point: dict
+            The data point that was loaded.
+        
+        Parameters:
+        -----------
+        None
+        """
+
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
@@ -1259,9 +2123,26 @@ class SleepDataManager:
         del file_generator
     
 
-    def __getitem__(self, key):        
+    def __getitem__(self, key):
+        """
+        Get all data with the given key from the file. Usage: data_manager_instance[key]
 
-        if key in self.valid_datapoint_keys:
+        Identical to data_manager_instance.load(key), but more convenient.
+
+        Returns:
+        --------
+        values_for_key_from_all_data_points: list
+            The values for the key from all data points.
+        
+        Parameters:
+        -----------
+        key: str
+            The key to be loaded.
+        """    
+
+        valid_keys = ["ID", "RRI", "MAD", "SLP", "RRI_windows", "MAD_windows", "SLP_windows"]
+
+        if key in valid_keys:
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
 
@@ -1283,65 +2164,22 @@ class SleepDataManager:
                 print(f"Attention: {count_data_points_missing_key} data points are missing the key {key}")
             
             return values_for_key_from_all_data_points
+    
 
+    def __str__(self):
+        """
+        Returns a string representation of the file path and file information.
 
-# shhs_data_manager = DataManager(file_path = "messing_around.pkl")
-# shhs_data_manager = DataManager(file_path = "messing_around_2.pkl")
+        Usage: print(data_manager_instance) or str(data_manager_instance)
 
-#raise SystemExit
+        Returns:
+        --------
+        str
+            A string representation of the file path and file information.
+        
+        Parameters:
+        -----------
+        None
+        """
 
-# shhs_data_manager.save_data(new_data = {"ID": 1, "RRI": [1, 2, 3], "MAD": [5, 6, 7]}, overwrite_id = True)
-# shhs_data_manager.save_data(new_data = {"ID": 2, "RRI": [2, 3, 4], "MAD": [6, 7, 8]}, overwrite_id = True)
-# shhs_data_manager.save_data(new_data = {"ID": 3, "RRI": [3, 4, 5], "MAD": [7, 8, 9]}, overwrite_id = True)
-
-"""
-print(len(shhs_data_manager))
-
-for data_point in shhs_data_manager:
-    print(data_point)
-
-print(shhs_data_manager.load_data(id = 2))
-
-print(shhs_data_manager["RRI"])
-
-print(shhs_data_manager['1'])
-
-# let getitem retrieve also ids
-# change so that sampling frequency must always be the same
-# maybe create first dictionary that holds information like sampling frequency, etc.
-# which is not transformable by the user
-import inspect
-
-class DataManager:
-    _instance_registry = {}
-
-    def __init__(self, file_path):
-        self._file_path = file_path
-        self._register_instance()
-
-    def _register_instance(self):
-        # Get the name of the variable assigned to this instance
-        frame = inspect.currentframe().f_back
-        variable_name = None
-        for name, value in frame.f_locals.items():
-            if value is self:
-                variable_name = name
-                break
-
-        if variable_name:
-            if variable_name in DataManager._instance_registry:
-                raise ValueError(f"Variable '{variable_name}' is already assigned to an instance of DataManager.")
-            DataManager._instance_registry[variable_name] = self
-
-# Example usage:
-try:
-    dm1 = DataManager(file_path="file1.pkl")
-    dm1 = DataManager(file_path="file2.pkl")  # This will raise a ValueError
-except ValueError as e:
-    print(e)
-
-try:
-    dm2 = DataManager(file_path="file3.pkl")
-except ValueError as e:
-    print(e)
-"""
+        return f"file_path: {self.file_path}\nfile_info: {self.file_info}"
