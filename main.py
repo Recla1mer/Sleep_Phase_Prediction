@@ -1,70 +1,17 @@
+"""
+Author: Johannes Peter Knoll
+
+"""
+
 # LOCAL IMPORTS
 from dataset_processing import *
 from neural_network_model import *
 
-# LOAD DATA
-class EDF_Dataset(Dataset):
-    def __init__(self):
-        # load data
-        # transform data
-        pass
-
-    def __len__(self):
-        # return number of samples
-        pass
-
-    def __getitem__(self, idx):
-        # return sample
-        pass
-
-# CREATE NETWORK
-class NeuralNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(NeuralNetwork, self).__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, output_dim)
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-# check if model runs and returns correct shape on random data
-# model = NeuralNetwork(28*28, 64, 10)
-# x = torch.rand(5, 28, 28) # mini-batch size 1, 28x28 pixels
-# print(model(x).shape) # we want num classes (10) values for each image (5) -> [5, 10]
-
-# SET DEVICE
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-print(f"Using {device} device")
-
-# HYPERPARAMETERS
-learning_rate = 1e-3
-batch_size = 64
-epochs = 5
-
-input_size = 28*28
-num_classes = 10
-
-# INITIALIZE NETWORK
-model = NeuralNetwork(input_size, num_classes).to(device)
-
-# Initialize the loss and optimizer functions
-loss_fn = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-
-edf_dataset = EDF_Dataset()
-edf_dataloader = DataLoader(edf_dataset, batch_size=64)
+"""
+------------------------
+Looping over the dataset
+------------------------
+"""
 
 # TRAINING LOOP
 def train_loop(dataloader, model, loss_fn, optimizer):
@@ -107,3 +54,40 @@ def test_loop(dataloader, model, loss_fn):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+
+"""
+--------------------------------
+Training and Testing the Model
+--------------------------------
+"""
+
+if __name__ == "__main__":
+
+    # SET DEVICE
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"Using {device} device")
+
+    # HYPERPARAMETERS
+    learning_rate = 1e-3
+    batch_size = 64
+    epochs = 5
+
+    input_size = 28*28
+    num_classes = 10
+
+    # INITIALIZE NETWORK
+    model = SleepStageModel(input_size, num_classes).to(device)
+
+    # Initialize the loss and optimizer functions
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
+    #edf_dataset = EDF_Dataset()
+    #edf_dataloader = DataLoader(edf_dataset, batch_size=64)

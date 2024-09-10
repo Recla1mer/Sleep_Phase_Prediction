@@ -332,7 +332,7 @@ if __name__ == "__main__":
     random_sleep_stage_labels = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
 
     # creating and saving random data to file
-    for index in range(5):
+    for index in range(10):
         random_datapoint = {
             "ID": str(index),
             "RRI": np.random.rand(36000*4), # 10 hours with 4 Hz sampling rate
@@ -344,7 +344,7 @@ if __name__ == "__main__":
             "sleep_stage_label": random_sleep_stage_labels
         }
         random_datapoint_without_mad = {
-            "ID": str(index+10),
+            "ID": str(index),
             "RRI": np.random.rand(36000*4), # 10 hours with 4 Hz sampling rate
             "RRI_frequency": 4,
             "SLP": np.random.randint(5, size=1200), # 10 hours with 1/30 Hz sampling rate
