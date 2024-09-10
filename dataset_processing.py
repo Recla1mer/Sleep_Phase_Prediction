@@ -15,6 +15,8 @@ then head to 'Classification_Demo.ipynb' and follow the instructions there.
 
 # IMPORTS:
 import numpy as np
+import os
+import copy
 
 
 """
@@ -1235,7 +1237,8 @@ class SleepDataManager:
             file_generator = load_from_pickle(self.file_path)
             
             # Create temporary file to save data in progress
-            working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+            working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+            working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
             # save file information to working file
             save_to_pickle(data = next(file_generator), file_name = working_file_path)
@@ -1475,7 +1478,8 @@ class SleepDataManager:
         file_generator = load_from_pickle(self.file_path)
 
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # save file information to working file
         save_to_pickle(data = next(file_generator), file_name = working_file_path)
@@ -1660,7 +1664,8 @@ class SleepDataManager:
         next(file_generator)
 
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)
@@ -1748,7 +1753,8 @@ class SleepDataManager:
         next(file_generator)
 
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)
@@ -1795,7 +1801,8 @@ class SleepDataManager:
         file_generator = load_from_pickle(self.file_path)
         
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # save file information to working file
         save_to_pickle(data = next(file_generator), file_name = working_file_path)
@@ -1830,8 +1837,11 @@ class SleepDataManager:
         in the same directory as the main file. The file information will be saved to each file.
 
         Data that can not be used to train the network (i.e. missing "RRI" and "SLP") will be left in the
-        main file. As we have data with "RRI" and "MAD" and data with "RRI" only, the algorithm makes sure
-        that the ratio between the two types of data is about the same in all files.
+        main file. 
+        
+        As we can manage data with "RRI" and "MAD" and data with "RRI" only, the algorithm makes sure
+        that only one of the two types of data is used (the one with more samples). The other type will 
+        be left in the main file.
 
         The individual files can be accessed by another instance of this class. 
 
@@ -1894,26 +1904,26 @@ class SleepDataManager:
         
         del file_generator
 
+        """ # useless after realising that we can only use one type of data in one dataset, was used to obtain equal relative amounts of both types
         # Separate data
-        train_data_rri_and_mad, rest_data_rri_and_mad = train_test_split(id_with_rri_and_mad, train_size = train_size, random_state = random_state, shuffle = shuffle)
+        train_data_rri_and_mad, rest_data_rri_and_mad = train_test_split(copy.deepcopy(id_with_rri_and_mad), train_size = train_size, random_state = random_state, shuffle = shuffle)
         val_data_rri_and_mad, test_data_rri_and_mad = train_test_split(rest_data_rri_and_mad, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
 
-        train_data_rri, rest_data_rri = train_test_split(id_with_rri, train_size = train_size, random_state = random_state, shuffle = shuffle)
+        train_data_rri, rest_data_rri = train_test_split(copy.deepcopy(id_with_rri), train_size = train_size, random_state = random_state, shuffle = shuffle)
         test_data_rri, val_data_rri = train_test_split(rest_data_rri, train_size = test_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
+        """
 
-        # # relocate datapoints if ratio between val and test data is off
-        # more_val = False
-        # if len(val_data_rri_and_mad) / len(test_data_rri_and_mad) > validation_size / test_size:
-        #     more_val = True
-        
-        # more_val_rri = False
-        # if len(val_data_rri) / len(test_data_rri) > validation_size / test_size:
-        #     more_val_rri = True
-        
-        # if more_val and more_val_rri:
-        #     test_data_rri = np.append(test_data_rri, [val_data_rri[0]])
-        # if not more_val and not more_val_rri:
-        #     val_data_rri = np.append(val_data_rri, [test_data_rri[0]])
+        # choose which data to keep in the main file
+        if len(id_with_rri_and_mad) > len(id_with_rri):
+            if len(id_with_rri) != 0:
+                print(f"\nAttention: {len(id_with_rri)} datapoints without MAD signal will be left in the main file.")
+            train_data_ids, rest_data_ids = train_test_split(copy.deepcopy(id_with_rri_and_mad), train_size = train_size, random_state = random_state, shuffle = shuffle)
+            validation_data_ids, test_data_ids = train_test_split(rest_data_ids, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
+        else:
+            if len(id_with_rri_and_mad) != 0:
+                print(f"\nAttention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
+            train_data_ids, rest_data_ids = train_test_split(copy.deepcopy(id_with_rri), train_size = train_size, random_state = random_state, shuffle = shuffle)
+            validation_data_ids, test_data_ids = train_test_split(rest_data_ids, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
 
         # Change file information
         self.file_info["train_val_test_split_applied"] = True
@@ -1931,7 +1941,8 @@ class SleepDataManager:
         file_generator = load_from_pickle(self.file_path)
 
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # skip file information
         next(file_generator)
@@ -1940,11 +1951,11 @@ class SleepDataManager:
         save_to_pickle(data = self.file_info, file_name = working_file_path)
 
         for data_point in file_generator:
-            if data_point["ID"] in train_data_rri_and_mad or data_point["ID"] in train_data_rri:
+            if data_point["ID"] in train_data_ids:
                 append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
-            elif data_point["ID"] in val_data_rri_and_mad or data_point["ID"] in val_data_rri:
+            elif data_point["ID"] in validation_data_ids:
                 append_to_pickle(data = data_point, file_name = self.file_info["validation_file_path"])
-            elif data_point["ID"] in test_data_rri_and_mad or data_point["ID"] in test_data_rri:
+            elif data_point["ID"] in test_data_ids:
                 append_to_pickle(data = data_point, file_name = self.file_info["test_file_path"])
             else:
                 append_to_pickle(data = data_point, file_name = working_file_path)
@@ -1979,7 +1990,8 @@ class SleepDataManager:
         self.file_info["train_val_test_split_applied"] = False
 
         # Create temporary file to save data in progress
-        working_file_path = find_non_existing_path(path_without_file_type = "save_in_progress", file_type = "pkl")
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)

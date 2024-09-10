@@ -7,6 +7,7 @@ Prediction.
 
 # IMPORTS:
 import numpy as np
+import os
 
 import torch
 import torch.nn as nn
@@ -18,199 +19,67 @@ from torchvision.transforms import ToTensor
 from dataset_processing import *
 
 
-class CustomArrayDataset(Dataset):
-    def __init__(self, ecg_data, mad_data, labels, transform=None):
-        self.ecg_data = ecg_data
-        self.mad_data = mad_data
-        self.labels = labels
+"""
+------------------------------
+Implementing a Custom Dataset
+------------------------------
+"""
+
+class CustomSleepDataset(Dataset):
+    def __init__(
+            self, 
+            path_to_data: str, 
+            transform=None
+        ):
+
+        self.data_manager = SleepDataManager(path_to_data)
         self.transform = transform
 
     def __len__(self):
-        return len(self.ecg_data)
+        return len(self.data_manager)
 
     def __getitem__(self, idx):
-        ecg_sample = self.ecg_data[idx]
-        mad_sample = self.mad_data[idx]
-        labels = self.labels[idx]
+        # load dictionary with data from file using data_manager
+        data_sample = self.data_manager.load(idx)
+
+        # extract features from dictionary:
+        rri_sample = data_sample["RRI_windows"] # type: ignore
+
+        # mad not present in all files:
+        try:
+            mad_sample = data_sample["MAD_windows"] # type: ignore
+        except:
+            mad_sample = "None"
+
+        # extract labels from dictionary:
+        slp_labels = data_sample["SLP_windows"] # type: ignore
 
         if self.transform:
-            ecg_sample = self.transform(ecg_sample)
-            mad_sample = self.transform(mad_sample)
+            rri_sample = self.transform(rri_sample)
+            try:
+                mad_sample = self.transform(mad_sample)
+            except:
+                pass
 
-        return ecg_sample, mad_sample, labels
-
-
-# Example usage
-if __name__ == "__main__":
-    # Sample ECG data: 3D array (e.g., 2 nights, each with 5 windows, each window with a 1D array of shape (6,))
-    ecg_data = np.array([[[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-                          [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
-                          [13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
-                          [19.0, 20.0, 21.0, 22.0, 23.0, 24.0],
-                          [25.0, 26.0, 27.0, 28.0, 29.0, 30.0]],
-                         [[31.0, 32.0, 33.0, 34.0, 35.0, 36.0],
-                          [37.0, 38.0, 39.0, 40.0, 41.0, 42.0],
-                          [43.0, 44.0, 45.0, 46.0, 47.0, 48.0],
-                          [49.0, 50.0, 51.0, 52.0, 53.0, 54.0],
-                          [55.0, 56.0, 57.0, 58.0, 59.0, 60.0]]])
-
-    # Sample MAD data: 3D array (e.g., 2 nights, each with 5 windows, each window with a 1D array of shape (3,))
-    mad_data = np.array([[[0.1, 0.2, 0.3],
-                          [0.4, 0.5, 0.6],
-                          [0.7, 0.8, 0.9],
-                          [1.0, 1.1, 1.2],
-                          [1.3, 1.4, 1.5]],
-                         [[1.6, 1.7, 1.8],
-                          [1.9, 2.0, 2.1],
-                          [2.2, 2.3, 2.4],
-                          [2.5, 2.6, 2.7],
-                          [2.8, 2.9, 3.0]]])
-
-    # Corresponding labels for each window (e.g., 2 nights, each with 5 windows, each window with 1 label)
-    labels = torch.tensor([[0, 1, 0, 1, 0],
-                           [1, 0, 1, 0, 1]])
-
-    # Create dataset
-    dataset = CustomArrayDataset(ecg_data, mad_data, labels, transform=ToTensor())
-
-    # Create DataLoader
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
-
-    # for batch, (ecg, mad, y) in enumerate(dataloader):
-    #     # print shape of data and labels:
-    #     print(f"Batch {batch}:")
-    #     print("ECG Data:", ecg)
-    #     print("MAD Data:", mad)
-    #     print("Labels:", y)
-    #     print("ECG Data shape:", ecg.shape)
-    #     print("MAD Data shape:", mad.shape)
-    #     print("Labels shape:", y.shape)
-
-
-
-
-    # for batch, (ecg, mad, y) in enumerate(dataloader):
-    #     print(f"Batch {batch}:")
-    #     print("ECG Data:", ecg)
-    #     print("MAD Data:", mad)
-    #     print("Labels:", y)
-    #     print("ECG Data shape:", ecg.shape)
-    #     print("MAD Data shape:", mad.shape)
-    #     print("Labels shape:", y.shape)
-
-    #     output = model(ecg, mad)
-    #     print("Output shape:", output.shape)
-
-
-        
-    # # Sample ECG and MAD data
-    # ecg_data = np.array([[[31.0, 32.0, 33.0, 34.0, 35.0, 36.0],
-    #                       [37.0, 38.0, 39.0, 40.0, 41.0, 42.0],
-    #                       [43.0, 44.0, 45.0, 46.0, 47.0, 48.0],
-    #                       [49.0, 50.0, 51.0, 52.0, 53.0, 54.0],
-    #                       [55.0, 56.0, 57.0, 58.0, 59.0, 60.0]],
-    #                      [[61.0, 62.0, 63.0, 64.0, 65.0, 66.0],
-    #                       [67.0, 68.0, 69.0, 70.0, 71.0, 72.0],
-    #                       [73.0, 74.0, 75.0, 76.0, 77.0, 78.0],
-    #                       [79.0, 80.0, 81.0, 82.0, 83.0, 84.0],
-    #                       [85.0, 86.0, 87.0, 88.0, 89.0, 90.0]]])
-
-    # mad_data = np.array([[[0.1, 0.2, 0.3],
-    #                       [0.4, 0.5, 0.6],
-    #                       [0.7, 0.8, 0.9],
-    #                       [1.0, 1.1, 1.2],
-    #                       [1.3, 1.4, 1.5]],
-    #                      [[1.6, 1.7, 1.8],
-    #                       [1.9, 2.0, 2.1],
-    #                       [2.2, 2.3, 2.4],
-    #                       [2.5, 2.6, 2.7],
-    #                       [2.8, 2.9, 3.0]]])
-
-    # labels = torch.tensor([[0, 1, 0, 1, 0],
-    #                        [1, 0, 1, 0, 1]])
-
-    # class CustomArrayDataset(Dataset):
-    #     def __init__(self, ecg_data, mad_data, labels, transform=None):
-    #         self.ecg_data = ecg_data
-    #         self.mad_data = mad_data
-    #         self.labels = labels
-    #         self.transform = transform
-
-    #     def __len__(self):
-    #         return len(self.ecg_data)
-
-    #     def __getitem__(self, idx):
-    #         ecg = self.ecg_data[idx]
-    #         mad = self.mad_data[idx]
-    #         label = self.labels[idx]
-    #         if self.transform:
-    #             ecg = self.transform(ecg)
-    #             mad = self.transform(mad)
-    #         return ecg, mad, label
-
-    # class ToTensor:
-    #     def __call__(self, sample):
-    #         return torch.tensor(sample, dtype=torch.float32)
-
-    # dataset = CustomArrayDataset(ecg_data, mad_data, labels, transform=ToTensor())
-
-    # dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
-
-    # model = SleepStageModel()
-    # criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    # for batch, (ecg, mad, y) in enumerate(dataloader):
-    #     print(f"Batch {batch}:")
-    #     print("ECG Data:", ecg)
-    #     print("MAD Data:", mad)
-    #     print("Labels:", y)
-    #     print("ECG Data shape:", ecg.shape)
-    #     print("MAD Data shape:", mad.shape)
-    #     print("Labels shape:", y.shape)
-
-    #     output = model(ecg, mad)
-    #     print("Output shape:", output.shape)
-
-"""
-length = 1000
-frequency = 1 / 30
-target_freq = 1 / 30
-
-import random
-
-random_array = [random.randint(0, 5) for _ in range(length)]
-reshaped_array = reshape_signal(
-    signal = random_array, # type: ignore
-    sampling_frequency = frequency,
-    target_frequency = target_freq, 
-    number_windows = 1197, 
-    window_duration_seconds = 120, 
-    overlap_seconds = 90,
-    signal_type = "target",
-    nn_signal_duration_seconds = 10*3600,
-    )
-
-print(f"Shape of new array: {reshaped_array.shape}")
-print(f" Datapoints in new array: {reshaped_array.shape[0]}")
-print(f"Unique Datapoints in new array: {120 * target_freq + (reshaped_array.shape[0] - 1) * (120 - 90) * target_freq}")
-print(f" Datapoints in scaled original array: {length/frequency*target_freq}")
-"""
+        return rri_sample, mad_sample, slp_labels
 
 
 # conv, relu, conv, relu, pool
 class SleepStageModel(nn.Module):
     """
     Deep Convolutional Neural Network for Sleep Stage Prediction
+
+    Attention:  Number of convolutional channels (-1) must be smaller equals than the number of times 
+                datapoints_per_mad_window and datapoints_per_rri_window are dividable by 2 without rest.
     """
     def __init__(
             self, 
-            datapoints_per_rri_window = 512, 
-            datapoints_per_mad_window = 128,
-            windows_per_batch = 1200,
+            datapoints_per_rri_window = 480, 
+            datapoints_per_mad_window = 120,
+            windows_per_batch = 1197,
             number_window_learning_features = 128,
-            rri_convolutional_channels = [1, 2, 4, 8, 16, 32, 64],
-            mad_convolutional_channels = [1, 2, 4, 8, 16, 32, 64],
+            rri_convolutional_channels = [1, 2, 4, 8],
+            mad_convolutional_channels = [1, 2, 4, 8],
             window_learning_dilations = [2, 4, 6, 8],
             number_sleep_stages = 5
             ):
@@ -218,11 +87,11 @@ class SleepStageModel(nn.Module):
         Parameters
         ----------
         datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 512
+            Number of data points in each RRI window, by default 480
         datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 128
+            Number of data points in each MAD window, by default 120
         windows_per_batch : int, optional
-            Number of windows in each batch, by default 1200
+            Number of windows in each batch, by default 1197
         number_window_learning_features : int, optional
             Number of features learned from Signal Learning, by default 128
         rri_convolutional_channels : list, optional
@@ -235,6 +104,14 @@ class SleepStageModel(nn.Module):
             Number of predictable sleep stages, by default 5
         
         """
+        # check parameters:
+        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
+            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
+        if datapoints_per_mad_window % 2**(len(mad_convolutional_channels)-1) != 0:
+            raise ValueError("Number of MAD datapoints per window must be dividable by 2^(number of MAD convolutional layers - 1) without rest.")
+        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
+            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
+
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_batch = windows_per_batch
@@ -442,6 +319,110 @@ class SleepStageModel(nn.Module):
 # Example usage
 if __name__ == "__main__":
 
+    """
+    --------------------------------------
+    preparing random data file for testing
+    --------------------------------------
+    """
+    print("\n\nPreparing random data file for testing...")
+    print("="*40)
+    # creating dataset file and data manager instance on it
+    random_file_path = "Testing_NNM/random_data.pkl"
+    random_data_manager = SleepDataManager(file_path = random_file_path)
+    random_sleep_stage_labels = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+
+    # creating and saving random data to file
+    for index in range(5):
+        random_datapoint = {
+            "ID": str(index),
+            "RRI": np.random.rand(36000*4), # 10 hours with 4 Hz sampling rate
+            "RRI_frequency": 4,
+            "MAD": np.random.rand(36000), # 10 hours with 1 Hz sampling rate
+            "MAD_frequency": 1,
+            "SLP": np.random.randint(5, size=1200), # 10 hours with 1/30 Hz sampling rate
+            "SLP_frequency": 1/30,
+            "sleep_stage_label": random_sleep_stage_labels
+        }
+        random_datapoint_without_mad = {
+            "ID": str(index+10),
+            "RRI": np.random.rand(36000*4), # 10 hours with 4 Hz sampling rate
+            "RRI_frequency": 4,
+            "SLP": np.random.randint(5, size=1200), # 10 hours with 1/30 Hz sampling rate
+            "SLP_frequency": 1/30,
+            "sleep_stage_label": random_sleep_stage_labels
+        }
+        random_data_manager.save(random_datapoint) # comment to test data without MAD signal
+        #random_data_manager.save(random_datapoint_without_mad) # uncomment to test data without MAD signal
+    
+    # transforming all data in file to windows
+    random_data_manager.transform_signals_to_windows(
+        number_windows = 1197, 
+        window_duration_seconds = 120, 
+        overlap_seconds = 90, 
+        priority_order = [0, 1, 2, 3, 5, -1]
+        )
+    
+    some_datapoint = random_data_manager.load(0)
+
+    print("Shape of Signals (before / after):")
+    print(f"RRI Signal: {some_datapoint["RRI"].shape} / {some_datapoint["RRI_windows"].shape}") # type: ignore
+    try:
+        print(f"MAD Signal: {some_datapoint["MAD"].shape} / {some_datapoint["MAD_windows"].shape}") # type: ignore
+    except:
+        pass
+    print(f"SLP Signal: {some_datapoint["SLP"].shape} / {some_datapoint["SLP_windows"].shape}") # type: ignore
+    
+    del random_data_manager, random_sleep_stage_labels, some_datapoint
+
+    print("="*40)
+
+
+    """
+    ---------------------------------
+    Testing the Custom Dataset Class
+    ---------------------------------
+    """
+
+    print("\n\nTesting the Custom Dataset Class...")
+    print("="*40)
+    print("")
+
+    # Create dataset
+    dataset = CustomSleepDataset(path_to_data = random_file_path, transform=ToTensor())
+
+    # Create DataLoader
+    dataloader = DataLoader(dataset, batch_size=3, shuffle=True)
+
+    # Iterate over dataloader and print shape of features and labels
+    for batch, (rri, mad, slp) in enumerate(dataloader):
+        # print shape of data and labels:
+        print(f"Batch {batch}:")
+        print("-"*40)
+        print("RRI shape:", rri.shape)
+        if mad[0] == "None":
+            mad = None
+            print(f"MAD shape: {mad}")
+        else:
+            print("MAD shape:", mad.shape)
+        print("SLP shape:", slp.shape)
+        print("")
+    
+    # delete data file
+    os.remove(random_file_path)
+    os.rmdir(os.path.split(random_file_path)[0])
+
+    print("="*40)
+
+
+    """
+    ---------------------------------
+    Testing the Neural Network Model
+    ---------------------------------
+    """
+
+    print("\n\nTesting the Neural Network Model...")
+    print("="*40)
+
     # Get cpu, gpu or mps device for training.
     device = (
         "cuda"
@@ -457,9 +438,11 @@ if __name__ == "__main__":
     DCNN.to(device)
 
     # Create example data
-    rri_example = torch.rand((2, 1, 1200, 512), device=device)
-    mad_example = torch.rand((2, 1, 1200, 128), device=device)
+    rri_example = torch.rand((2, 1, 1197, 480), device=device)
+    mad_example = torch.rand((2, 1, 1197, 120), device=device)
 
     # Pass data through the model
     output = DCNN(rri_example, mad_example)
     print(output.shape)
+
+    print("="*40)
