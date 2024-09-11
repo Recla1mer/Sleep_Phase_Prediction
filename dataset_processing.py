@@ -390,8 +390,9 @@ def split_long_signal(
         target_frequency: int,
         nn_signal_duration_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
-        absolute_shift_deviation_seconds: int = 1800
-    ) -> tuple[np.ndarray, int]:
+        absolute_shift_deviation_seconds: int = 1800,
+        use_shift_length_seconds: float = 0
+    ) -> tuple[np.ndarray, float]:
     """
     If the signal is longer than nn_signal_duration_seconds, the signal will be split into multiple signals of 
     length 'nn_signal_duration_seconds'. The signal will only be shifted by a certain amount though, to
@@ -424,6 +425,12 @@ def split_long_signal(
         The shift length that is desired by user.
     absolute_shift_deviation_seconds: int
         The allowed deviation from the wanted shift length.
+    use_shift_length_seconds: int
+        If this parameter is set to a value > 0, the function will use this shift length to split the signal.
+        This can be useful if you want to split multiple signals with the same shift length.
+        
+        HIGHLY IMPORTANT for "bad" data with a signal (RRI, MAD, SLP... probably in most cases the latter) 
+        so that: (signal_seconds * sampling_frequency != integer)
     """
     
     # Check parameters
@@ -445,18 +452,24 @@ def split_long_signal(
     
     splitted_signals = np.empty((0, number_nn_datapoints), signal.dtype) # type: ignore
 
-    # Calculate optimal shift length
-    optimal_shift_length = calculate_optimal_shift_length(
-        signal_length = len(signal),
-        desired_length = number_nn_datapoints,
-        wanted_shift_length = wanted_shift_length_seconds * target_frequency,
-        absolute_shift_deviation = absolute_shift_deviation_seconds * target_frequency
-        )
-    
-    # to ensure that we not miss any datapoints by reducing the shift length to nearest integer,
-    # we will not perform the last shift within the loop, but instead use the last 'number_nn_datapoints'
-    # of the signal
-    optimal_shift_length = int(optimal_shift_length)
+    # evaluate shift length
+    if use_shift_length_seconds > 0:
+        optimal_shift_length = int(use_shift_length_seconds * target_frequency)
+        shift_length_seconds = use_shift_length_seconds
+    else:
+        # Calculate optimal shift length
+        optimal_shift_length = calculate_optimal_shift_length(
+            signal_length = len(signal),
+            desired_length = number_nn_datapoints,
+            wanted_shift_length = wanted_shift_length_seconds * target_frequency,
+            absolute_shift_deviation = absolute_shift_deviation_seconds * target_frequency
+            )
+        
+        # to ensure that we not miss any datapoints by reducing the shift length to nearest integer,
+        # we will not perform the last shift within the loop, but instead use the last 'number_nn_datapoints'
+        # of the signal
+        shift_length_seconds = optimal_shift_length / target_frequency
+        optimal_shift_length = int(optimal_shift_length)
     
     # Split signal into multiple signals by shifting, transform to windows and append to reshaped_signals
     if optimal_shift_length > 0:
@@ -469,7 +482,7 @@ def split_long_signal(
     # Append last 'number_nn_datapoints' of signal to reshaped_signals
     splitted_signals = np.append(splitted_signals, [signal[-number_nn_datapoints:]], axis=0)
     
-    return splitted_signals, optimal_shift_length
+    return splitted_signals, shift_length_seconds
 
 
 def split_signals_within_dictionary(
@@ -517,22 +530,24 @@ def split_signals_within_dictionary(
         The allowed deviation from the wanted shift length.
     """
     splitted_signals = list()
+    previous_shift_length_seconds = 0
 
     # split signals if they are too long
     for signal_key_index in range(0, len(valid_signal_keys)):
         signal_key = valid_signal_keys[signal_key_index]
 
-        this_splitted_signal, this_shift_length = split_long_signal(
+        this_splitted_signal, previous_shift_length_seconds = split_long_signal(
             signal = data_dict[signal_key], # type: ignore
             sampling_frequency = signal_frequencies[signal_key_index],
             target_frequency = signal_target_frequencies[signal_key_index],
             nn_signal_duration_seconds = nn_signal_duration_seconds,
             wanted_shift_length_seconds = wanted_shift_length_seconds,
-            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
+            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
+            use_shift_length_seconds = previous_shift_length_seconds
             )
 
         splitted_signals.append(this_splitted_signal)
-        this_shift_length_seconds = int(this_shift_length / signal_target_frequencies[signal_key_index])
+        this_shift_length_seconds = int(previous_shift_length_seconds)
         del this_splitted_signal
 
     # create new dictionaries for splitted signals
