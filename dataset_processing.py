@@ -614,7 +614,7 @@ def signal_to_windows(
 
     # Check if signal_type is valid
     if signal_type not in ["feature", "target"]:
-        raise ValueError("Parameter 'mode' must be either 'signal' or 'target'.")
+        raise ValueError("Parameter 'mode' must be either 'feature' or 'target'.")
 
     # Initialize windows
     if signal_type == "feature":
@@ -656,7 +656,6 @@ def signal_to_windows(
 
 def reshape_signal_to_overlapping_windows(
         signal: list, 
-        sampling_frequency: float,
         target_frequency: float, 
         nn_signal_duration_seconds: int = 10*3600,
         pad_with = 0,
@@ -686,10 +685,8 @@ def reshape_signal_to_overlapping_windows(
     Check uses following parameters:
     -----
 
-    sampling_frequency: int
-        The frequency of the input signal.
     target_frequency: int
-        The frequency to resample the signal to. Frequency of signal in the neural network.
+        Frequency of signal in the neural network.
     
     -----
     If the signal is shorter than 'nn_signal_duration_seconds', it will be padded with 'pad_with' to match
@@ -731,8 +728,6 @@ def reshape_signal_to_overlapping_windows(
     window_overlap = overlap_seconds * target_frequency
     
     # Check parameters
-    if sampling_frequency != target_frequency:
-        raise ValueError("Signal must be resampled to target frequency before reshaping.")
     
     if int(number_nn_datapoints) != number_nn_datapoints:
         raise ValueError("Number of datapoints must be an integer. Choose 'nn_signal_duration_seconds' and 'target_frequency' accordingly.")

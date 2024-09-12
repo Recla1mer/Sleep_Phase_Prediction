@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     shhs_data_manager.separate_train_test_validation(
         train_size = 0.8, 
-        validation_size = 0.1, 
+        validation_size = 0.1,  
         test_size = 0.1, 
         random_state = None, 
         shuffle = True

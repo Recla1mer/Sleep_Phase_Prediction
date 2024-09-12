@@ -26,34 +26,69 @@ Implementing a Custom Dataset
 ------------------------------
 """
 
+default_window_reshape_parameters = {
+        "nn_signal_duration_seconds": 10*3600,
+        "number_windows": 1197, 
+        "window_duration_seconds": 120, 
+        "overlap_seconds": 90,
+        "priority_order": [0, 1, 2, 3, 5, -1]
+}
+
 class CustomSleepDataset(Dataset):
     def __init__(
             self, 
             path_to_data: str, 
-            transform=None
+            transform=None,
+            window_reshape_parameters: dict = default_window_reshape_parameters,
         ):
 
-        self.data_manager = SleepDataManager(path_to_data)
         self.transform = transform
+        
+        self.data_manager = SleepDataManager(path_to_data)
+        self.rri_frequency = self.data_manager.file_info["RRI_frequency"]
+        self.mad_frequency = self.data_manager.file_info["MAD_frequency"]
+        self.slp_frequency = self.data_manager.file_info["SLP_frequency"]
+        
+        self.window_reshape_parameters = window_reshape_parameters
+        
 
     def __len__(self):
         return len(self.data_manager)
+
 
     def __getitem__(self, idx):
         # load dictionary with data from file using data_manager
         data_sample = self.data_manager.load(idx)
 
+        self.window_reshape_parameters["signal_type"] = "feature"
+        self.window_reshape_parameters["pad_with"] = 0
+
         # extract features from dictionary:
-        rri_sample = data_sample["RRI"] # type: ignore
+        rri_sample = reshape_signal_to_overlapping_windows(
+            signal = data_sample["RRI"], # type: ignore
+            target_frequency = self.rri_frequency,
+            **self.window_reshape_parameters
+        )
 
         # mad not present in all files:
         try:
-            mad_sample = data_sample["MAD"] # type: ignore
+            mad_sample = reshape_signal_to_overlapping_windows(
+                signal = data_sample["MAD"], # type: ignore
+                target_frequency = self.mad_frequency,
+                **self.window_reshape_parameters
+            )
         except:
             mad_sample = "None"
 
         # extract labels from dictionary:
-        slp_labels = data_sample["SLP"] # type: ignore
+        self.window_reshape_parameters["signal_type"] = "target"
+        self.window_reshape_parameters["pad_with"] = 0
+
+        slp_labels = reshape_signal_to_overlapping_windows(
+            signal = data_sample["SLP"], # type: ignore 
+            target_frequency = self.slp_frequency,
+            **self.window_reshape_parameters
+        )
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
@@ -535,26 +570,18 @@ if __name__ == "__main__":
             "SLP_frequency": 1/30,
             "sleep_stage_label": random_sleep_stage_labels
         }
-        random_data_manager.save(random_datapoint) # comment to test data without MAD signal
+        random_data_manager.save(random_datapoint, unique_id=True) # comment to test data without MAD signal
         #random_data_manager.save(random_datapoint_without_mad) # uncomment to test data without MAD signal
-    
-    # transforming all data in file to windows
-    random_data_manager.transform_signals_to_windows(
-        number_windows = 1197, 
-        window_duration_seconds = 120, 
-        overlap_seconds = 90, 
-        priority_order = [0, 1, 2, 3, 5, -1]
-        )
     
     some_datapoint = random_data_manager.load(0)
 
-    print("Shape of Signals (before / after):")
-    print(f"RRI Signal: {some_datapoint["RRI"].shape} / {some_datapoint["RRI_windows"].shape}") # type: ignore
+    print("Shape of Signals:")
+    print(f"RRI Signal: {some_datapoint["RRI"].shape}") # type: ignore
     try:
-        print(f"MAD Signal: {some_datapoint["MAD"].shape} / {some_datapoint["MAD_windows"].shape}") # type: ignore
+        print(f"MAD Signal: {some_datapoint["MAD"].shape}") # type: ignore
     except:
         pass
-    print(f"SLP Signal: {some_datapoint["SLP"].shape} / {some_datapoint["SLP_windows"].shape}") # type: ignore
+    print(f"SLP Signal: {some_datapoint["SLP"].shape}") # type: ignore
     
     del random_data_manager, random_sleep_stage_labels, some_datapoint
 
