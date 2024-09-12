@@ -604,7 +604,13 @@ def signal_to_windows(
     """
 
     signal = np.array(signal) # type: ignore
-    step_size = datapoints_per_window - window_overlap
+    priority_order = np.array(priority_order) # type: ignore
+
+    # check if signal data type equals priority_order data type
+    signal_data_type = signal.dtype # type: ignore
+    priority_order_data_type = priority_order.dtype # type: ignore
+    if signal_data_type != priority_order_data_type:
+        priority_order = priority_order.astype(signal_data_type) # type: ignore
 
     # Check if signal_type is valid
     if signal_type not in ["feature", "target"]:
@@ -615,6 +621,8 @@ def signal_to_windows(
         windows = np.empty((0, datapoints_per_window), signal.dtype) # type: ignore
     elif signal_type == "target":
         windows = np.empty((0), signal.dtype) # type: ignore
+    
+    step_size = datapoints_per_window - window_overlap
     
     # Split signal into windows
     for i in range(0, len(signal)-datapoints_per_window+1, step_size):
@@ -860,8 +868,7 @@ def alter_slp_labels(
             else:
                 raise ValueError(f"Label '{label}' not found in transformation dictionary.")
         
-    if signal_data_type == int:
-        altered_labels = altered_labels.astype(int)
+    altered_labels = altered_labels.astype(signal_data_type)
     
     return altered_labels
 
@@ -2210,3 +2217,106 @@ class SleepDataManager:
         """
 
         return f"file_path: {self.file_path}\nfile_info: {self.file_info}"
+
+
+"""
+--------------------------------------------
+Applying SleepDataManager class to our data
+--------------------------------------------
+"""
+
+import h5py
+
+def Process_SHHS_Dataset(
+        path_to_shhs_dataset: str,
+        path_to_save_processed_data: str
+    ):
+    """
+    This function processes our SHHS dataset. It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the above code to process a dataset.
+    """
+
+    # access the SHHS dataset
+    shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
+    
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    shhs_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+
+    # initializing the database
+    shhs_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
+
+    # accessing patient ids:
+    patients = list(shhs_dataset['slp'].keys()) # type: ignore
+
+    # check if patient ids are unique:
+    shhs_data_manager.check_if_ids_are_unique(patients)
+
+    # saving all data from SHHS dataset to the shhs_data.pkl file
+    for patient_id in patients:
+        new_datapoint = {
+            "ID": patient_id,
+            "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
+            "SLP": shhs_dataset["slp"][patient_id][:], # type: ignore
+            "RRI_frequency": shhs_dataset["rri"].attrs["freq"], # type: ignore
+            "SLP_frequency": shhs_dataset["slp"].attrs["freq"], # type: ignore
+            "sleep_stage_label": copy.deepcopy(shhs_sleep_stage_label)
+        }
+
+        shhs_data_manager.save(new_datapoint, unique_id=True)
+    
+    # transform signals in database to windows
+    shhs_data_manager.transform_signals_to_windows(
+    number_windows = 1197, 
+    window_duration_seconds = 120, 
+    overlap_seconds = 90, 
+    priority_order = [0, 1, 2, 3, 5, -1]
+    )
+
+
+def Process_GIF_Dataset(
+        path_to_gif_dataset: str,
+        path_to_save_processed_data: str
+    ):
+    """
+    This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the above code to process a dataset.
+    """
+
+    # access the GIF dataset
+    gif_dataset = h5py.File(path_to_gif_dataset, 'r')
+
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+
+    # initializing the database
+    gif_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
+
+    # accessing patient ids:
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    # check if patient ids are unique:
+    gif_data_manager.check_if_ids_are_unique(patients)
+
+    # saving all data from GIF dataset to the gif_data.pkl file
+    for patient_id in patients:
+        new_datapoint = {
+            "ID": patient_id,
+            "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
+            "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
+            "SLP": gif_dataset["stage"][patient_id][:], # type: ignore
+            "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
+            "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
+            "SLP_frequency": 1/30, # type: ignore
+            "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
+        }
+
+        gif_data_manager.save(new_datapoint, unique_id=True)
+
+    gif_data_manager.transform_signals_to_windows(
+        number_windows = 1197, 
+        window_duration_seconds = 120, 
+        overlap_seconds = 90, 
+        priority_order = [0, 1, 2, 3, 5, -1]
+        )

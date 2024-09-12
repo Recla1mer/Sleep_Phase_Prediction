@@ -8,6 +8,7 @@ Prediction.
 # IMPORTS:
 import numpy as np
 import os
+import math
 
 import torch
 import torch.nn as nn
@@ -43,16 +44,16 @@ class CustomSleepDataset(Dataset):
         data_sample = self.data_manager.load(idx)
 
         # extract features from dictionary:
-        rri_sample = data_sample["RRI_windows"] # type: ignore
+        rri_sample = data_sample["RRI"] # type: ignore
 
         # mad not present in all files:
         try:
-            mad_sample = data_sample["MAD_windows"] # type: ignore
+            mad_sample = data_sample["MAD"] # type: ignore
         except:
             mad_sample = "None"
 
         # extract labels from dictionary:
-        slp_labels = data_sample["SLP_windows"] # type: ignore
+        slp_labels = data_sample["SLP"] # type: ignore
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
@@ -67,10 +68,18 @@ class CustomSleepDataset(Dataset):
 # conv, relu, conv, relu, pool
 class SleepStageModel(nn.Module):
     """
-    Deep Convolutional Neural Network for Sleep Stage Prediction
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
 
     Attention:  Number of convolutional channels (-1) must be smaller equals than the number of times 
                 datapoints_per_mad_window and datapoints_per_rri_window are dividable by 2 without rest.
+    
+    Differences to the original architecture:
+    - Number of datapoints per window does not equal 2^x (x being an integer)
+        - Reason:   SLP stage was sampled with 1/30 Hz, which made it impossible to have a window size of 
+                    2^x which fits the sleep stage labels perfectly
+        - Advantage:    Every window better represents the actual sleep stage
+        - Disadvantage: Less repetitions of structure possible (because each step requires to be dividable by 2)
     """
     def __init__(
             self, 
@@ -314,6 +323,181 @@ class SleepStageModel(nn.Module):
         output = self.fc(combined_features)
         return output
         """
+
+
+"""
+------------------------
+Learning Rate Scheduling
+------------------------
+"""
+
+class CosineScheduler:
+    """
+    Source: https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
+
+    The Learning Rate defines how much to update the models parameters at each batch/epoch. 
+    Smaller values yield slow learning speed, while large values may result in unpredictable behavior during
+    training (https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html).
+
+    That's why we want to start with a larger learning rate and decrease it over time. A useful approach is to
+    decrease it in a cosine manner.
+
+    Using this class we can also define the parameters so, that the learning rate increases linearly in the beginning
+    and then decreases in a cosine manner.
+    """
+    def __init__(
+            self, 
+            number_updates_total, 
+            number_updates_to_max_lr,
+            start_learning_rate, 
+            max_learning_rate,
+            end_learning_rate, 
+        ):
+        """
+        Parameters
+        ----------
+        number_updates_total : int
+            Total number of learning rate updates for new epochs
+        number_updates_to_max_lr : int
+            Number of updates to reach max learning rate
+        start_learning_rate : float
+            Initial learning rate
+        max_learning_rate : float
+            Maximum learning rate
+        end_learning_rate : float
+            Final learning rate
+        """
+
+        self.number_updates_total = number_updates_total
+        self.number_increase_lr = number_updates_to_max_lr
+        self.number_decrease_lr = number_updates_total - number_updates_to_max_lr
+        self.start_learning_rate = start_learning_rate
+        self.max_learning_rate = max_learning_rate
+        self.end_learning_rate = end_learning_rate
+    
+    def linear_lr_increase(self, epoch):
+        """
+        Calculates linear increase of learning rate depending on the epoch
+        """
+        increase = self.max_learning_rate - self.start_learning_rate
+        increase *= epoch / self.number_increase_lr
+        return increase
+
+    def cosine_lr_decay(self, epoch):
+        """
+        Calculates cosine decrease of learning rate depending on the epoch
+        """
+        decay = self.max_learning_rate - self.end_learning_rate
+        decay *= (1 + math.cos(math.pi * (epoch-self.number_increase_lr) / self.number_decrease_lr)) / 2
+        return decay
+
+    def __call__(self, epoch):
+        """
+        Returns the learning rate for the given epoch
+        """
+        if epoch < self.number_increase_lr:
+            return self.start_learning_rate + self.linear_lr_increase(epoch)
+        if epoch <= self.number_updates_total:
+            return self.end_learning_rate + self.cosine_lr_decay(epoch)
+
+
+"""
+------------------------
+Looping over the dataset
+------------------------
+"""
+
+# TRAINING LOOP
+def train_loop(dataloader, model, loss_fn, optimizer, batch_size) -> None:
+    """
+    Iterate over the training dataset and try to converge to optimal parameters.
+
+    Source: https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html
+
+    Parameters
+    ----------
+    dataloader : DataLoader
+        DataLoader object containing the training dataset
+    model : nn.Module
+        Neural Network model to train
+    loss_fn : nn.Module
+        Loss function to be minimized
+    optimizer : torch.optim
+        Optimizer to update the model parameters
+    batch_size : int
+        Number of samples in each batch
+    
+    Returns
+    -------
+    None
+    """
+
+    size = len(dataloader.dataset)
+    # Set the model to training mode - important for batch normalization and dropout layers
+    model.train()
+
+    for batch, (rri, mad, slp) in enumerate(dataloader):
+        # check if MAD signal was not provided
+        if mad[0] == "None":
+            mad = None
+
+        # Compute prediction and loss
+        pred = model(rri, mad)
+        loss = loss_fn(pred, slp)
+
+        # Backpropagation
+        loss.backward()
+        optimizer.step() # updates the model parameters based on the gradients computed during the backward pass
+        optimizer.zero_grad()
+
+        if batch % 100 == 0:
+            loss, current = loss.item(), batch * batch_size + len(rri)
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+
+# TESTING LOOP
+def test_loop(dataloader, model, loss_fn) -> None:
+    """
+    Iterate over the test dataset to check if model performance is improving
+
+    Source: https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html
+
+    Parameters
+    ----------
+    dataloader : DataLoader
+        DataLoader object containing the test dataset
+    model : nn.Module
+        Neural Network model to test
+    loss_fn : nn.Module
+        Loss function to be minimized
+
+    Returns
+    -------
+    None
+    """
+
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    model.eval()
+
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    test_loss, correct = 0, 0
+
+    # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
+    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
+    with torch.no_grad():
+        for rri, mad, slp in dataloader:
+            # check if MAD signal was not provided
+            if mad[0] == "None":
+                mad = None
+
+            pred = model(rri, mad)
+            test_loss += loss_fn(pred, slp).item()
+            correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
+
+    test_loss /= num_batches
+    correct /= size
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 
 # Example usage
