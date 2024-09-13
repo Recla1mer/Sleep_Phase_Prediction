@@ -100,6 +100,13 @@ class CustomSleepDataset(Dataset):
         return rri_sample, mad_sample, slp_labels
 
 
+"""
+--------------------------------
+Implementing a Neural Network
+--------------------------------
+"""
+
+
 # conv, relu, conv, relu, pool
 class SleepStageModel(nn.Module):
     """
@@ -317,6 +324,7 @@ class SleepStageModel(nn.Module):
 
         # Process MAD Signal or create 0 tensor if MAD signal is not provided
         if mad_signal is None:
+            num_windows_mad = self.windows_per_batch
             mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device)
         else:
             mad_features = self.mad_signal_learning(mad_signal)
@@ -443,7 +451,7 @@ Looping over the dataset
 """
 
 # TRAINING LOOP
-def train_loop(dataloader, model, loss_fn, optimizer, batch_size) -> None:
+def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size) -> None:
     """
     Iterate over the training dataset and try to converge to optimal parameters.
 
@@ -455,10 +463,16 @@ def train_loop(dataloader, model, loss_fn, optimizer, batch_size) -> None:
         DataLoader object containing the training dataset
     model : nn.Module
         Neural Network model to train
+    device : str
+        Device to train the model on
     loss_fn : nn.Module
         Loss function to be minimized
-    optimizer : torch.optim
+    optimizer_fn : torch.optim
         Optimizer to update the model parameters
+    lr_scheduler :
+        Scheduler for the learning rate
+    current_epoch : int
+        Current epoch number
     batch_size : int
         Number of samples in each batch
     
@@ -475,6 +489,15 @@ def train_loop(dataloader, model, loss_fn, optimizer, batch_size) -> None:
         # check if MAD signal was not provided
         if mad[0] == "None":
             mad = None
+        else:
+            mad = mad.to(device)
+        
+        # Send data to device
+        rri, slp = rri.to(device), slp.to(device)
+        print(rri.shape, slp.shape, mad)
+        
+        # set optimizer
+        optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
 
         # Compute prediction and loss
         pred = model(rri, mad)
@@ -491,7 +514,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, batch_size) -> None:
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, loss_fn) -> None:
+def test_loop(dataloader, model, device, loss_fn) -> None:
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -503,6 +526,8 @@ def test_loop(dataloader, model, loss_fn) -> None:
         DataLoader object containing the test dataset
     model : nn.Module
         Neural Network model to test
+    device : str
+        Device to test the model on
     loss_fn : nn.Module
         Loss function to be minimized
 
@@ -525,6 +550,11 @@ def test_loop(dataloader, model, loss_fn) -> None:
             # check if MAD signal was not provided
             if mad[0] == "None":
                 mad = None
+            else:
+                mad = mad.to(device)
+            
+            # Send data to device
+            rri, slp = rri.to(device), slp.to(device)
 
             pred = model(rri, mad)
             test_loss += loss_fn(pred, slp).item()
@@ -650,7 +680,13 @@ if __name__ == "__main__":
 
     # Create example data
     rri_example = torch.rand((2, 1, 1197, 480), device=device)
-    mad_example = torch.rand((2, 1, 1197, 120), device=device)
+    mad_example = torch.rand((2, 1, 1197, 120), device=device) # comment to test data without MAD signal
+    # mad_example = None # uncomment to test data without MAD signal
+
+    # Send data to device
+    rri_example = rri_example.to(device)
+    if mad_example is not None:
+        mad_example = mad_example.to(device)
 
     # Pass data through the model
     output = DCNN(rri_example, mad_example)
