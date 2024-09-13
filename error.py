@@ -16,16 +16,10 @@ default_window_reshape_parameters = {
 
 data_manager = SleepDataManager(shhs_training_data_path)
 
-count = 0
-count_2 = 0
-count_3 = 0
 for dict in data_manager:
     slp = dict['SLP']
     if slp.dtype == float:
-        count += 1
+        print("hey", dict['ID'])
     reshaped_slp = reshape_signal_to_overlapping_windows(slp, target_frequency=1/30, **default_window_reshape_parameters)
     if reshaped_slp.dtype == float:
-        count_2 += 1
-
-print(len(data_manager))
-print(count, count_2)
+        print(dict['ID'])

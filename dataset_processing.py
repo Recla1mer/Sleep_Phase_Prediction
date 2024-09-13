@@ -618,9 +618,9 @@ def signal_to_windows(
 
     # Initialize windows
     if signal_type == "feature":
-        windows = np.empty((0, datapoints_per_window), signal.dtype) # type: ignore
+        windows = np.empty((0, datapoints_per_window), signal_data_type) # type: ignore
     elif signal_type == "target":
-        windows = np.empty((0), signal.dtype) # type: ignore
+        windows = np.empty((0), signal_data_type) # type: ignore
     
     step_size = datapoints_per_window - window_overlap
     
@@ -757,8 +757,11 @@ def reshape_signal_to_overlapping_windows(
         signal = signal[:number_nn_datapoints]
     
     # Pad signal with zeros if signal is shorter than 'signal_duration_seconds'
+    signal_data_type = signal.dtype # type: ignore
+
     number_missing_datapoints = number_nn_datapoints - len(signal)
     signal = np.append(signal, [pad_with for i in range(number_missing_datapoints)]) # type: ignore
+    signal = signal.astype(signal_data_type) # type: ignore
 
     # Reshape signal to windows
     signal_windows = signal_to_windows(

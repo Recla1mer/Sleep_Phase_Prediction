@@ -69,7 +69,8 @@ class CustomSleepDataset(Dataset):
             target_frequency = self.rri_frequency,
             **self.window_reshape_parameters
         )
-        rri_sample = rri_sample.astype(np.float32)
+        if rri_sample.dtype == np.float64:
+            rri_sample = rri_sample.astype(np.float32)
 
         # mad not present in all files:
         try:
@@ -78,7 +79,8 @@ class CustomSleepDataset(Dataset):
                 target_frequency = self.mad_frequency,
                 **self.window_reshape_parameters
             )
-            mad_sample = mad_sample.astype(np.float32)
+            if rri_sample.dtype == np.float64:
+                mad_sample = mad_sample.astype(np.float32)
         except:
             mad_sample = "None"
 
@@ -91,10 +93,8 @@ class CustomSleepDataset(Dataset):
             target_frequency = self.slp_frequency,
             **self.window_reshape_parameters
         )
-        if slp_labels.dtype == int:
+        if slp_labels.dtype == np.int64:
             slp_labels = slp_labels.astype(np.int32)
-        elif slp_labels.dtype == float:
-            slp_labels = slp_labels.astype(np.float32)
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
@@ -487,6 +487,9 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     None
     """
 
+    # set optimizer
+    optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
+
     size = len(dataloader.dataset)
     # Set the model to training mode - important for batch normalization and dropout layers
     model.train()
@@ -503,9 +506,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         
         # Send data to device
         rri, slp = rri.to(device), slp.to(device)
-        
-        # set optimizer
-        optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
 
         # Compute prediction and loss
         pred = model(rri, mad)
