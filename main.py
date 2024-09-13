@@ -239,7 +239,6 @@ if __name__ == "__main__":
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    device = "cpu"
     print(f"\nUsing {device} device")
 
     """

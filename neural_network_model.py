@@ -69,6 +69,7 @@ class CustomSleepDataset(Dataset):
             target_frequency = self.rri_frequency,
             **self.window_reshape_parameters
         )
+        rri_sample = rri_sample.astype(np.float32)
 
         # mad not present in all files:
         try:
@@ -77,6 +78,7 @@ class CustomSleepDataset(Dataset):
                 target_frequency = self.mad_frequency,
                 **self.window_reshape_parameters
             )
+            mad_sample = mad_sample.astype(np.float32)
         except:
             mad_sample = "None"
 
@@ -89,6 +91,10 @@ class CustomSleepDataset(Dataset):
             target_frequency = self.slp_frequency,
             **self.window_reshape_parameters
         )
+        if slp_labels.dtype == int:
+            slp_labels = slp_labels.astype(np.int32)
+        elif slp_labels.dtype == float:
+            slp_labels = slp_labels.astype(np.float32)
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
@@ -492,9 +498,11 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         else:
             mad = mad.to(device)
         
+        # reshape slp to fit the model output
+        slp = slp.view(-1) # Combine batch and windows dimensions
+        
         # Send data to device
         rri, slp = rri.to(device), slp.to(device)
-        print(rri.shape, slp.shape, mad)
         
         # set optimizer
         optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
@@ -680,8 +688,8 @@ if __name__ == "__main__":
 
     # Create example data
     rri_example = torch.rand((2, 1, 1197, 480), device=device)
-    mad_example = torch.rand((2, 1, 1197, 120), device=device) # comment to test data without MAD signal
-    # mad_example = None # uncomment to test data without MAD signal
+    mad_example = torch.rand((2, 1, 1197, 120), device=device)
+    mad_example = None # uncomment to test data without MAD signal
 
     # Send data to device
     rri_example = rri_example.to(device)
