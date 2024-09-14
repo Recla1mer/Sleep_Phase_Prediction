@@ -18,6 +18,7 @@ from torchvision.transforms import ToTensor
 
 # LOCAL IMPORTS:
 from dataset_processing import *
+from side_functions import *
 
 
 """
@@ -490,11 +491,21 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     # set optimizer
     optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
 
-    size = len(dataloader.dataset)
     # Set the model to training mode - important for batch normalization and dropout layers
     model.train()
 
+    # variables to track progress
+    size = len(dataloader.dataset)
+    start_time = time.time()
+    progress_bar(0, size, start_time, None)
+
     for batch, (rri, mad, slp) in enumerate(dataloader):
+        # print progress bar
+        datapoints_done = (batch+1) * batch_size
+        if datapoints_done > size:
+            datapoints_done = size
+        progress_bar(batch*batch_size, size, start_time, loss)
+
         # check if MAD signal was not provided
         if mad[0] == "None":
             mad = None
@@ -516,9 +527,9 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         optimizer.step() # updates the model parameters based on the gradients computed during the backward pass
         optimizer.zero_grad()
 
-        if batch % 100 == 0:
-            loss, current = loss.item(), batch * batch_size + len(rri)
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        # if batch % 100 == 0:
+        #     loss, current = loss.item(), batch * batch_size + len(rri)
+        #     print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
 # TESTING LOOP

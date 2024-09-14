@@ -155,7 +155,7 @@ if __name__ == "__main__":
     processed_shhs_path = "Processed_Data/shhs_data.pkl"
     processed_gif_path = "Processed_Data/gif_data.pkl"
 
-    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path)
+    # Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path)
     # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path)
 
 
@@ -263,7 +263,8 @@ if __name__ == "__main__":
     -------------------------------
     """
     for t in range(number_epochs):
-        print(f"\nEpoch {t+1}\n-------------------------------")
+        print(f"\nEpoch {t+1}:")
+        print("-"*130)
         train_loop(
             dataloader = shhs_train_dataloader,
             model = nn_model,
