@@ -1011,7 +1011,7 @@ class SleepDataManager:
     default_file_info["MAD_frequency"] = 1
     default_file_info["SLP_frequency"] = 1/30
 
-    default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}
+    default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
 
     default_file_info["signal_length_seconds"] = 36000
     default_file_info["wanted_shift_length_seconds"] = 3600

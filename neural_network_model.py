@@ -115,7 +115,7 @@ Implementing a Neural Network
 
 
 # conv, relu, conv, relu, pool
-class SleepStageModel(nn.Module):
+class SleepStageModel_1(nn.Module):
     """
     Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
     https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
@@ -174,7 +174,7 @@ class SleepStageModel(nn.Module):
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_batch = windows_per_batch
 
-        super(SleepStageModel, self).__init__()
+        super(SleepStageModel_1, self).__init__()
 
         # Parameters
         rri_branch_convolutional_kernel_size = 3
@@ -375,6 +375,586 @@ class SleepStageModel(nn.Module):
         """
 
 
+class SleepStageModel(nn.Module):
+    """
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
+
+    Attention:  Number of convolutional channels (-1) must be smaller equals than the number of times 
+                datapoints_per_mad_window and datapoints_per_rri_window are dividable by 2 without rest.
+    
+    Differences to the original architecture:
+    - Number of datapoints per window does not equal 2^x (x being an integer)
+        - Reason:   SLP stage was sampled with 1/30 Hz, which made it impossible to have a window size of 
+                    2^x which fits the sleep stage labels perfectly
+        - Advantage:    Every window better represents the actual sleep stage
+        - Disadvantage: Less repetitions of structure possible (because each step requires to be dividable by 2)
+    """
+    def __init__(
+            self, 
+            datapoints_per_rri_window = 480, 
+            datapoints_per_mad_window = 120,
+            windows_per_batch = 1197,
+            number_window_learning_features = 128,
+            rri_convolutional_channels = [1, 8, 16, 32, 64],
+            mad_convolutional_channels = [1, 8, 16, 32, 64],
+            window_learning_dilations = [2, 4, 8, 16, 32],
+            number_sleep_stages = 4
+            ):
+        """
+        Parameters
+        ----------
+        datapoints_per_rri_window : int, optional
+            Number of data points in each RRI window, by default 480
+        datapoints_per_mad_window : int, optional
+            Number of data points in each MAD window, by default 120
+        windows_per_batch : int, optional
+            Number of windows in each batch, by default 1197
+        number_window_learning_features : int, optional
+            Number of features learned from Signal Learning, by default 128
+        rri_convolutional_channels : list, optional
+            Number of channels to process RRI signal by 1D-convolution, by default [2, 4, 8, 16, 32, 64]
+        mad_convolutional_channels : list, optional
+            Number of channels to process MAD signal by 1D-convolution, by default [2, 4, 8, 16, 32, 64]
+        window_learning_dilations : list, optional
+            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
+        number_sleep_stages : int, optional
+            Number of predictable sleep stages, by default 5
+        
+        """
+        # check parameters:
+        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
+            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
+        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
+            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
+        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
+            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
+        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
+            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
+
+        self.datapoints_per_rri_window = datapoints_per_rri_window
+        self.datapoints_per_mad_window = datapoints_per_mad_window
+        self.windows_per_batch = windows_per_batch
+
+        super(SleepStageModel, self).__init__()
+
+        # Parameters
+        negative_slope_leaky_relu = 0.15
+        dropout_probability = 0.2
+
+        rri_branch_convolutional_kernel_size = 3
+        rri_branch_max_pooling_kernel_size = 2
+
+        mad_branch_convolutional_kernel_size = 3
+        mad_branch_max_pooling_kernel_size = 2
+
+        window_branch_convolutional_kernel_size = 7
+
+        """
+        ------------------------
+        Signal Feature Learning
+        ------------------------
+        """
+
+        # RRI branch:
+
+        # Create layer structure for RRI branch
+        rri_branch_layers = []
+        for num_channel_pos in range(1, len(rri_convolutional_channels)):
+            # Convolutional layer:
+            rri_branch_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
+                out_channels = rri_convolutional_channels[num_channel_pos], 
+                kernel_size = rri_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Activation function:
+            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            # Batch normalization:
+            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
+
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+
+        # MAD branch:
+
+        # Create layer structure for MAD branch
+        mad_branch_layers = []
+        for num_channel_pos in range(1, len(mad_convolutional_channels)):
+            # Convolutional layer:
+            mad_branch_layers.append(nn.Conv1d(
+                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
+                out_channels = mad_convolutional_channels[num_channel_pos], 
+                kernel_size = mad_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Activation function:
+            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos % 2 == 0:
+                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
+            # Batch normalization:
+            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
+        
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+
+        """
+        -------------------------------------------------
+        Combining features obtained from Signal Learning
+        -------------------------------------------------
+        """
+        # Calculating number of remaining values after each branch: 
+
+        # Padding is chosen so that conv layer does not change size 
+        # -> datapoints before branch must be multiplied by the number of channels of the 
+        # last conv layer
+
+        # MaxPooling is chosen so that the size of the data is halved
+        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
+        # convolutional layer in MAD branch
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
+        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+
+        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
+        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+
+        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
+        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        
+        remaining_rri_branch_values = int(remaining_rri_branch_values)
+        remaining_mad_branch_values = int(remaining_mad_branch_values)
+        
+        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        self.flatten = nn.Flatten()
+
+        """
+        ------------------------
+        Window Feature Learning
+        ------------------------
+        """
+        # Fully connected layer after concatenation
+        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
+        
+        # Create layer structure for Window Feature Learning
+        window_feature_learning_layers = []
+        for dilation in window_learning_dilations:
+            # Residual block:
+            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            window_feature_learning_layers.append(nn.Conv1d(
+                in_channels = number_window_learning_features, 
+                out_channels = number_window_learning_features, 
+                kernel_size = window_branch_convolutional_kernel_size, 
+                dilation = dilation,
+                padding='same'
+                ))
+            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
+        
+        self.window_feature_learning = nn.Sequential(
+            *window_feature_learning_layers,
+            *window_feature_learning_layers,
+            nn.Conv1d(
+                in_channels = number_window_learning_features, 
+                out_channels = number_sleep_stages, 
+                kernel_size = 1
+                )
+            )
+
+        """
+        Save MAD shape for data where MAD is not provided
+        """
+        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+
+        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
+
+
+    def forward(self, rri_signal, mad_signal = None):
+        """
+        Checking and preparing data for forward pass
+        """
+
+        # Check Dimensions of RRI signal
+        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
+        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
+        assert num_windows_rri == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_rri}."
+
+        # Reshape RRI signal
+        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
+        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
+
+        if mad_signal is not None:
+            # Check Dimensions of MAD signal
+            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
+            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
+            assert num_windows_mad == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_mad}."
+
+            # Reshape MAD signal
+            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
+
+        """
+        Signal Feature Learning
+        """
+
+        # Process RRI Signal
+        rri_features = self.rri_signal_learning(rri_signal)
+        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
+
+        # Process MAD Signal or create 0 tensor if MAD signal is not provided
+        if mad_signal is None:
+            num_windows_mad = self.windows_per_batch
+            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
+        else:
+            mad_features = self.mad_signal_learning(mad_signal)
+        
+        """
+        Create Window Features
+        """
+
+        # Concatenate features
+        window_features = torch.cat((rri_features, mad_features), dim=-1)
+
+        # Flatten features
+        window_features = self.flatten(window_features)
+
+        """
+        Window Feature Learning
+        """
+
+        # Fully connected layer
+        output = self.linear(window_features)
+
+        # Reshape for convolutional layers
+        output = output.reshape(batch_size, self.windows_per_batch, -1)
+        output = output.transpose(1, 2).contiguous()
+
+        # Convolutional layers
+        output = self.window_feature_learning(output)
+
+        # Reshape for output
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_batch, -1)
+
+        return output
+
+        """
+        # Reshape for fully connected layers
+        combined_features = combined_features.view(batch_size, -1)  # Combine windows and features dimensions
+
+        # Fully connected layers
+        output = self.fc(combined_features)
+        return output
+        """
+
+
+class Window_Learning(nn.Module):
+    def __init__(
+            self, 
+            number_window_learning_features = 128, 
+            window_branch_convolutional_kernel_size = 7,
+            window_learning_dilations = [2, 4, 8, 16, 32],
+            negative_slope_leaky_relu = 0.15,
+            dropout_probability = 0.2
+            ):
+        super(Window_Learning, self).__init__()
+
+        window_layers = []
+        for d in window_learning_dilations:
+            window_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            window_layers.append(nn.Conv1d(
+                in_channels = number_window_learning_features,
+                out_channels = number_window_learning_features,
+                kernel_size = window_branch_convolutional_kernel_size,
+                dilation = d,
+                padding = 'same'
+            ))
+            window_layers.append(nn.Dropout(dropout_probability))
+        
+        self.window_branch = nn.Sequential(
+            *window_layers
+        )
+
+    def forward(self, x):
+        out = self.window_branch(x)
+        return x + out
+
+
+class YaoModel(nn.Module):
+    """
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
+
+    Attention:  Number of convolutional channels (-1) must be smaller equals than the number of times 
+                datapoints_per_mad_window and datapoints_per_rri_window are dividable by 2 without rest.
+    
+    Differences to the original architecture:
+    - Number of datapoints per window does not equal 2^x (x being an integer)
+        - Reason:   SLP stage was sampled with 1/30 Hz, which made it impossible to have a window size of 
+                    2^x which fits the sleep stage labels perfectly
+        - Advantage:    Every window better represents the actual sleep stage
+        - Disadvantage: Less repetitions of structure possible (because each step requires to be dividable by 2)
+    """
+    def __init__(
+            self, 
+            datapoints_per_rri_window = 480, 
+            datapoints_per_mad_window = 120,
+            windows_per_batch = 1197,
+            number_window_learning_features = 128,
+            rri_convolutional_channels = [1, 8, 16, 32, 64],
+            mad_convolutional_channels = [1, 8, 16, 32, 64],
+            window_learning_dilations = [2, 4, 8, 16, 32],
+            number_sleep_stages = 4
+            ):
+        """
+        Parameters
+        ----------
+        datapoints_per_rri_window : int, optional
+            Number of data points in each RRI window, by default 480
+        datapoints_per_mad_window : int, optional
+            Number of data points in each MAD window, by default 120
+        windows_per_batch : int, optional
+            Number of windows in each batch, by default 1197
+        number_window_learning_features : int, optional
+            Number of features learned from Signal Learning, by default 128
+        rri_convolutional_channels : list, optional
+            Number of channels to process RRI signal by 1D-convolution, by default [2, 4, 8, 16, 32, 64]
+        mad_convolutional_channels : list, optional
+            Number of channels to process MAD signal by 1D-convolution, by default [2, 4, 8, 16, 32, 64]
+        window_learning_dilations : list, optional
+            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
+        number_sleep_stages : int, optional
+            Number of predictable sleep stages, by default 5
+        
+        """
+        # check parameters:
+        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
+            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
+        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
+            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
+        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
+            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
+        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
+            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
+
+        self.datapoints_per_rri_window = datapoints_per_rri_window
+        self.datapoints_per_mad_window = datapoints_per_mad_window
+        self.windows_per_batch = windows_per_batch
+
+        super(YaoModel, self).__init__()
+
+        # Parameters
+        negative_slope_leaky_relu = 0.15
+        dropout_probability = 0.2
+
+        rri_branch_convolutional_kernel_size = 3
+        rri_branch_max_pooling_kernel_size = 2
+
+        mad_branch_convolutional_kernel_size = 3
+        mad_branch_max_pooling_kernel_size = 2
+
+        window_branch_convolutional_kernel_size = 7
+
+        """
+        ------------------------
+        Signal Feature Learning
+        ------------------------
+        """
+
+        # RRI branch:
+
+        # Create layer structure for RRI branch
+        rri_branch_layers = []
+        for num_channel_pos in range(1, len(rri_convolutional_channels)):
+            # Convolutional layer:
+            rri_branch_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
+                out_channels = rri_convolutional_channels[num_channel_pos], 
+                kernel_size = rri_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Activation function:
+            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            # Batch normalization:
+            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
+
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+
+        # MAD branch:
+
+        # Create layer structure for MAD branch
+        mad_branch_layers = []
+        for num_channel_pos in range(1, len(mad_convolutional_channels)):
+            # Convolutional layer:
+            mad_branch_layers.append(nn.Conv1d(
+                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
+                out_channels = mad_convolutional_channels[num_channel_pos], 
+                kernel_size = mad_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Activation function:
+            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos % 2 == 0:
+                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
+            # Batch normalization:
+            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
+        
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+
+        """
+        -------------------------------------------------
+        Combining features obtained from Signal Learning
+        -------------------------------------------------
+        """
+        # Calculating number of remaining values after each branch: 
+
+        # Padding is chosen so that conv layer does not change size 
+        # -> datapoints before branch must be multiplied by the number of channels of the 
+        # last conv layer
+
+        # MaxPooling is chosen so that the size of the data is halved
+        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
+        # convolutional layer in MAD branch
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
+        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+
+        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
+        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+
+        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
+        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        
+        remaining_rri_branch_values = int(remaining_rri_branch_values)
+        remaining_mad_branch_values = int(remaining_mad_branch_values)
+        
+        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        self.flatten = nn.Flatten()
+
+        """
+        ------------------------
+        Window Feature Learning
+        ------------------------
+        """
+        # Fully connected layer after concatenation
+        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
+        
+        # Create layer structure for Window Feature Learning
+        window_feature_learning_layers = []
+        for dilation in window_learning_dilations:
+            # Residual block:
+            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            window_feature_learning_layers.append(nn.Conv1d(
+                in_channels = number_window_learning_features, 
+                out_channels = number_window_learning_features, 
+                kernel_size = window_branch_convolutional_kernel_size, 
+                dilation = dilation,
+                padding='same'
+                ))
+            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
+        
+        self.window_feature_learning = nn.Sequential(
+            Window_Learning(
+                number_window_learning_features = number_window_learning_features, 
+                window_branch_convolutional_kernel_size = window_branch_convolutional_kernel_size, 
+                window_learning_dilations = window_learning_dilations, 
+                negative_slope_leaky_relu = negative_slope_leaky_relu, 
+                dropout_probability = dropout_probability
+                ),
+            nn.Conv1d(
+                in_channels = number_window_learning_features, 
+                out_channels = number_sleep_stages, 
+                kernel_size = 1
+                )
+            )
+
+        """
+        Save MAD shape for data where MAD is not provided
+        """
+        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+
+        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
+
+
+    def forward(self, rri_signal, mad_signal = None):
+        """
+        Checking and preparing data for forward pass
+        """
+
+        # Check Dimensions of RRI signal
+        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
+        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
+        assert num_windows_rri == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_rri}."
+
+        # Reshape RRI signal
+        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
+        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
+
+        if mad_signal is not None:
+            # Check Dimensions of MAD signal
+            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
+            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
+            assert num_windows_mad == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_mad}."
+
+            # Reshape MAD signal
+            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
+
+        """
+        Signal Feature Learning
+        """
+
+        # Process RRI Signal
+        rri_features = self.rri_signal_learning(rri_signal)
+        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
+
+        # Process MAD Signal or create 0 tensor if MAD signal is not provided
+        if mad_signal is None:
+            num_windows_mad = self.windows_per_batch
+            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
+        else:
+            mad_features = self.mad_signal_learning(mad_signal)
+        
+        """
+        Create Window Features
+        """
+
+        # Concatenate features
+        window_features = torch.cat((rri_features, mad_features), dim=-1)
+
+        # Flatten features
+        window_features = self.flatten(window_features)
+
+        """
+        Window Feature Learning
+        """
+
+        # Fully connected layer
+        output = self.linear(window_features)
+
+        # Reshape for convolutional layers
+        output = output.reshape(batch_size, self.windows_per_batch, -1)
+        output = output.transpose(1, 2).contiguous()
+
+        # Convolutional layers
+        output = self.window_feature_learning(output)
+
+        # Reshape for output
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_batch, -1)
+
+        return output
+
+
 """
 ------------------------
 Learning Rate Scheduling
@@ -458,7 +1038,7 @@ Looping over the dataset
 """
 
 # TRAINING LOOP
-def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size) -> None:
+def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size):
     """
     Iterate over the training dataset and try to converge to optimal parameters.
 
@@ -494,17 +1074,18 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     # Set the model to training mode - important for batch normalization and dropout layers
     model.train()
 
+    # variables to save accuracy progress
+    train_loss, correct = 0, 0
+
+
     # variables to track progress
     size = len(dataloader.dataset)
+    num_batches = len(dataloader)
     start_time = time.time()
-    progress_bar(0, size, start_time, None)
+    progress_bar(0, size, start_time, None, None)
+
 
     for batch, (rri, mad, slp) in enumerate(dataloader):
-        # print progress bar
-        datapoints_done = (batch+1) * batch_size
-        if datapoints_done > size:
-            datapoints_done = size
-        progress_bar(batch*batch_size, size, start_time, loss)
 
         # check if MAD signal was not provided
         if mad[0] == "None":
@@ -527,13 +1108,28 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         optimizer.step() # updates the model parameters based on the gradients computed during the backward pass
         optimizer.zero_grad()
 
-        # if batch % 100 == 0:
-        #     loss, current = loss.item(), batch * batch_size + len(rri)
-        #     print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        # collect accuracy progress values
+        this_correct_predicted = torch.sum(torch.argmax(pred, dim=1) == slp)
+
+        train_loss += loss.item()
+        correct += this_correct_predicted
+
+        # print progress bar
+        datapoints_done = (batch+1) * batch_size
+        if datapoints_done > size:
+            datapoints_done = size
+        progress_bar(batch*batch_size, size, start_time, float(loss.item()), float(this_correct_predicted / slp.shape[0]))
+
+        del this_correct_predicted
+    
+    train_loss /= num_batches
+    correct /= size
+    
+    return train_loss, correct
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, device, loss_fn) -> None:
+def test_loop(dataloader, model, device, loss_fn):
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -571,6 +1167,9 @@ def test_loop(dataloader, model, device, loss_fn) -> None:
                 mad = None
             else:
                 mad = mad.to(device)
+
+            # reshape slp to fit the model output
+            slp = slp.view(-1) # Combine batch and windows dimensions
             
             # Send data to device
             rri, slp = rri.to(device), slp.to(device)
@@ -582,6 +1181,8 @@ def test_loop(dataloader, model, device, loss_fn) -> None:
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+    return test_loss, correct
 
 
 # Example usage
@@ -693,8 +1294,36 @@ if __name__ == "__main__":
     )
     print(f"Using {device} device")
 
+    """
+    My network:
+    """
+    print("\nSleepStageModel:")
+
     # Define the Neural Network
     DCNN = SleepStageModel()
+    DCNN.to(device)
+
+    # Create example data
+    rri_example = torch.rand((2, 1, 1197, 480), device=device)
+    mad_example = torch.rand((2, 1, 1197, 120), device=device)
+    mad_example = None # uncomment to test data without MAD signal
+
+    # Send data to device
+    rri_example = rri_example.to(device)
+    if mad_example is not None:
+        mad_example = mad_example.to(device)
+
+    # Pass data through the model
+    output = DCNN(rri_example, mad_example)
+    print(output.shape)
+
+    """
+    Yaopeng-like network:
+    """
+    print("\nYao:")
+
+    # Define the Neural Network
+    DCNN = YaoModel()
     DCNN.to(device)
 
     # Create example data

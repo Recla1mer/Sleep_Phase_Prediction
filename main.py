@@ -262,10 +262,18 @@ if __name__ == "__main__":
     TRAINING NEURAL NETWORK
     -------------------------------
     """
+    # variables to store accuracy progress
+    train_accuracy = []
+    train_avg_loss = []
+
+    test_accuracy = []
+    test_avg_loss = []
+
     for t in range(number_epochs):
         print(f"\nEpoch {t+1}:")
         print("-"*130)
-        train_loop(
+
+        train_results = train_loop(
             dataloader = shhs_train_dataloader,
             model = nn_model,
             device = device,
@@ -275,9 +283,14 @@ if __name__ == "__main__":
             current_epoch = t,
             batch_size = batch_size,
         )
-        test_loop(
+        train_avg_loss.append(train_results[0])
+        train_accuracy.append(train_results[1])
+
+        test_results = test_loop(
             dataloader = shhs_validation_dataloader,
             model = nn_model,
             device = device,
             loss_fn = loss_function,
         )
+        test_avg_loss.append(test_results[0])
+        test_accuracy.append(test_results[1])

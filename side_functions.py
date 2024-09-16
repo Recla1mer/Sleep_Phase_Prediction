@@ -91,7 +91,7 @@ def print_smart_time(time_seconds: float):
             return str(seconds) + "s"
 
 
-def progress_bar(index: int, total: int, start_time: float, loss = None, loss_decimals = 5, bar_len=40, max_length = 130):
+def progress_bar(index: int, total: int, start_time: float, loss = None, corr_prop = None, decimals = 3, bar_len=40, max_length = 130):
     """
     Prints a progress bar to the console.
 
@@ -118,12 +118,17 @@ def progress_bar(index: int, total: int, start_time: float, loss = None, loss_de
 
     # estimate time remaining
     if index == 0:
-        time_remaining_str = "Calculating..."
+        time_passed = None
     else:
         time_passed = time.time() - start_time
-        time_remaining = time_passed/index*(total-index)
+        time_per_index = time_passed/index
+        time_total = time_per_index*total
+        time_remaining = time_per_index*(total-index)
+
+        time_passed_str = print_smart_time(time_passed)
+        time_per_index_str = print_smart_time(time_per_index)
         time_remaining_str = print_smart_time(time_remaining)
-        # time_remaining_str += " "*((len("Calculating...")-len(time_remaining_str)))
+        time_total_str = print_smart_time(time_total)
 
     # code from source
     percent_done = index/total*100
@@ -135,13 +140,14 @@ def progress_bar(index: int, total: int, start_time: float, loss = None, loss_de
     done_str = '█'*int(done)
     togo_str = '░'*int(togo)
 
-    if loss is None:
-        message = f'\t⏳Please wait: [{done_str}{togo_str}] {rounded_percent_done}% done. Time remaining: {time_remaining_str}.'
+    if time_passed is None:
+        message = f'   ⏳: {rounded_percent_done}% [{done_str}{togo_str}] {index} / {total}'
+    elif loss is None or corr_prop is None:
+        message = f'   ⏳: {rounded_percent_done}% [{done_str}{togo_str}] {index} / {total} | {time_passed_str} / {time_total_str} ({time_per_index_str}/it)'
     else:
-        loss = float(loss)
-        message = f'\t⏳Please wait: [{done_str}{togo_str}] {rounded_percent_done}% done. Time remaining: {time_remaining_str}. Loss: {print_smart_float(loss, loss_decimals)}'
+        message = f'   ⏳: {rounded_percent_done}% [{done_str}{togo_str}] {index} / {total} | {time_passed_str} / {time_total_str} ({time_per_index_str}/it) | Loss: {print_smart_float(loss, decimals)} | Acc: {round(corr_prop*100, 2)}%'
 
     print(message + " "*(max_length-len(message)), end='\r')
 
-    if percent_done == 100:
-        print('\t✅')
+    if index >= total:
+        print(' ✅')
