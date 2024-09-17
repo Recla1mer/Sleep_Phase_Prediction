@@ -1109,7 +1109,8 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         optimizer.zero_grad()
 
         # collect accuracy progress values
-        this_correct_predicted = torch.sum(torch.argmax(pred, dim=1) == slp)
+        # this_correct_predicted = torch.sum(torch.argmax(pred, dim=1) == slp)
+        this_correct_predicted = (pred.argmax(1) == slp).type(torch.float).sum().item()
 
         train_loss += loss.item()
         correct += this_correct_predicted
@@ -1118,7 +1119,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
             datapoints_done = size
-        progress_bar(batch*batch_size, size, start_time, float(loss.item()), float(this_correct_predicted / slp.shape[0]))
+        progress_bar(batch*batch_size, size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
 
         del this_correct_predicted
     

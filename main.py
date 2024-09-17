@@ -246,7 +246,8 @@ if __name__ == "__main__":
     INITIALIZE NEURAL NETWORK MODEL
     -------------------------------
     """
-    nn_model = SleepStageModel()
+    # nn_model = SleepStageModel()
+    nn_model = YaoModel()
     nn_model.to(device)
 
     """
