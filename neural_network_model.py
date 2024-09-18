@@ -32,7 +32,7 @@ default_window_reshape_parameters = {
         "number_windows": 1197, 
         "window_duration_seconds": 120, 
         "overlap_seconds": 90,
-        "priority_order": [0, 1, 2, 3, 5, -1]
+        "priority_order": [3, 2, 1, 0]
 }
 
 class CustomSleepDataset(Dataset):
@@ -103,7 +103,7 @@ class CustomSleepDataset(Dataset):
                 mad_sample = self.transform(mad_sample)
             except:
                 pass
-
+        
         return rri_sample, mad_sample, slp_labels
 
 
@@ -1077,12 +1077,11 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     # variables to save accuracy progress
     train_loss, correct = 0, 0
 
-
     # variables to track progress
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     start_time = time.time()
-    progress_bar(0, size, start_time, None, None)
+    progress_bar(0, size, batch_size, start_time, None, None)
 
 
     for batch, (rri, mad, slp) in enumerate(dataloader):
@@ -1093,14 +1092,15 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         else:
             mad = mad.to(device)
         
-        # reshape slp to fit the model output
-        slp = slp.view(-1) # Combine batch and windows dimensions
-        
         # Send data to device
         rri, slp = rri.to(device), slp.to(device)
 
+        # reshape slp to fit the model output
+        slp = slp.view(-1) # Combine batch and windows dimensions
+
         # Compute prediction and loss
         pred = model(rri, mad)
+        slp = slp.long()
         loss = loss_fn(pred, slp)
 
         # Backpropagation
@@ -1119,7 +1119,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
             datapoints_done = size
-        progress_bar(batch*batch_size, size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
+        progress_bar(batch*batch_size, size, batch_size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
 
         del this_correct_predicted
     

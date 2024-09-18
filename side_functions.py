@@ -91,7 +91,7 @@ def print_smart_time(time_seconds: float):
             return str(seconds) + "s"
 
 
-def progress_bar(index: int, total: int, start_time: float, loss = None, corr_prop = None, decimals = 3, bar_len=40, max_length = 130):
+def progress_bar(index: int, total: int, batch_size: int, start_time: float, loss = None, corr_prop = None, decimals = 3, bar_len=40, max_length = 130):
     """
     Prints a progress bar to the console.
 
@@ -124,6 +124,7 @@ def progress_bar(index: int, total: int, start_time: float, loss = None, corr_pr
         time_per_index = time_passed/index
         time_total = time_per_index*total
         time_remaining = time_per_index*(total-index)
+        time_per_index *= batch_size
 
         time_passed_str = print_smart_time(time_passed)
         time_per_index_str = print_smart_time(time_per_index)

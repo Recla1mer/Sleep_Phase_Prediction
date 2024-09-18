@@ -993,6 +993,28 @@ def create_directories_along_path(file_path: str):
                 os.mkdir(path)
 
 
+def check_if_splitted_signals_align_with_data(
+        signal_to_split: list,
+        splitted_signals: list,
+    ):
+    """
+    Function was used to check something. Isn't implemented currently. Still leaving it here for now.
+    """
+    collect_indices = list()
+    multiplier = 1
+    if len(splitted_signals[0]) < 36000:
+        multiplier = 120
+    for splitted_signal in splitted_signals:
+        splitted_signal = np.array(splitted_signal) # type: ignore
+        fits_for_this_signal = list()
+        for j in range(0, len(signal_to_split)-len(splitted_signal)+1):
+            if np.array_equal(signal_to_split[j:j+len(splitted_signal)], splitted_signal):
+                fits_for_this_signal.append(j*multiplier)
+        collect_indices.append(fits_for_this_signal)
+    
+    return collect_indices
+    
+
 """
 -------------------
 Data-Manager Class
@@ -1014,7 +1036,7 @@ class SleepDataManager:
     default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
 
     default_file_info["signal_length_seconds"] = 36000
-    default_file_info["wanted_shift_length_seconds"] = 3600
+    default_file_info["wanted_shift_length_seconds"] = 5400
     default_file_info["absolute_shift_deviation_seconds"] = 1800
 
     default_file_info["train_val_test_split_applied"] = False
@@ -1092,6 +1114,8 @@ class SleepDataManager:
         # Check if ID key is misleading
         if new_data["ID"] in self.valid_datapoint_keys:
             raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
+        if "shift" in new_data["ID"]:
+            raise ValueError("Value for ID key: \"ID\" must not contain the string: \"shift\"!")
         
         # Check if key in new_data is unknown
         for new_data_key in new_data:
@@ -1311,7 +1335,7 @@ class SleepDataManager:
         if self.file_info["train_val_test_split_applied"]:
             print("Attention: Data will remain in the main file and won't be forwarded into training, validation, or test file automatically. If you want to include this data, fuse files using 'fuse_train_test_validation' and resaparate again.")
 
-        corrected_data_dicts = self._correct_datapoint(data_dict)
+        corrected_data_dicts = self._correct_datapoint(copy.deepcopy(data_dict))
         for corrected_data_dict in corrected_data_dicts:
             self._save_datapoint(corrected_data_dict, unique_id, overwrite_id)
     

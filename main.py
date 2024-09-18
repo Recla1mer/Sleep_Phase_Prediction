@@ -240,14 +240,15 @@ if __name__ == "__main__":
         else "cpu"
     )
     print(f"\nUsing {device} device")
+    device = "cpu"
 
     """
     -------------------------------
     INITIALIZE NEURAL NETWORK MODEL
     -------------------------------
     """
-    # nn_model = SleepStageModel()
-    nn_model = YaoModel()
+    nn_model = SleepStageModel()
+    # nn_model = YaoModel()
     nn_model.to(device)
 
     """
