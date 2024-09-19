@@ -1032,6 +1032,60 @@ class CosineScheduler:
 
 
 """
+------------------------------------------
+Calculating Individual Prediction Accuracy
+------------------------------------------
+"""
+
+def update_prediction_results(predicted, actual, current_classification_values, current_true_positive, current_false_positive, current_true_negative, current_false_negative):
+    """
+    Calculates the prediction accuracy of the individual classification values.
+
+    Parameters
+    ----------
+    predicted : torch.Tensor
+        Predicted classifications
+    actual : torch.Tensor
+        True classifications
+
+    Returns
+    -------
+    float
+        Accuracy of the individual predictions
+    """
+    # get unique sleep stages
+    classification_values_in_actual = torch.unique(actual)
+    classification_values_in_predicted = torch.unique(predicted)
+    classification_values = torch.unique(torch.cat((classification_values_in_actual, classification_values_in_predicted)))
+
+    # Calculate accuracy
+    true_positive, false_positive, true_negative, false_negative = [], [], [], []
+
+    # Calculate true positive, false positive, true negative, false negative for each classification value in new prediction
+    for classification_value in classification_values:
+        true_positive.append(((predicted == classification_value) & (actual == classification_value)).type(torch.float).sum().item())
+        false_positive.append(((predicted == classification_value) & (actual != classification_value)).type(torch.float).sum().item())
+        true_negative.append(((predicted != classification_value) & (actual != classification_value)).type(torch.float).sum().item())
+        false_negative.append(((predicted != classification_value) & (actual == classification_value)).type(torch.float).sum().item())
+    
+    # update current values
+    for class_label_index in range(len(classification_values)):
+        class_label = classification_values[class_label_index]
+        if class_label not in current_classification_values:
+            current_classification_values.append(class_label)
+            current_true_positive.append(true_positive[class_label_index])
+            current_false_positive.append(false_positive[class_label_index])
+            current_true_negative.append(true_negative[class_label_index])
+            current_false_negative.append(false_negative[class_label_index])
+        else:
+            current_class_label_index = current_classification_values.index(class_label)
+            current_true_positive[current_class_label_index] += true_positive[class_label_index]
+            current_false_positive[current_class_label_index] += false_positive[class_label_index]
+            current_true_negative[current_class_label_index] += true_negative[class_label_index]
+            current_false_negative[current_class_label_index] += false_negative[class_label_index]
+
+
+"""
 ------------------------
 Looping over the dataset
 ------------------------
@@ -1109,7 +1163,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         optimizer.zero_grad()
 
         # collect accuracy progress values
-        # this_correct_predicted = torch.sum(torch.argmax(pred, dim=1) == slp)
         this_correct_predicted = (pred.argmax(1) == slp).type(torch.float).sum().item()
 
         train_loss += loss.item()
@@ -1130,7 +1183,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, device, loss_fn):
+def test_loop(dataloader, model, device, loss_fn, batch_size):
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -1146,6 +1199,8 @@ def test_loop(dataloader, model, device, loss_fn):
         Device to test the model on
     loss_fn : nn.Module
         Loss function to be minimized
+    batch_size : int
+        Number of samples in each batch
 
     Returns
     -------
@@ -1155,35 +1210,62 @@ def test_loop(dataloader, model, device, loss_fn):
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     model.eval()
 
+    # variables to track progress
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
+    start_time = time.time()
+    print("\nCalculating Prediction Accuracy on Test Data:")
+    progress_bar(0, size, 1, start_time, None, None)
+
+    # variables to save accuracy progress
     test_loss, correct = 0, 0
+    classification_values, true_positive, false_positive, true_negative, false_negative = [], [], [], [], []
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
     with torch.no_grad():
-        for rri, mad, slp in dataloader:
+        for batch, (rri, mad, slp) in enumerate(dataloader):
             # check if MAD signal was not provided
             if mad[0] == "None":
                 mad = None
             else:
                 mad = mad.to(device)
 
-            # reshape slp to fit the model output
-            slp = slp.view(-1) # Combine batch and windows dimensions
-            
             # Send data to device
             rri, slp = rri.to(device), slp.to(device)
 
+            # reshape slp to fit the model output
+            slp = slp.view(-1) # Combine batch and windows dimensions
+
+            # Compute prediction and loss
             pred = model(rri, mad)
             test_loss += loss_fn(pred, slp).item()
+
+            # collect accuracy values
             correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
+
+            # update prediction results
+            update_prediction_results(
+                predicted = pred.argmax(1),
+                actual = slp, 
+                current_classification_values = classification_values, 
+                current_true_positive = true_positive, 
+                current_false_positive = false_positive, 
+                current_true_negative = true_negative, 
+                current_false_negative = false_negative
+                )
+
+            # print progress bar
+            datapoints_done = (batch+1) * batch_size
+            if datapoints_done > size:
+                datapoints_done = size
+            progress_bar(batch*batch_size, size, batch_size, start_time, None, None)
 
     test_loss /= num_batches
     correct /= size
-    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-    return test_loss, correct
+    return test_loss, correct, classification_values, true_positive, false_positive, true_negative, false_negative
 
 
 # Example usage

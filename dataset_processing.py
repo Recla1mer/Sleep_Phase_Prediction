@@ -571,7 +571,7 @@ def signal_to_windows(
         datapoints_per_window: int,
         window_overlap: int,
         signal_type: str = "feature",
-        priority_order: list = [0, 1, 2, 3, 5, -1]
+        priority_order: list = [3, 2, 1, 0]
     ) -> np.ndarray:
     """
     This function splits a signal into windows of length 'datapoints_per_window' that overlap by 
@@ -663,7 +663,7 @@ def reshape_signal_to_overlapping_windows(
         window_duration_seconds: int = 120, 
         overlap_seconds: int = 90,
         signal_type: str = "feature",
-        priority_order: list = [0, 1, 2, 3, 5, -1],
+        priority_order: list = [3, 2, 1, 0],
     ) -> np.ndarray:
     """
     Reshape a signal with shape (n <= nn_signal_duration_seconds * target_frequency) to 

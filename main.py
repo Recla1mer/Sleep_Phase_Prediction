@@ -145,25 +145,31 @@ def Process_GIF_Dataset(
     )
 
 
-if __name__ == "__main__":
+"""
+------------------------------------------
+Training and Testing Neural Network Model
+------------------------------------------
+"""
+
+
+def main(
+        neural_network_model = SleepStageModel(),
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        save_file_name: str = "Neural_Network",
+        save_accuracy_directory: str = "Accuracy",
+        save_model_directory: str = "Model_State",
+        window_reshape_parameters: dict = default_window_reshape_parameters
+    ):
 
     """
     ====================
     Preprocess Data
     ====================
     """
-    processed_shhs_path = "Processed_Data/shhs_data.pkl"
-    processed_gif_path = "Processed_Data/gif_data.pkl"
 
     # Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path)
     # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path)
-
-
-    """
-    ====================
-    Neural Network
-    ====================
-    """
 
     """
     -------------------------
@@ -178,9 +184,9 @@ if __name__ == "__main__":
     apply_transformation = ToTensor()
 
     if os.path.exists(shhs_training_data_path):
-        shhs_training_data = CustomSleepDataset(path_to_data = shhs_training_data_path, transform = apply_transformation)
-        shhs_validation_data = CustomSleepDataset(path_to_data = shhs_validation_data_path, transform = apply_transformation)
-        shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, transform = apply_transformation)
+        shhs_training_data = CustomSleepDataset(path_to_data = shhs_training_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        shhs_validation_data = CustomSleepDataset(path_to_data = shhs_validation_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
 
     """
     -------------------------
@@ -192,9 +198,15 @@ if __name__ == "__main__":
     gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
 
     if os.path.exists(gif_training_data_path):
-        gif_training_data = CustomSleepDataset(path_to_data = gif_training_data_path, transform = apply_transformation)
-        gif_validation_data = CustomSleepDataset(path_to_data = gif_validation_data_path, transform = apply_transformation)
-        gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, transform = apply_transformation)
+        gif_training_data = CustomSleepDataset(path_to_data = gif_training_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        gif_validation_data = CustomSleepDataset(path_to_data = gif_validation_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+    
+    """
+    ====================
+    Neural Network
+    ====================
+    """
     
     """
     -------------------------
@@ -235,21 +247,19 @@ if __name__ == "__main__":
     device = (
         "cuda"
         if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
+        # else "mps"
+        # if torch.backends.mps.is_available()
         else "cpu"
     )
     print(f"\nUsing {device} device")
-    device = "cpu"
 
     """
     -------------------------------
     INITIALIZE NEURAL NETWORK MODEL
     -------------------------------
     """
-    nn_model = SleepStageModel()
-    # nn_model = YaoModel()
-    nn_model.to(device)
+   
+    neural_network_model.to(device)
 
     """
     -------------------------------
@@ -257,7 +267,7 @@ if __name__ == "__main__":
     -------------------------------
     """
     loss_function = nn.CrossEntropyLoss()
-    optimizer_function = optim.Adam
+    optimizer_function = optim.Adam # type: ignore
 
     """
     -------------------------------
@@ -277,7 +287,7 @@ if __name__ == "__main__":
 
         train_results = train_loop(
             dataloader = shhs_train_dataloader,
-            model = nn_model,
+            model = neural_network_model,
             device = device,
             loss_fn = loss_function,
             optimizer_fn = optimizer_function,
@@ -290,9 +300,59 @@ if __name__ == "__main__":
 
         test_results = test_loop(
             dataloader = shhs_validation_dataloader,
-            model = nn_model,
+            model = neural_network_model,
             device = device,
             loss_fn = loss_function,
+            batch_size = batch_size
         )
+
         test_avg_loss.append(test_results[0])
         test_accuracy.append(test_results[1])
+
+        classification_values = test_results[2]
+        true_positives = test_results[3]
+        false_positives = test_results[4]
+        true_negatives = test_results[5]
+        false_negatives = test_results[6]
+    
+    """
+    -------------------------------
+    SAVING ACCURACY VALUES
+    -------------------------------
+    """
+
+    if not os.path.exists(save_accuracy_directory):
+        os.mkdir(save_accuracy_directory)
+
+    accuracy_values_save_path = save_accuracy_directory + "/" + save_file_name + ".pkl"
+
+    accuracy_values = {
+        "train_accuracy": train_accuracy,
+        "train_avg_loss": train_avg_loss,
+        "test_accuracy": test_accuracy,
+        "test_avg_loss": test_avg_loss,
+        "classification_values": classification_values,
+        "true_positives": true_positives,
+        "false_positives": false_positives,
+        "true_negatives": true_negatives,
+        "false_negatives": false_negatives
+    }
+
+    save_to_pickle(accuracy_values, accuracy_values_save_path)
+
+    """
+    -------------------------------
+    SAVING NEURAL NETWORK MODEL 
+    -------------------------------
+    """
+
+    if not os.path.exists(save_model_directory):
+        os.mkdir(save_model_directory)
+    
+    model_save_path = save_model_directory + "/" + save_file_name + ".pth"
+    
+    torch.save(neural_network_model.state_dict(), model_save_path)
+
+
+if __name__ == "__main__":
+    main()
