@@ -24,7 +24,8 @@ def Process_SHHS_Dataset(
         validation_size = 0.1, 
         test_size = 0.1, 
         random_state = None, 
-        shuffle = True
+        shuffle = True,
+        change_data_parameters: dict = {}
     ):
     """
     This function processes our SHHS dataset. It is designed to be a more specific. So, if you are not using
@@ -39,6 +40,10 @@ def Process_SHHS_Dataset(
 
     # initializing the database
     shhs_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
+
+    # update data parameters, if necessary
+    if len(change_data_parameters) > 0:
+        shhs_data_manager.change_file_information(change_data_parameters)
 
     if not os.path.exists(shhs_training_data_path):
 
@@ -87,7 +92,8 @@ def Process_GIF_Dataset(
         validation_size = 0.1, 
         test_size = 0.1, 
         random_state = None, 
-        shuffle = True
+        shuffle = True,
+        change_data_parameters: dict = {}
     ):
     """
     This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
@@ -102,6 +108,10 @@ def Process_GIF_Dataset(
 
     # initializing the database
     gif_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
+
+    # update data parameters, if necessary
+    if len(change_data_parameters) > 0:
+        gif_data_manager.change_file_information(change_data_parameters)
 
     if not os.path.exists(gif_training_data_path):
 
@@ -154,13 +164,53 @@ Training and Testing Neural Network Model
 
 def main(
         neural_network_model = SleepStageModel(),
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
         save_file_name: str = "Neural_Network",
         save_accuracy_directory: str = "Accuracy",
         save_model_directory: str = "Model_State",
-        window_reshape_parameters: dict = default_window_reshape_parameters
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters: dict = default_window_reshape_parameters,
+        change_data_parameters: dict = {}
     ):
+    """
+    Full implementation of project, with ability to easily change most important parameters to test different
+    dataset preprocessing and neural network architecture configurations.
+
+    First, the available datasets are preprocessed (functions: Process_SHHS_Dataset and Process_GIF_Dataset).
+    Using the SleepDataManager class from dataset_processing.py, the data is saved 
+
+    Then, the neural network is trained and tested.
+
+    ARGUMENTS:
+    ================================================================================
+    
+    Arguments for Neural Network Section:
+    -------------------------------------
+
+    neural_network_model
+        the neural network model to use
+    save_file_name: str
+        the name of the file to save the accuracy values and the model
+    save_accuracy_directory: str
+        the directory to save the accuracy values
+    save_model_directory: str
+        the directory to save the model state dictionary
+
+    Arguments for Data Preprocessing Section:
+    -----------------------------------------
+
+    processed_shhs_path: str
+        the path to save the processed SHHS dataset
+    processed_gif_path: str
+        the path to save the processed GIF dataset
+    window_reshape_parameters: dict
+        the parameters used when reshaping the signal to windows 
+        (see reshape_signal_to_overlapping_windows function in dataset_processing.py)
+    change_data_parameters: dict
+        the parameters that are used to keep data uniform 
+        (see SleepDataManager class in dataset_processing.py)
+    
+    """
 
     """
     ====================
@@ -168,8 +218,8 @@ def main(
     ====================
     """
 
-    # Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path)
-    # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path)
+    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = change_data_parameters)
+    # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = change_data_parameters)
 
     """
     -------------------------

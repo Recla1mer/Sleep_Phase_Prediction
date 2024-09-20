@@ -1046,7 +1046,7 @@ class SleepDataManager:
     default_file_info["test_file_path"] = "unassigned"
 
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, change_default_file_info = None):
         self.file_path = file_path
 
         # load general information from file
@@ -1846,6 +1846,50 @@ class SleepDataManager:
         
         # Rename the working file
         os.rename(working_file_path, self.file_info["main_file_path"])
+    
+
+    def change_file_information(self, new_file_info: dict):
+        """
+        Change the file information of the file. Only possible if no datapoints are in the file.
+
+        Returns:
+        --------
+        None
+
+        Parameters:
+        -----------
+        new_file_info: dict
+            The new file information.
+        """
+
+        # check if there are datapoints in the file
+        if len(self) > 0:
+            raise ValueError("File information can only be changed if no data points are in the file.")
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # update file information
+        for key in new_file_info:
+            if key not in self.file_info:
+                print(f"Attention: Key {key} not recognized. It will be skipped.")
+                continue
+            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path"]:
+                print(f"Attention: Key {key} is a reserved key and cannot be changed.")
+                continue
+            self.file_info[key] = new_file_info[key]
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
     
 
     def __len__(self):
