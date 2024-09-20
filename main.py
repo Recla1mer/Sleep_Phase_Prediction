@@ -20,19 +20,49 @@ import h5py
 def Process_SHHS_Dataset(
         path_to_shhs_dataset: str,
         path_to_save_processed_data: str,
+        change_data_parameters: dict = {},
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
         random_state = None, 
         shuffle = True,
-        change_data_parameters: dict = {}
     ):
     """
     This function processes our SHHS dataset. It is designed to be a more specific. So, if you are not using
     the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
-    quickly demonstrates how to quickly use the above code to process a dataset.
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the SHHS dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    change_data_parameters argument. Afterwards we will use the class to split the data into training,
+    validation, and test pids (individual files).
 
     If already processed, the function will only shuffle the data in the pids again.
+
+    RETURNS:
+    --------------------------------
+    None
+
+    ARGUMENTS:
+    --------------------------------
+    path_to_shhs_dataset: str
+        the path to the SHHS dataset
+    path_to_save_processed_data: str
+        the path to save the processed SHHS dataset
+    change_data_parameters: dict
+        the parameters that are used to keep data uniform 
+        (see SleepDataManager class in dataset_processing.py)
+    train_size: float
+        the size of the training dataset
+    validation_size: float
+        the size of the validation dataset
+    test_size: float
+        the size of the test dataset
+    random_state: int
+        the random state to use for the train-test-validation split
+    shuffle: bool
+        whether to shuffle the data before splitting
     """
 
     # following path will be created at the end of this function, if it exists, skip the processing part
@@ -88,19 +118,49 @@ def Process_SHHS_Dataset(
 def Process_GIF_Dataset(
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
+        change_data_parameters: dict = {},
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
         random_state = None, 
         shuffle = True,
-        change_data_parameters: dict = {}
     ):
     """
     This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
     the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
-    quickly demonstrates how to quickly use the above code to process a dataset.
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the GIF dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    change_data_parameters argument. Afterwards we will use the class to split the data into training,
+    validation, and test pids (individual files).
 
     If already processed, the function will only shuffle the data in the pids again.
+
+    RETURNS:
+    --------------------------------
+    None
+
+    ARGUMENTS:
+    --------------------------------
+    path_to_shhs_dataset: str
+        the path to the SHHS dataset
+    path_to_save_processed_data: str
+        the path to save the processed SHHS dataset
+    change_data_parameters: dict
+        the parameters that are used to keep data uniform 
+        (see SleepDataManager class in dataset_processing.py)
+    train_size: float
+        the size of the training dataset
+    validation_size: float
+        the size of the validation dataset
+    test_size: float
+        the size of the test dataset
+    random_state: int
+        the random state to use for the train-test-validation split
+    shuffle: bool
+        whether to shuffle the data before splitting
     """
 
     # following path will be created at the end of this function, if it exists, skip the processing part
@@ -177,9 +237,33 @@ def main(
     dataset preprocessing and neural network architecture configurations.
 
     First, the available datasets are preprocessed (functions: Process_SHHS_Dataset and Process_GIF_Dataset).
-    Using the SleepDataManager class from dataset_processing.py, the data is saved 
+    Using the SleepDataManager class from dataset_processing.py, the data is saved in a uniform way. How exactly
+    can be altered using the change_data_parameters argument.
 
-    Then, the neural network is trained and tested.
+    Afterwards it is split into training, validation, and test datasets and accessed using the 
+    CustomSleepDataset class from neural_network_model.py. Before returning the data, this class reshapes the
+    data into windows. Adjustments can be made using the window_reshape_parameters argument.
+
+    Afterwards the neural network model is trained and tested. The accuracy results are saved in a pickle file
+    and the model state dictionary is saved in a .pth file.
+
+    The accuracy values are saved in a dictionary with the following format:
+    {
+        "train_accuracy": train_accuracy for each epoch (list),
+        "train_avg_loss": train_avg_loss for each epoch (list),
+        "test_accuracy": test_accuracy for each epoch (list),
+        "test_avg_loss": test_avg_loss for each epoch (list),
+        "classification_values": classification_values found in the test dataset (list),
+        "true_positives": true_positives for each classifcation value (list) calculated after last epoch,
+        "false_positives": false_positives for each classifcation value (list) calculated after last epoch,
+        "true_negatives": true_negatives for each classifcation value (list) calculated after last epoch,
+        "false_negatives": false_negatives for each classifcation value (list) calculated after last epoch
+    }
+
+    RETURNS:
+    ================================================================================
+    None
+
 
     ARGUMENTS:
     ================================================================================

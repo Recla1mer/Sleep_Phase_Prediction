@@ -1,14 +1,11 @@
 """
 Author: Johannes Peter Knoll
 
-In this file we provide functions that are not just needed in the main file, but also in
-other ones. Their purpose is to keep them a little cleaner and more intuitive.
+In this file we provide functions that are used to keep the code a little bit cleaner.
 """
 
 # IMPORTS
 import time
-
-
 
 
 def print_smart_float(floating_point_number: float, decimals: int) -> str:
@@ -54,7 +51,7 @@ def print_smart_float(floating_point_number: float, decimals: int) -> str:
         return str(floating_point_number)
 
 
-def print_smart_time(time_seconds: float):
+def print_smart_time(time_seconds: float) -> str:
     """
     Convert seconds to a time format that is easier to read.
 
@@ -151,4 +148,4 @@ def progress_bar(index: int, total: int, batch_size: int, start_time: float, los
     print(message + " "*(max_length-len(message)), end='\r')
 
     if index >= total:
-        print(' ✅')
+        print('   ✅')
