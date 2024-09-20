@@ -10,9 +10,9 @@ from dataset_processing import *
 from neural_network_model import *
 
 """
---------------------------------------------
-Applying SleepDataManager class to our data
---------------------------------------------
+============================================
+Applying SleepDataManager Class To Our Data
+============================================
 """
 
 import h5py
@@ -41,11 +41,11 @@ def Process_SHHS_Dataset(
     If already processed, the function will only shuffle the data in the pids again.
 
     RETURNS:
-    --------------------------------
+    ------------------------------
     None
 
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     path_to_shhs_dataset: str
         the path to the SHHS dataset
     path_to_save_processed_data: str
@@ -139,11 +139,11 @@ def Process_GIF_Dataset(
     If already processed, the function will only shuffle the data in the pids again.
 
     RETURNS:
-    --------------------------------
+    ------------------------------
     None
 
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     path_to_shhs_dataset: str
         the path to the SHHS dataset
     path_to_save_processed_data: str
@@ -216,9 +216,9 @@ def Process_GIF_Dataset(
 
 
 """
-------------------------------------------
-Training and Testing Neural Network Model
-------------------------------------------
+==========================================
+Training And Testing Neural Network Model
+==========================================
 """
 
 
@@ -297,18 +297,18 @@ def main(
     """
 
     """
-    ====================
+    ================
     Preprocess Data
-    ====================
+    ================
     """
 
     Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = change_data_parameters)
     # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = change_data_parameters)
 
     """
-    -------------------------
-    ACCESSING SHHS DATASETS
-    -------------------------
+    ------------------------
+    Accessing SHHS Datasets
+    ------------------------
     """
 
     shhs_training_data_path = processed_shhs_path[:-4] + "_training_pid.pkl"
@@ -323,10 +323,11 @@ def main(
         shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
 
     """
-    -------------------------
-    ACCESSING GIF DATASETS
-    -------------------------
+    -----------------------
+    Accessing GIF Datasets
+    -----------------------
     """
+
     gif_training_data_path = processed_gif_path[:-4] + "_training_pid.pkl"
     gif_validation_data_path = processed_gif_path[:-4] + "_validation_pid.pkl"
     gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
@@ -337,16 +338,17 @@ def main(
         gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
     
     """
-    ====================
+    ===============
     Neural Network
-    ====================
+    ===============
     """
     
     """
-    -------------------------
-    HYPERPARAMETERS
-    -------------------------
+    ----------------
+    Hyperparameters
+    ----------------
     """
+
     batch_size = 8
     number_epochs = 40
 
@@ -359,10 +361,11 @@ def main(
     )
 
     """
-    --------------------------------------------
-    PREPARING DATA FOR TRAINING WITH DATALOADERS
-    --------------------------------------------
+    ---------------------------------------------
+    Preparing Data For Training With Dataloaders
+    ---------------------------------------------
     """
+
     if os.path.exists(shhs_training_data_path):
         shhs_train_dataloader = DataLoader(shhs_training_data, batch_size = batch_size, shuffle=True)
         shhs_validation_dataloader = DataLoader(shhs_validation_data, batch_size = batch_size, shuffle=True)
@@ -374,10 +377,12 @@ def main(
         gif_test_dataloader = DataLoader(gif_test_data, batch_size = batch_size, shuffle=True)
 
     """
-    -------------------------
-    SETTING DEVICE
-    -------------------------
+    ---------------
+    Setting Device
+    ---------------
     """
+
+    # Neural network model is unable to learn on mps device, option to use it is removed
     device = (
         "cuda"
         if torch.cuda.is_available()
@@ -388,26 +393,28 @@ def main(
     print(f"\nUsing {device} device")
 
     """
-    -------------------------------
-    INITIALIZE NEURAL NETWORK MODEL
-    -------------------------------
+    ----------------------------------
+    Initializing Neural Network Model
+    ----------------------------------
     """
    
     neural_network_model.to(device)
 
     """
-    -------------------------------
-    LOSS AND OPTIMIZER FUNCTIONS
-    -------------------------------
+    ----------------------------
+    Loss Function And Optimizer
+    ----------------------------
     """
+
     loss_function = nn.CrossEntropyLoss()
     optimizer_function = optim.Adam # type: ignore
 
     """
-    -------------------------------
-    TRAINING NEURAL NETWORK
-    -------------------------------
+    ------------------------
+    Training Neural Network
+    ------------------------
     """
+
     # variables to store accuracy progress
     train_accuracy = []
     train_avg_loss = []
@@ -450,9 +457,9 @@ def main(
         false_negatives = test_results[6]
     
     """
-    -------------------------------
-    SAVING ACCURACY VALUES
-    -------------------------------
+    -----------------------
+    Saving Accuracy Values
+    -----------------------
     """
 
     if not os.path.exists(save_accuracy_directory):
@@ -475,9 +482,9 @@ def main(
     save_to_pickle(accuracy_values, accuracy_values_save_path)
 
     """
-    -------------------------------
-    SAVING NEURAL NETWORK MODEL 
-    -------------------------------
+    ----------------------------------
+    Saving Neural Network Model State
+    ----------------------------------
     """
 
     if not os.path.exists(save_model_directory):

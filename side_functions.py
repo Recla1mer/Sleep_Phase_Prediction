@@ -13,17 +13,18 @@ def print_smart_float(floating_point_number: float, decimals: int) -> str:
     Convert a floating point number to a string with a certain number of decimals.
 
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     floating_point_number: float
         the number to convert
     decimals: int
         the number of decimals to keep
     
     RETURNS:
-    --------------------------------
+    ------------------------------
     str
         the number as a string with the specified number of decimals
     """
+
     count_division_by_10 = 0
     while True:
         if floating_point_number < 10:
@@ -56,15 +57,16 @@ def print_smart_time(time_seconds: float) -> str:
     Convert seconds to a time format that is easier to read.
 
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     time_seconds: int
         time in seconds
     
     RETURNS:
-    --------------------------------
+    ------------------------------
     str
         time in a more readable format
     """
+
     if time_seconds <= 1:
         return str(round(time_seconds, 1)) + "s"
     else:
@@ -96,7 +98,7 @@ def progress_bar(index: int, total: int, batch_size: int, start_time: float, los
     https://stackoverflow.com/questions/6169217/replace-console-output-in-python
 
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     index: int
         current index
     total: int
@@ -107,9 +109,10 @@ def progress_bar(index: int, total: int, batch_size: int, start_time: float, los
         title of the progress bar
 
     RETURNS:
-    --------------------------------
+    ------------------------------
     None, but prints the progress bar to the console
     """
+    
     if total == 0:
         return
 

@@ -20,9 +20,9 @@ import copy
 
 
 """
-----------------------
-Operating on Signals
-----------------------
+=====================
+Operating On Signals
+=====================
 """
 
 
@@ -39,13 +39,13 @@ def calculate_overlap(signal_length: int, number_windows: int, datapoints_per_wi
 
     -> window_overlap = datapoints_per_window - (signal_length - datapoints_per_window) / (number_windows - 1)
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     window_overlap: float
         The needed overlap between windows of size datapoints_per_window to fit into signal_length.
 
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal_length: int
         The length of the signal.
     number_windows: int
@@ -70,12 +70,12 @@ def find_suitable_window_parameters(
     This function searches for suitable window parameters (number_windows, datapoints_per_window, 
     window_overlap) in a given range for a signal of length 'signal_length' and prints them to console.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     None, but prints suitable window parameters to console.
 
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal_length: int
         The length of the signal.
     number_windows_range: tuple
@@ -84,7 +84,6 @@ def find_suitable_window_parameters(
         The range of window sizes to consider.
     minimum_window_size_overlap_difference: int
         The minimum difference between window_size and window_overlap.
-
     """
 
     window_parameters_found = False
@@ -108,20 +107,20 @@ def interpolate_signal(signal: list, signal_frequency: float, target_frequency: 
     This function uses linear interpolation to resample a signal to a target frequency.
     If the signal is of type int, the interpolated signal will be rounded to the nearest integer.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     interpolated_signal: list
         The resampled signal.
 
-    Example:
-    --------
+    EXAMPLE:
+    ------------------------------
     signal = [1., 2., 3., 4., 5.]
     signal_frequency = 1
     target_frequency = 2
     interpolated_signal = [1., 1.5, 2., 2.5, 3., 3.5, 4., 4.5, 5., 5.]
 
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be resampled.
     signal_frequency: int
@@ -155,13 +154,13 @@ def scale_classification_signal(
     """
     This function resamples a classification signal to a target frequency.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     target_signal: np.ndarray
         The resampled signal.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be resampled.
     signal_frequency: float
@@ -201,13 +200,13 @@ def scale_continuous_signal(
 
     Fun Fact: After testing it, I realized that this function is the same as 'interpolate_signal'.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     target_signal: np.ndarray
         The resampled signal.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be resampled.
     signal_frequency: float
@@ -280,13 +279,13 @@ def scale_signal(
     """
     This function resamples a signal to a target frequency.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     target_signal: np.ndarray
         The resampled signal.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be resampled.
     signal_frequency: float
@@ -323,13 +322,13 @@ def calculate_optimal_shift_length(
     wanted shift length, but still within the allowed deviation. If a shift length within the deviation is an
     integer, it will be preferred over a non-integer shift length.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     best_possible_shift_length: float
         The optimal shift length.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal_length: int
         The length of the signal.
     desired_length: int
@@ -400,15 +399,15 @@ def split_long_signal(
 
     Attention:  'sampling_frequency' must be equal to 'target_frequency'
     
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     splitted_signals: np.ndarray
         The signal split into multiple signals.
     optimal_shift_length: int
         The optimal shift length that was used to split the signal.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be split into multiple signals.
 
@@ -505,13 +504,13 @@ def split_signals_within_dictionary(
     ATTENTION: The order of the signals in 'valid_signal_keys' must be the same as the order of the frequencies
     in 'signal_frequencies' and 'signal_target_frequencies'.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     new_dictionaries_for_splitted_signals: list
         The new dictionaries for the splitted signals.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     data_dict: dict
         The dictionary containing the signals.
     id_key: str
@@ -529,6 +528,7 @@ def split_signals_within_dictionary(
     absolute_shift_deviation_seconds: int
         The allowed deviation from the wanted shift length.
     """
+
     splitted_signals = list()
     previous_shift_length_seconds = 0
 
@@ -577,13 +577,13 @@ def signal_to_windows(
     This function splits a signal into windows of length 'datapoints_per_window' that overlap by 
     'window_overlap'.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     windows: np.ndarray
         The signal split into overlapping windows.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: np.ndarray
         The signal to be split into windows.
     datapoints_per_window: int
@@ -670,13 +670,13 @@ def reshape_signal_to_overlapping_windows(
     (number_windows, window_size), where windows overlap by 'overlap_seconds' and adjust the signal to the
     neural network's requirements.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     reshaped_signals: list
         The signal split into overlapping windows.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     signal: list
         The signal to be split into windows.
     
@@ -790,18 +790,19 @@ def slp_label_transformation(
     """
     Create transformation dictionary to alter the labels that classify the sleep stage.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     transformation_dict: dict
         The transformation dictionary.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     current_labels: dict
         The current labels that classify the sleep stage. Values must be lists of strings or integers.
     desired_labels: dict
         The desired labels that classify the sleep stage. Values must be strings or integers.
     """
+
     # make sure values are strings.
     for key in desired_labels:
         desired_labels[key] = str(desired_labels[key])
@@ -827,13 +828,13 @@ def alter_slp_labels(
     """
     Alter the labels that classify the sleep stage.
 
-    Returns:
-    --------
+    RETURNS:
+    ------------------------------
     altered_labels: list
         The altered labels.
     
-    Parameters:
-    -----------
+    ARGUMENTS:
+    ------------------------------
     labels: list
         The labels to be altered.
     current_labels: dict
@@ -841,6 +842,7 @@ def alter_slp_labels(
     desired_labels: dict
         The desired labels that classify the sleep stage.
     """
+
     transformation = slp_label_transformation(current_labels, desired_labels)
 
     slp_labels = np.array(slp_labels) # type: ignore
@@ -872,9 +874,9 @@ def alter_slp_labels(
 
 
 """
-
-Section 2: Managing Data
-
+================================
+Handling Pickle Files And Paths
+================================
 """
 
 import pickle
@@ -887,17 +889,18 @@ def save_to_pickle(data, file_name):
     """
     Save data to a pickle file, overwriting the file if it already exists.
 
+    RETURNS:
+    ------------------------------
+    None
+
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     data: any
         data to be saved
     file_name: str
         path to the pickle file
-    
-    RETURNS:
-    --------------------------------
-    None
     """
+
     with open(file_name, "wb") as f:
         pickle.dump(data, f)
 
@@ -906,17 +909,18 @@ def append_to_pickle(data, file_name):
     """
     Append data to a pickle file, without deleting previous data.
 
+    RETURNS:
+    ------------------------------
+    None
+
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     data: any
         data to be saved
     file_name: str
         path to the pickle file
-    
-    RETURNS:
-    --------------------------------
-    None
     """
+    
     with open(file_name, "ab") as f:
         pickle.dump(data, f)
 
@@ -925,21 +929,19 @@ def load_from_pickle(file_name: str):
     """
     Load data from a pickle file as a generator.
 
+    RETURNS:
+    ------------------------------
+    any
+        data from the pickle file
+
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     file_name: str
         path to the pickle file
     key: str
         key of the data to be loaded
-    
-    RETURNS:
-    --------------------------------
-    any
-        data from the pickle file
     """
-    # with open(file_name, "rb") as f:
-    #     data = pickle.load(f)
-    # return data
+
     with open(file_name, "rb") as f:
         while True:
             try:
@@ -952,18 +954,19 @@ def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
     """
     Find a path that does not exist yet by adding a number to the end of the path.
 
+    RETURNS:
+    ------------------------------
+    str
+        path that does not exist yet
+
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     path_without_file_type: str
         path without the file type
     file_type: str
         file type of the file to be saved
-    
-    RETURNS:
-    --------------------------------
-    str
-        path that does not exist yet
     """
+
     if not os.path.exists(f"{path_without_file_type}.{file_type}"):
         return f"{path_without_file_type}.{file_type}"
     i = 0
@@ -976,15 +979,16 @@ def create_directories_along_path(file_path: str):
     """
     Create all directories along a given path that do not exist yet.
 
+    RETURNS:
+    ------------------------------
+    None
+
     ARGUMENTS:
-    --------------------------------
+    ------------------------------
     file_path: str
         path to a file
-    
-    RETURNS:
-    --------------------------------
-    None
     """
+
     if "/" in file_path:
         path_parts = file_path.split("/")
         for i in range(1, len(path_parts)):
@@ -1000,6 +1004,7 @@ def check_if_splitted_signals_align_with_data(
     """
     Function was used to check something. Isn't implemented currently. Still leaving it here for now.
     """
+
     collect_indices = list()
     multiplier = 1
     if len(splitted_signals[0]) < 36000:
@@ -1016,9 +1021,9 @@ def check_if_splitted_signals_align_with_data(
     
 
 """
--------------------
-Data-Manager Class
--------------------
+===================
+Data Manager Class
+===================
 """
 
 class SleepDataManager:
@@ -1046,7 +1051,14 @@ class SleepDataManager:
     default_file_info["test_file_path"] = "unassigned"
 
 
-    def __init__(self, file_path, change_default_file_info = None):
+    def __init__(self, file_path):
+        """
+        ARGUMENTS:
+        ------------------------------
+        file_path: str
+            path to the pickle file
+        """
+
         self.file_path = file_path
 
         # load general information from file
@@ -1089,19 +1101,22 @@ class SleepDataManager:
 
         ATTENTION:  Never call this function manually. It will not do any damage, but it is not useful.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         splitted_data_dictionaries: list
             The new dictionaries for the splitted signals.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         new_data: dict
             The datapoint to be corrected.
         """
 
-        # INSPECT NEW DATAPOINT:
-        # ----------------------
+        """
+        ----------------------
+        Inspect New Datapoint
+        ----------------------
+        """
 
         # Check if new_data is a dictionary
         if not isinstance(new_data, dict):
@@ -1137,9 +1152,11 @@ class SleepDataManager:
         if "sleep_stage_label" in new_data and "SLP" not in new_data:
             raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
             
-        
-        # ALTER ENTRIES IN NEW DATAPOINT:
-        # -------------------------------
+        """
+        -------------------------------
+        Alter Entries In New Datapoint
+        -------------------------------
+        """
 
         # make sure ID is a string
         new_data["ID"] = str(new_data["ID"])
@@ -1217,12 +1234,12 @@ class SleepDataManager:
 
         ATTENTION:  NEVER CALL THIS FUNCTION MANUALLY. USE save() INSTEAD.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         new_data: dict
             The datapoint to be saved.
         unique_id: bool
@@ -1311,12 +1328,12 @@ class SleepDataManager:
             "sleep_stage_label": list   # required if SLP signal is provided
         }
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         data_dict: dict
             The datapoint to be saved.
         overwrite_id: bool
@@ -1344,12 +1361,12 @@ class SleepDataManager:
         """
         Check if the IDs in the list are unique. 
         
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None, but prints information to console
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         ids: list
             List of IDs to be checked.
         """
@@ -1382,8 +1399,8 @@ class SleepDataManager:
         """
         Loads data from file path. The data can be loaded by ID, key, or index.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         data_point: dict
             The data point that was loaded.
         
@@ -1392,8 +1409,8 @@ class SleepDataManager:
         values_for_key_from_all_data_points: list
             The values for the key from all data points.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         key_id_index: str, int
             The ID, key, or index of the data to be loaded.
         """
@@ -1461,12 +1478,12 @@ class SleepDataManager:
         """
         Remove data from the file path. The data can be removed by ID, key, or index.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         key_id_index: str, int
             The ID, key, or index of the data to be removed.
         """
@@ -1544,12 +1561,12 @@ class SleepDataManager:
         Order the keys in the datapoints of the database for better readability when printing.
         Quite useless I know... But you know, maybe there is someone out there who appreciates this feature.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         custom_order: list
             The order in which the keys should be ordered.
         """
@@ -1612,12 +1629,12 @@ class SleepDataManager:
                     (only to main file, won't be forwarded to training, validation, or test files), reshuffle 
                     the data in the secondary files or pull them back into the main file for further processing.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         train_size: float
             The ratio of the training data.
         validation_size: float
@@ -1770,12 +1787,12 @@ class SleepDataManager:
         """
         Fuses the training, validation, and test data back into the main file.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         None
         """
 
@@ -1852,12 +1869,12 @@ class SleepDataManager:
         """
         Change the file information of the file. Only possible if no datapoints are in the file.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         None
 
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         new_file_info: dict
             The new file information.
         """
@@ -1896,13 +1913,13 @@ class SleepDataManager:
         """
         Returns the number of data points in the file. Usage: len(data_manager_instance)
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         count: int
             The number of data points in the file.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         None
         """
 
@@ -1925,13 +1942,13 @@ class SleepDataManager:
         """
         Check if the ID is in the file. Usage: id in data_manager_instance:
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         id_found: bool
             True if the ID is in the file, False otherwise.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         id: str
             The ID to be checked.
         """
@@ -1957,13 +1974,13 @@ class SleepDataManager:
         """
         Iterate over all data points in the file. Usage: for data_point in data_manager_instance:
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         data_point: dict
             The data point that was loaded.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         None
         """
 
@@ -1985,13 +2002,13 @@ class SleepDataManager:
 
         Identical to data_manager_instance.load(key), but more convenient.
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         values_for_key_from_all_data_points: list
             The values for the key from all data points.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         key: str
             The key to be loaded.
         """    
@@ -2028,13 +2045,13 @@ class SleepDataManager:
 
         Usage: print(data_manager_instance) or str(data_manager_instance)
 
-        Returns:
-        --------
+        RETURNS:
+        ------------------------------
         str
             A string representation of the file path and file information.
         
-        Parameters:
-        -----------
+        ARGUMENTS:
+        ------------------------------
         None
         """
 
