@@ -231,7 +231,7 @@ def main(
         change_data_parameters: dict = {},
         window_reshape_parameters: dict = default_window_reshape_parameters,
         pad_feature_with = 0,
-        pad_target_with = -1
+        pad_target_with = 0
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
@@ -507,6 +507,9 @@ def main(
 
 if __name__ == "__main__":
 
+    main()
+    raise SystemExit
+
     # Testing Original Idea: Overlapping Windows and artifect = wake stage
 
     main(
@@ -537,8 +540,8 @@ if __name__ == "__main__":
         neural_network_model = SleepStageModel(number_sleep_stages = 5),
         save_accuracy_values_path = "Accuracy/SSM_Artifect.pkl",
         save_model_state_path = "Model_State/SSM_Artifect.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
+        processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
+        processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
         change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
         pad_target_with = -1
@@ -548,8 +551,8 @@ if __name__ == "__main__":
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
         save_accuracy_values_path = "Accuracy/Yao_Artifect.pkl",
         save_model_state_path = "Model_State/Yao_Artifect.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
+        processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
+        processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
         change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
         pad_target_with = -1

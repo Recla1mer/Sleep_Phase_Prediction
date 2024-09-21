@@ -994,6 +994,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     start_time = time.time()
+    print("\nTraining Neural Network Model on Training Data:")
     progress_bar(0, size, batch_size, start_time, None, None)
 
     # Iterate over the training dataset
@@ -1031,7 +1032,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
             datapoints_done = size
-        progress_bar(batch*batch_size, size, batch_size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
+        progress_bar(datapoints_done, size, batch_size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
 
         del this_correct_predicted
     
@@ -1112,6 +1113,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
 
             # Compute prediction and loss
             pred = model(rri, mad)
+            slp = slp.long()
             test_loss += loss_fn(pred, slp).item()
 
             # collect accuracy values
@@ -1132,7 +1134,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             datapoints_done = (batch+1) * batch_size
             if datapoints_done > size:
                 datapoints_done = size
-            progress_bar(batch*batch_size, size, batch_size, start_time, None, None)
+            progress_bar(datapoints_done, size, batch_size, start_time, None, None)
 
     test_loss /= num_batches
     correct /= size
