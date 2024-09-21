@@ -46,8 +46,10 @@ class CustomSleepDataset(Dataset):
     def __init__(
             self, 
             path_to_data: str, 
-            transform=None,
+            transform = None,
             window_reshape_parameters: dict = default_window_reshape_parameters,
+            pad_feature_with = 0,
+            pad_target_with = 0
         ):
         """
         ARGUMENTS:
@@ -59,6 +61,10 @@ class CustomSleepDataset(Dataset):
         window_reshape_parameters : dict
             Parameters for reshaping the data into overlapping windows, 
             by default default_window_reshape_parameters
+        pad_feature_with : int
+            Value to pad feature (RRI and MAD) with if signal too short, by default 0
+        pad_target_with : int
+            Value to pad target (SLP) with if signal too short, by default 0
         """
 
         self.transform = transform
@@ -69,6 +75,8 @@ class CustomSleepDataset(Dataset):
         self.slp_frequency = self.data_manager.file_info["SLP_frequency"]
         
         self.window_reshape_parameters = window_reshape_parameters
+        self.pad_feature_with = pad_feature_with
+        self.pad_target_with = pad_target_with
         
 
     def __len__(self):
@@ -80,7 +88,7 @@ class CustomSleepDataset(Dataset):
         data_sample = self.data_manager.load(idx)
 
         self.window_reshape_parameters["signal_type"] = "feature"
-        self.window_reshape_parameters["pad_with"] = 0
+        self.window_reshape_parameters["pad_with"] = self.pad_feature_with
 
         # extract features from dictionary:
         rri_sample = reshape_signal_to_overlapping_windows(
@@ -105,7 +113,7 @@ class CustomSleepDataset(Dataset):
 
         # extract labels from dictionary:
         self.window_reshape_parameters["signal_type"] = "target"
-        self.window_reshape_parameters["pad_with"] = 0
+        self.window_reshape_parameters["pad_with"] = self.pad_target_with
 
         slp_labels = reshape_signal_to_overlapping_windows(
             signal = data_sample["SLP"], # type: ignore 

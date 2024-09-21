@@ -228,8 +228,10 @@ def main(
         save_model_state_path: str = "Model_State/Neural_Network.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
+        change_data_parameters: dict = {},
         window_reshape_parameters: dict = default_window_reshape_parameters,
-        change_data_parameters: dict = {}
+        pad_feature_with = 0,
+        pad_target_with = -1
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
@@ -291,13 +293,16 @@ def main(
         the path to save the processed SHHS dataset
     processed_gif_path: str
         the path to save the processed GIF dataset
-    window_reshape_parameters: dict
-        the parameters used when reshaping the signal to windows 
-        (see reshape_signal_to_overlapping_windows function in dataset_processing.py)
     change_data_parameters: dict
         the parameters that are used to keep data uniform 
         (see SleepDataManager class in dataset_processing.py)
-    
+    window_reshape_parameters: dict
+        the parameters used when reshaping the signal to windows 
+        (see reshape_signal_to_overlapping_windows function in dataset_processing.py)
+    pad_feature_with : int
+        Value to pad feature (RRI and MAD) with if signal too short, by default 0
+    pad_target_with : int
+        Value to pad target (SLP) with if signal too short, by default 0
     """
 
     """
@@ -315,16 +320,21 @@ def main(
     ------------------------
     """
 
+    CustomSleepDataset_keywords = {
+        "transform": ToTensor(), 
+        "window_reshape_parameters": window_reshape_parameters, 
+        "pad_feature_with": pad_feature_with, 
+        "pad_target_with": pad_target_with
+    }
+
     shhs_training_data_path = processed_shhs_path[:-4] + "_training_pid.pkl"
     shhs_validation_data_path = processed_shhs_path[:-4] + "_validation_pid.pkl"
     shhs_test_data_path = processed_shhs_path[:-4] + "_test_pid.pkl"
 
-    apply_transformation = ToTensor()
-
     if os.path.exists(shhs_training_data_path):
-        shhs_training_data = CustomSleepDataset(path_to_data = shhs_training_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
-        shhs_validation_data = CustomSleepDataset(path_to_data = shhs_validation_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
-        shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        shhs_training_data = CustomSleepDataset(path_to_data = shhs_training_data_path, **CustomSleepDataset_keywords)
+        shhs_validation_data = CustomSleepDataset(path_to_data = shhs_validation_data_path, **CustomSleepDataset_keywords)
+        shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, **CustomSleepDataset_keywords)
 
     """
     -----------------------
@@ -337,9 +347,9 @@ def main(
     gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
 
     if os.path.exists(gif_training_data_path):
-        gif_training_data = CustomSleepDataset(path_to_data = gif_training_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
-        gif_validation_data = CustomSleepDataset(path_to_data = gif_validation_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
-        gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, transform = apply_transformation, window_reshape_parameters = window_reshape_parameters)
+        gif_training_data = CustomSleepDataset(path_to_data = gif_training_data_path, **CustomSleepDataset_keywords)
+        gif_validation_data = CustomSleepDataset(path_to_data = gif_validation_data_path, **CustomSleepDataset_keywords)
+        gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, **CustomSleepDataset_keywords)
     
     """
     ===============
@@ -379,6 +389,8 @@ def main(
         gif_train_dataloader = DataLoader(gif_training_data, batch_size = batch_size, shuffle=True)
         gif_validation_dataloader = DataLoader(gif_validation_data, batch_size = batch_size, shuffle=True)
         gif_test_dataloader = DataLoader(gif_test_data, batch_size = batch_size, shuffle=True)
+    
+    del CustomSleepDataset_keywords, shhs_training_data_path, shhs_validation_data_path, shhs_test_data_path, gif_training_data_path, gif_validation_data_path, gif_test_data_path
 
     """
     ---------------
@@ -492,30 +504,85 @@ def main(
     
     torch.save(neural_network_model.state_dict(), save_model_state_path)
 
-default_window_reshape_parameters = {
-        "nn_signal_duration_seconds": 10*3600,
-        "number_windows": 1197, 
-        "window_duration_seconds": 120, 
-        "overlap_seconds": 90,
-        "priority_order": [3, 2, 1, 0]
-}
-
-default_file_info = dict()
-default_file_info["RRI_frequency"] = 4
-default_file_info["MAD_frequency"] = 1
-default_file_info["SLP_frequency"] = 1/30
-
-default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
-
-default_file_info["signal_length_seconds"] = 36000
-default_file_info["wanted_shift_length_seconds"] = 5400
-default_file_info["absolute_shift_deviation_seconds"] = 1800
-
-default_file_info["train_val_test_split_applied"] = False
-default_file_info["main_file_path"] = "unassigned"
-default_file_info["train_file_path"] = "unassigned"
-default_file_info["validation_file_path"] = "unassigned"
-default_file_info["test_file_path"] = "unassigned"
 
 if __name__ == "__main__":
-    main()
+
+    # Testing Original Idea: Overlapping Windows and artifect = wake stage
+
+    main(
+        neural_network_model = SleepStageModel(),
+        save_accuracy_values_path = "Accuracy/SSM_Original.pkl",
+        save_model_state_path = "Model_State/SSM_Original.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = default_window_reshape_parameters,
+        change_data_parameters = {}
+        )
+    
+    main(
+        neural_network_model = YaoModel(), # type: ignore
+        save_accuracy_values_path = "Accuracy/Yao_Original.pkl",
+        save_model_state_path = "Model_State/Yao_Original.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = default_window_reshape_parameters,
+        change_data_parameters = {}
+        )
+    
+    # Testing with Overlapping windows but artifect being a unique stage
+    
+    default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
+
+    main(
+        neural_network_model = SleepStageModel(number_sleep_stages = 5),
+        save_accuracy_values_path = "Accuracy/SSM_Artifect.pkl",
+        save_model_state_path = "Model_State/SSM_Artifect.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = default_window_reshape_parameters,
+        change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
+        pad_target_with = -1
+        )
+    
+    main(
+        neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
+        save_accuracy_values_path = "Accuracy/Yao_Artifect.pkl",
+        save_model_state_path = "Model_State/Yao_Artifect.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = default_window_reshape_parameters,
+        change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
+        pad_target_with = -1
+        )
+    
+    default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
+
+    # Testing with non-overlapping windows and artifect = wake stage
+    
+    window_reshape_parameters = {
+        "nn_signal_duration_seconds": 10*3600,
+        "number_windows": 300, 
+        "window_duration_seconds": 120, 
+        "overlap_seconds": 0,
+        "priority_order": [3, 2, 1, 0]
+    }
+
+    main(
+        neural_network_model = SleepStageModel(),
+        save_accuracy_values_path = "Accuracy/SSM_no_overlap.pkl",
+        save_model_state_path = "Model_State/SSM_no_overlap.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = window_reshape_parameters,
+        change_data_parameters = {}
+        )
+    
+    main(
+        neural_network_model = YaoModel(), # type: ignore
+        save_accuracy_values_path = "Accuracy/Yao_no_overlap.pkl",
+        save_model_state_path = "Model_State/Yao_no_overlap.pth",
+        processed_shhs_path = "Processed_Data/shhs_data.pkl",
+        processed_gif_path = "Processed_Data/gif_data.pkl",
+        window_reshape_parameters = window_reshape_parameters,
+        change_data_parameters = {}
+        )
