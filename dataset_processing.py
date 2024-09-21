@@ -920,7 +920,7 @@ def append_to_pickle(data, file_name):
     file_name: str
         path to the pickle file
     """
-    
+
     with open(file_name, "ab") as f:
         pickle.dump(data, f)
 

@@ -882,7 +882,12 @@ Calculating Individual Prediction Accuracy
 
 def update_prediction_results(predicted, actual, current_classification_values, current_true_positive, current_false_positive, current_true_negative, current_false_negative):
     """
-    Calculates the prediction accuracy of the individual classification values.
+    Calculates the prediction accuracy of the individual classification values. Following cases are collected
+    for each classification value:
+    - True Positive (TP):   Model correctly predicted that label belongs to feature
+    - False Positive (FP):  Model incorrectly predicted that label belongs to feature, when in fact it does not
+    - True Negative (TN):   Model correctly predicted that label does not belong to feature
+    - False Negative (FN):  Model incorrectly predicted that label does not belong to feature, when in fact it does
 
     RETURNS:
     ------------------------------

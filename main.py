@@ -224,9 +224,8 @@ Training And Testing Neural Network Model
 
 def main(
         neural_network_model = SleepStageModel(),
-        save_file_name: str = "Neural_Network",
-        save_accuracy_directory: str = "Accuracy",
-        save_model_directory: str = "Model_State",
+        save_accuracy_values_path: str = "Accuracy/Neural_Network.pkl",
+        save_model_state_path: str = "Model_State/Neural_Network.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
         window_reshape_parameters: dict = default_window_reshape_parameters,
@@ -259,6 +258,11 @@ def main(
         "true_negatives": true_negatives for each classifcation value (list) calculated after last epoch,
         "false_negatives": false_negatives for each classifcation value (list) calculated after last epoch
     }
+
+    - True Positive (TP):   Model correctly predicted that label belongs to feature
+    - False Positive (FP):  Model incorrectly predicted that label belongs to feature, when in fact it does not
+    - True Negative (TN):   Model correctly predicted that label does not belong to feature
+    - False Negative (FN):  Model incorrectly predicted that label does not belong to feature, when in fact it does
 
     RETURNS:
     ================================================================================
@@ -462,10 +466,7 @@ def main(
     -----------------------
     """
 
-    if not os.path.exists(save_accuracy_directory):
-        os.mkdir(save_accuracy_directory)
-
-    accuracy_values_save_path = save_accuracy_directory + "/" + save_file_name + ".pkl"
+    create_directories_along_path(save_accuracy_values_path)
 
     accuracy_values = {
         "train_accuracy": train_accuracy,
@@ -479,7 +480,7 @@ def main(
         "false_negatives": false_negatives
     }
 
-    save_to_pickle(accuracy_values, accuracy_values_save_path)
+    save_to_pickle(accuracy_values, save_accuracy_values_path)
 
     """
     ----------------------------------
@@ -487,13 +488,34 @@ def main(
     ----------------------------------
     """
 
-    if not os.path.exists(save_model_directory):
-        os.mkdir(save_model_directory)
+    create_directories_along_path(save_model_state_path)
     
-    model_save_path = save_model_directory + "/" + save_file_name + ".pth"
-    
-    torch.save(neural_network_model.state_dict(), model_save_path)
+    torch.save(neural_network_model.state_dict(), save_model_state_path)
 
+default_window_reshape_parameters = {
+        "nn_signal_duration_seconds": 10*3600,
+        "number_windows": 1197, 
+        "window_duration_seconds": 120, 
+        "overlap_seconds": 90,
+        "priority_order": [3, 2, 1, 0]
+}
+
+default_file_info = dict()
+default_file_info["RRI_frequency"] = 4
+default_file_info["MAD_frequency"] = 1
+default_file_info["SLP_frequency"] = 1/30
+
+default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+
+default_file_info["signal_length_seconds"] = 36000
+default_file_info["wanted_shift_length_seconds"] = 5400
+default_file_info["absolute_shift_deviation_seconds"] = 1800
+
+default_file_info["train_val_test_split_applied"] = False
+default_file_info["main_file_path"] = "unassigned"
+default_file_info["train_file_path"] = "unassigned"
+default_file_info["validation_file_path"] = "unassigned"
+default_file_info["test_file_path"] = "unassigned"
 
 if __name__ == "__main__":
     main()
