@@ -913,6 +913,7 @@ def update_prediction_results(predicted, actual, current_classification_values, 
     classification_values_in_actual = torch.unique(actual)
     classification_values_in_predicted = torch.unique(predicted)
     classification_values = torch.unique(torch.cat((classification_values_in_actual, classification_values_in_predicted)))
+    classification_values = classification_values.numpy()
 
     # Calculate accuracy
     true_positive, false_positive, true_negative, false_negative = [], [], [], []
@@ -993,6 +994,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     # variables to track progress
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
+    total_number_predictions = 0
     start_time = time.time()
     print("\nTraining Neural Network Model on Training Data:")
     progress_bar(0, size, batch_size, start_time, None, None)
@@ -1024,20 +1026,22 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
         # collect accuracy progress values
         this_correct_predicted = (pred.argmax(1) == slp).type(torch.float).sum().item()
+        this_number_predictions = slp.shape[0]
 
         train_loss += loss.item()
         correct += this_correct_predicted
+        total_number_predictions += this_number_predictions
 
         # print progress bar
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
             datapoints_done = size
-        progress_bar(datapoints_done, size, batch_size, start_time, loss.item(), this_correct_predicted / slp.shape[0])
+        progress_bar(datapoints_done, size, batch_size, start_time, loss.item(), this_correct_predicted / this_number_predictions)
 
         del this_correct_predicted
     
     train_loss /= num_batches
-    correct /= size
+    correct /= total_number_predictions
     
     return train_loss, correct
 
@@ -1086,6 +1090,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
     # variables to track progress
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
+    total_number_predictions = 0
     start_time = time.time()
     print("\nCalculating Prediction Accuracy on Test Data:")
     progress_bar(0, size, 1, start_time, None, None)
@@ -1118,6 +1123,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
 
             # collect accuracy values
             correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
+            total_number_predictions += slp.shape[0]
 
             # update prediction results
             update_prediction_results(
@@ -1137,7 +1143,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             progress_bar(datapoints_done, size, batch_size, start_time, None, None)
 
     test_loss /= num_batches
-    correct /= size
+    correct /= total_number_predictions
     print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
     return test_loss, correct, classification_values, true_positive, false_positive, true_negative, false_negative
