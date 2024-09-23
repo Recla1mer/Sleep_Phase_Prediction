@@ -5,6 +5,9 @@ This file executes all the code needed to preprocess the data and train the neur
 It is basically the less commented version of the notebook: "Classification_Demo.ipynb".
 """
 
+# IMPORTS
+from sklearn.metrics import cohen_kappa_score, f1_score
+
 # LOCAL IMPORTS
 from dataset_processing import *
 from neural_network_model import *
@@ -222,9 +225,9 @@ Training And Testing Neural Network Model
 """
 
 
-def main(
+def model_training_and_testing(
         neural_network_model = SleepStageModel(),
-        save_accuracy_values_path: str = "Accuracy/Neural_Network.pkl",
+        save_accuracy_values_path: str = "Model_Accuracy/Neural_Network.pkl",
         save_model_state_path: str = "Model_State/Neural_Network.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
@@ -252,19 +255,13 @@ def main(
     {
         "train_accuracy": train_accuracy for each epoch (list),
         "train_avg_loss": train_avg_loss for each epoch (list),
+        "train_predicted_results": all predicted results for last epoch (list),
+        "train_actual_results": all actual results for last epoch (list),
         "test_accuracy": test_accuracy for each epoch (list),
         "test_avg_loss": test_avg_loss for each epoch (list),
-        "classification_values": classification_values found in the test dataset (list),
-        "true_positives": true_positives for each classifcation value (list) calculated after last epoch,
-        "false_positives": false_positives for each classifcation value (list) calculated after last epoch,
-        "true_negatives": true_negatives for each classifcation value (list) calculated after last epoch,
-        "false_negatives": false_negatives for each classifcation value (list) calculated after last epoch
+        "test_predicted_results": all predicted results for last epoch (list),
+        "test_actual_results": all actual results for last epoch (list)
     }
-
-    - True Positive (TP):   Model correctly predicted that label belongs to feature
-    - False Positive (FP):  Model incorrectly predicted that label belongs to feature, when in fact it does not
-    - True Negative (TN):   Model correctly predicted that label does not belong to feature
-    - False Negative (FN):  Model incorrectly predicted that label does not belong to feature, when in fact it does
 
     RETURNS:
     ================================================================================
@@ -442,6 +439,11 @@ def main(
         print(f"\nEpoch {t+1}:")
         print("-"*130)
 
+        # get all the results from the training and testing loop in the last epoch
+        collect_results = False
+        if t == number_epochs - 1:
+            collect_results = True
+
         train_results = train_loop(
             dataloader = shhs_train_dataloader,
             model = neural_network_model,
@@ -451,6 +453,7 @@ def main(
             lr_scheduler = learning_rate_scheduler,
             current_epoch = t,
             batch_size = batch_size,
+            collect_results = collect_results
         )
         train_avg_loss.append(train_results[0])
         train_accuracy.append(train_results[1])
@@ -460,17 +463,13 @@ def main(
             model = neural_network_model,
             device = device,
             loss_fn = loss_function,
-            batch_size = batch_size
+            batch_size = batch_size,
+            collect_results = collect_results
         )
 
         test_avg_loss.append(test_results[0])
         test_accuracy.append(test_results[1])
 
-        classification_values = test_results[2]
-        true_positives = test_results[3]
-        false_positives = test_results[4]
-        true_negatives = test_results[5]
-        false_negatives = test_results[6]
     
     """
     -----------------------
@@ -483,13 +482,12 @@ def main(
     accuracy_values = {
         "train_accuracy": train_accuracy,
         "train_avg_loss": train_avg_loss,
+        "train_predicted_results": train_results[2],
+        "train_actual_results": train_results[3],
         "test_accuracy": test_accuracy,
         "test_avg_loss": test_avg_loss,
-        "classification_values": classification_values,
-        "true_positives": true_positives,
-        "false_positives": false_positives,
-        "true_negatives": true_negatives,
-        "false_negatives": false_negatives
+        "test_predicted_results": test_results[2],
+        "test_actual_results": test_results[3]
     }
 
     save_to_pickle(accuracy_values, save_accuracy_values_path)
@@ -505,16 +503,26 @@ def main(
     torch.save(neural_network_model.state_dict(), save_model_state_path)
 
 
+def predicting_sleep_stage_using_trained_model(
+        neural_network_model = SleepStageModel(),
+        path_to_model_state: str = "Model_State/Neural_Network.pth",
+        path_to_processed_data: str = "Processed_Data/shhs_data_validation_pid.pkl",
+        path_to_save_results: str = "Results/Neural_Network.pkl",
+    ):
+    """
+    """
+
+
 if __name__ == "__main__":
 
-    main()
+    model_training_and_testing()
     raise SystemExit
 
     # Testing Original Idea: Overlapping Windows and artifect = wake stage
 
-    main(
+    model_training_and_testing(
         neural_network_model = SleepStageModel(),
-        save_accuracy_values_path = "Accuracy/SSM_Original.pkl",
+        save_accuracy_values_path = "Model_Accuracy/SSM_Original.pkl",
         save_model_state_path = "Model_State/SSM_Original.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
@@ -522,9 +530,9 @@ if __name__ == "__main__":
         change_data_parameters = {}
         )
     
-    main(
+    model_training_and_testing(
         neural_network_model = YaoModel(), # type: ignore
-        save_accuracy_values_path = "Accuracy/Yao_Original.pkl",
+        save_accuracy_values_path = "Model_Accuracy/Yao_Original.pkl",
         save_model_state_path = "Model_State/Yao_Original.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
@@ -536,9 +544,9 @@ if __name__ == "__main__":
     
     default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
 
-    main(
+    model_training_and_testing(
         neural_network_model = SleepStageModel(number_sleep_stages = 5),
-        save_accuracy_values_path = "Accuracy/SSM_Artifect.pkl",
+        save_accuracy_values_path = "Model_Accuracy/SSM_Artifect.pkl",
         save_model_state_path = "Model_State/SSM_Artifect.pth",
         processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
         processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
@@ -547,9 +555,9 @@ if __name__ == "__main__":
         pad_target_with = -1
         )
     
-    main(
+    model_training_and_testing(
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
-        save_accuracy_values_path = "Accuracy/Yao_Artifect.pkl",
+        save_accuracy_values_path = "Model_Accuracy/Yao_Artifect.pkl",
         save_model_state_path = "Model_State/Yao_Artifect.pth",
         processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
         processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
@@ -570,9 +578,9 @@ if __name__ == "__main__":
         "priority_order": [3, 2, 1, 0]
     }
 
-    main(
+    model_training_and_testing(
         neural_network_model = SleepStageModel(),
-        save_accuracy_values_path = "Accuracy/SSM_no_overlap.pkl",
+        save_accuracy_values_path = "Model_Accuracy/SSM_no_overlap.pkl",
         save_model_state_path = "Model_State/SSM_no_overlap.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",
@@ -580,9 +588,9 @@ if __name__ == "__main__":
         change_data_parameters = {}
         )
     
-    main(
+    model_training_and_testing(
         neural_network_model = YaoModel(), # type: ignore
-        save_accuracy_values_path = "Accuracy/Yao_no_overlap.pkl",
+        save_accuracy_values_path = "Model_Accuracy/Yao_no_overlap.pkl",
         save_model_state_path = "Model_State/Yao_no_overlap.pth",
         processed_shhs_path = "Processed_Data/shhs_data.pkl",
         processed_gif_path = "Processed_Data/gif_data.pkl",

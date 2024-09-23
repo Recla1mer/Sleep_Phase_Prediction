@@ -226,7 +226,7 @@ class YaoModel(nn.Module):
             self, 
             datapoints_per_rri_window = 480, 
             datapoints_per_mad_window = 120,
-            windows_per_batch = 1197,
+            windows_per_signal = 1197,
             number_window_learning_features = 128,
             rri_convolutional_channels = [1, 8, 16, 32, 64],
             mad_convolutional_channels = [1, 8, 16, 32, 64],
@@ -240,7 +240,7 @@ class YaoModel(nn.Module):
             Number of data points in each RRI window, by default 480
         datapoints_per_mad_window : int, optional
             Number of data points in each MAD window, by default 120
-        windows_per_batch : int, optional
+        windows_per_signal : int, optional
             Number of windows in each batch, by default 1197
         number_window_learning_features : int, optional
             Number of features learned from Signal Learning, by default 128
@@ -268,7 +268,7 @@ class YaoModel(nn.Module):
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_batch = windows_per_batch
+        self.windows_per_signal = windows_per_signal
 
         super(YaoModel, self).__init__()
 
@@ -436,7 +436,7 @@ class YaoModel(nn.Module):
         # Check Dimensions of RRI signal
         batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
         assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_rri}."
+        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
 
         # Reshape RRI signal
         rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
@@ -446,7 +446,7 @@ class YaoModel(nn.Module):
             # Check Dimensions of MAD signal
             _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
             assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_mad}."
+            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
 
             # Reshape MAD signal
             mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
@@ -463,7 +463,7 @@ class YaoModel(nn.Module):
 
         # Process MAD Signal or create 0 tensor if MAD signal is not provided
         if mad_signal is None:
-            num_windows_mad = self.windows_per_batch
+            num_windows_mad = self.windows_per_signal
             mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
         else:
             mad_features = self.mad_signal_learning(mad_signal)
@@ -490,14 +490,14 @@ class YaoModel(nn.Module):
         output = self.linear(window_features)
 
         # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_batch, -1)
+        output = output.reshape(batch_size, self.windows_per_signal, -1)
         output = output.transpose(1, 2).contiguous()
 
         # Convolutional layers
         output = self.window_feature_learning(output)
 
         # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_batch, -1)
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
 
         return output
 
@@ -523,7 +523,7 @@ class SleepStageModel(nn.Module):
             self, 
             datapoints_per_rri_window = 480, 
             datapoints_per_mad_window = 120,
-            windows_per_batch = 1197,
+            windows_per_signal = 1197,
             number_window_learning_features = 128,
             rri_convolutional_channels = [1, 8, 16, 32, 64],
             mad_convolutional_channels = [1, 8, 16, 32, 64],
@@ -537,8 +537,8 @@ class SleepStageModel(nn.Module):
             Number of data points in each RRI window, by default 480
         datapoints_per_mad_window : int, optional
             Number of data points in each MAD window, by default 120
-        windows_per_batch : int, optional
-            Number of windows in each batch, by default 1197
+        windows_per_signal : int, optional
+            Number of windows in each signal, by default 1197
         number_window_learning_features : int, optional
             Number of features learned from Signal Learning, by default 128
         rri_convolutional_channels : list, optional
@@ -565,7 +565,7 @@ class SleepStageModel(nn.Module):
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_batch = windows_per_batch
+        self.windows_per_signal = windows_per_signal
 
         super(SleepStageModel, self).__init__()
 
@@ -728,7 +728,7 @@ class SleepStageModel(nn.Module):
         # Check Dimensions of RRI signal
         batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
         assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_rri}."
+        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
 
         # Reshape RRI signal
         rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
@@ -738,7 +738,7 @@ class SleepStageModel(nn.Module):
             # Check Dimensions of MAD signal
             _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
             assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_batch, f"Expected {self.windows_per_batch} windows in each batch, but got {num_windows_mad}."
+            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
 
             # Reshape MAD signal
             mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
@@ -755,7 +755,7 @@ class SleepStageModel(nn.Module):
 
         # Process MAD Signal or create 0 tensor if MAD signal is not provided
         if mad_signal is None:
-            num_windows_mad = self.windows_per_batch
+            num_windows_mad = self.windows_per_signal
             mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
         else:
             mad_features = self.mad_signal_learning(mad_signal)
@@ -782,14 +782,14 @@ class SleepStageModel(nn.Module):
         output = self.linear(window_features)
 
         # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_batch, -1)
+        output = output.reshape(batch_size, self.windows_per_signal, -1)
         output = output.transpose(1, 2).contiguous()
 
         # Convolutional layers
         output = self.window_feature_learning(output)
 
         # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_batch, -1)
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
 
         return output
 
@@ -949,7 +949,7 @@ Looping Over The Dataset
 """
 
 # TRAINING LOOP
-def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size):
+def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size, collect_results = False):
     """
     Iterate over the training dataset and try to converge to optimal parameters.
 
@@ -961,6 +961,10 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         Average loss value of the training dataset
     correct : float
         Ratio of correctly predicted values of the training dataset
+    predicted_results : list
+        Predicted sleep stages
+    actual_results : list
+        Actual sleep stages
 
     ARGUMENTS:
     ------------------------------
@@ -980,7 +984,12 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         Current epoch number
     batch_size : int
         Number of samples in each batch
+    collect_results : bool
+        If True, predicted and actual results are collected
     """
+
+    # get number of windows the signals are reshaped to
+    windows_per_signal = model.windows_per_signal
 
     # set optimizer
     optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
@@ -990,6 +999,8 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
     # variables to save accuracy progress
     train_loss, correct = 0, 0
+    predicted_results = np.empty((0, windows_per_signal))
+    actual_results = np.empty((0, windows_per_signal))
 
     # variables to track progress
     size = len(dataloader.dataset)
@@ -1032,6 +1043,14 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         correct += this_correct_predicted
         total_number_predictions += this_number_predictions
 
+        # collect results if requested
+        if collect_results:
+            this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+            this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+            
+            predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
+            actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
+
         # print progress bar
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
@@ -1043,11 +1062,11 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     train_loss /= num_batches
     correct /= total_number_predictions
     
-    return train_loss, correct
+    return train_loss, correct, predicted_results, actual_results
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, device, loss_fn, batch_size):
+def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = False):
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -1059,16 +1078,11 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
         Average loss value of the test dataset
     correct : float
         Ratio of correctly predicted values of the test dataset
-    classification_values : list
-        List of unique classification values in the dataset
-    true_positive : list
-        Number of true positive predictions for each classification value
-    false_positive : list
-        Number of false positive predictions for each classification value
-    true_negative : list
-        Number of true negative predictions for each classification value
-    false_negative : list
-        Number of false negative predictions for each classification value
+    predicted_results : list
+        Predicted sleep stages
+    actual_results : list
+        Actual sleep stages
+
 
     ARGUMENTS:
     ------------------------------
@@ -1082,7 +1096,12 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
         Loss function to be minimized
     batch_size : int
         Number of samples in each batch
+    collect_results : bool
+        If True, predicted and actual results are collected
     """
+
+    # get number of windows the signals are reshaped to
+    windows_per_signal = model.windows_per_signal
 
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     model.eval()
@@ -1097,7 +1116,8 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
 
     # variables to save accuracy progress
     test_loss, correct = 0, 0
-    classification_values, true_positive, false_positive, true_negative, false_negative = [], [], [], [], []
+    predicted_results = np.empty((0, windows_per_signal))
+    actual_results = np.empty((0, windows_per_signal))
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
@@ -1125,16 +1145,13 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
             total_number_predictions += slp.shape[0]
 
-            # update prediction results
-            update_prediction_results(
-                predicted = pred.argmax(1),
-                actual = slp, 
-                current_classification_values = classification_values, 
-                current_true_positive = true_positive, 
-                current_false_positive = false_positive, 
-                current_true_negative = true_negative, 
-                current_false_negative = false_negative
-                )
+            # collect results if requested
+            if collect_results:
+                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+                
+                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
+                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
 
             # print progress bar
             datapoints_done = (batch+1) * batch_size
@@ -1146,7 +1163,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
     correct /= total_number_predictions
     print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-    return test_loss, correct, classification_values, true_positive, false_positive, true_negative, false_negative
+    return test_loss, correct, predicted_results, actual_results
 
 
 # Example usage

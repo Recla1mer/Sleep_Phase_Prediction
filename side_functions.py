@@ -6,6 +6,14 @@ In this file we provide functions that are used to keep the code a little bit cl
 
 # IMPORTS
 import time
+import numpy as np
+
+
+"""
+=============================
+Printing Progress to console
+=============================
+"""
 
 
 def print_smart_float(floating_point_number: float, decimals: int) -> str:
@@ -112,7 +120,7 @@ def progress_bar(index: int, total: int, batch_size: int, start_time: float, los
     ------------------------------
     None, but prints the progress bar to the console
     """
-    
+
     if total == 0:
         return
 
