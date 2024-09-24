@@ -92,8 +92,15 @@ def Process_SHHS_Dataset(
         # check if patient ids are unique:
         shhs_data_manager.check_if_ids_are_unique(patients)
 
+        # showing progress bar
+        start_time = time.time()
+        total_data_points = len(patients)
+        print("\nPreproccessing Datapoints from SHHS Dataset:")
+        progress_bar(0, total_data_points, 1, start_time, None, None)
+
         # saving all data from SHHS dataset to the shhs_data.pkl file
-        for patient_id in patients:
+        for patient_index in range(total_data_points):
+            patient_id = patients[patient_index]
             new_datapoint = {
                 "ID": patient_id,
                 "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
@@ -104,6 +111,7 @@ def Process_SHHS_Dataset(
             }
 
             shhs_data_manager.save(new_datapoint, unique_id=True)
+            progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
     
     else:
         print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -190,13 +198,20 @@ def Process_GIF_Dataset(
         # check if patient ids are unique:
         gif_data_manager.check_if_ids_are_unique(patients)
 
+        # showing progress bar
+        start_time = time.time()
+        total_data_points = len(patients)
+        print("\nPreproccessing Datapoints from GIF Dataset:")
+        progress_bar(0, total_data_points, 1, start_time, None, None)
+
         # saving all data from GIF dataset to the gif_data.pkl file
-        for patient_id in patients:
+        for patient_index in range(total_data_points):
+            patient_id = patients[patient_index]
             new_datapoint = {
                 "ID": patient_id,
                 "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
                 "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
-                "SLP": gif_dataset["stage"][patient_id][:], # type: ignore
+                "SLP": np.array(gif_dataset["stage"][patient_id][:]).astype(int), # type: ignore
                 "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
                 "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
                 "SLP_frequency": 1/30, # type: ignore
@@ -204,6 +219,8 @@ def Process_GIF_Dataset(
             }
 
             gif_data_manager.save(new_datapoint, unique_id=True)
+
+            progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
 
     else:
         print("\nATTENTION: GIF dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -361,7 +378,7 @@ def main_model_training(
     """
    
     if load_model_state_path is not None:
-        neural_network_model.load_state_dict(torch.load(load_model_state_path))
+        neural_network_model.load_state_dict(torch.load(load_model_state_path, map_location=device, weights_only=True))
     
     neural_network_model.to(device)
 
@@ -466,9 +483,9 @@ def predicting_sleep_stage_using_trained_model(
 
 
 if __name__ == "__main__":
-    train_size = 0.8
-    validation_size = 0.1
-    test_size = 0.1
+    train_size = 0.05
+    validation_size = 0.05
+    test_size = 0.9
 
     # Preprocess SHHS Data
     processed_shhs_path = "Processed_Data/shhs_data.pkl"
@@ -515,6 +532,8 @@ if __name__ == "__main__":
         pad_feature_with = 0,
         pad_target_with = 0
         )
+    
+    raise SystemExit
 
     """
     ---------------------------------------------------------------------

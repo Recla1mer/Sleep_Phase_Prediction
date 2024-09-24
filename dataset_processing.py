@@ -844,8 +844,13 @@ def alter_slp_labels(
     """
 
     transformation = slp_label_transformation(current_labels, desired_labels)
-
+    
+    # alter dtype of slp labels if necessary (float is not accepted)
     slp_labels = np.array(slp_labels) # type: ignore
+    if slp_labels.dtype == float: # type: ignore
+        print("\nWARNING: Sleep labels are of type float. Converting to int.")
+        slp_labels = slp_labels.astype(int) # type: ignore
+
     signal_data_type = slp_labels.dtype # type: ignore
     slp_labels = slp_labels.astype(str) # type: ignore
 

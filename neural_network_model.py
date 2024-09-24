@@ -106,7 +106,7 @@ class CustomSleepDataset(Dataset):
                 target_frequency = self.mad_frequency,
                 **self.window_reshape_parameters
             )
-            if rri_sample.dtype == np.float64:
+            if mad_sample.dtype == np.float64:
                 mad_sample = mad_sample.astype(np.float32)
         except:
             mad_sample = "None"
@@ -122,6 +122,8 @@ class CustomSleepDataset(Dataset):
         )
         if slp_labels.dtype == np.int64:
             slp_labels = slp_labels.astype(np.int32)
+        if slp_labels.dtype == np.float64:
+            slp_labels = slp_labels.astype(np.float32)
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
@@ -883,66 +885,6 @@ class CosineScheduler:
 
 
 """
-===========================================
-Calculating Individual Prediction Accuracy
-===========================================
-"""
-
-def update_prediction_results(predicted, actual, current_classification_values, current_true_positive, current_false_positive, current_true_negative, current_false_negative):
-    """
-    Calculates the prediction accuracy of the individual classification values. Following cases are collected
-    for each classification value:
-    - True Positive (TP):   Model correctly predicted that label belongs to feature
-    - False Positive (FP):  Model incorrectly predicted that label belongs to feature, when in fact it does not
-    - True Negative (TN):   Model correctly predicted that label does not belong to feature
-    - False Negative (FN):  Model incorrectly predicted that label does not belong to feature, when in fact it does
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    predicted : torch.Tensor
-        Predicted classifications
-    actual : torch.Tensor
-        True classifications
-    """
-
-    # get unique sleep stages
-    classification_values_in_actual = torch.unique(actual)
-    classification_values_in_predicted = torch.unique(predicted)
-    classification_values = torch.unique(torch.cat((classification_values_in_actual, classification_values_in_predicted)))
-    classification_values = classification_values.numpy()
-
-    # Calculate accuracy
-    true_positive, false_positive, true_negative, false_negative = [], [], [], []
-
-    # Calculate true positive, false positive, true negative, false negative for each classification value in new prediction
-    for classification_value in classification_values:
-        true_positive.append(((predicted == classification_value) & (actual == classification_value)).type(torch.float).sum().item())
-        false_positive.append(((predicted == classification_value) & (actual != classification_value)).type(torch.float).sum().item())
-        true_negative.append(((predicted != classification_value) & (actual != classification_value)).type(torch.float).sum().item())
-        false_negative.append(((predicted != classification_value) & (actual == classification_value)).type(torch.float).sum().item())
-    
-    # update current values
-    for class_label_index in range(len(classification_values)):
-        class_label = classification_values[class_label_index]
-        if class_label not in current_classification_values:
-            current_classification_values.append(class_label)
-            current_true_positive.append(true_positive[class_label_index])
-            current_false_positive.append(false_positive[class_label_index])
-            current_true_negative.append(true_negative[class_label_index])
-            current_false_negative.append(false_negative[class_label_index])
-        else:
-            current_class_label_index = current_classification_values.index(class_label)
-            current_true_positive[current_class_label_index] += true_positive[class_label_index]
-            current_false_positive[current_class_label_index] += false_positive[class_label_index]
-            current_true_negative[current_class_label_index] += true_negative[class_label_index]
-            current_false_negative[current_class_label_index] += false_negative[class_label_index]
-
-
-"""
 =========================
 Looping Over The Dataset
 =========================
@@ -1007,7 +949,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     num_batches = len(dataloader)
     total_number_predictions = 0
     start_time = time.time()
-    print("\nTraining Neural Network Model on Training Data:")
+    print("\nTraining Neural Network Model:")
     progress_bar(0, size, batch_size, start_time, None, None)
 
     # Iterate over the training dataset
@@ -1287,7 +1229,7 @@ if __name__ == "__main__":
     # Create example data
     rri_example = torch.rand((2, 1, 1197, 480), device=device)
     mad_example = torch.rand((2, 1, 1197, 120), device=device)
-    mad_example = None # uncomment to test data without MAD signal
+    # mad_example = None # uncomment to test data without MAD signal
 
     # Send data to device
     rri_example = rri_example.to(device)
@@ -1310,7 +1252,7 @@ if __name__ == "__main__":
     # Create example data
     rri_example = torch.rand((2, 1, 1197, 480), device=device)
     mad_example = torch.rand((2, 1, 1197, 120), device=device)
-    mad_example = None # uncomment to test data without MAD signal
+    # mad_example = None # uncomment to test data without MAD signal
 
     # Send data to device
     rri_example = rri_example.to(device)

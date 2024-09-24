@@ -326,6 +326,7 @@ def plot_confusion_matrix(
         prediction_result_key: str,
         actual_result_keys: str,
         display_labels: list = ["Wake", "LS", "DS", "REM"],
+        all_known_labels = None,
         **kwargs
     ):
     """
@@ -345,6 +346,9 @@ def plot_confusion_matrix(
         the key that accesses the actual results in the data (for example: "test_actual_results")
     display_labels: list
         the labels for the confusion matrix
+    all_known_labels: list
+        all known labels (if not all labels occur in the data)
+        if None, labels are guessed from display_labels
     
     KEYWORD ARGUMENTS:
     ------------------------------
@@ -392,16 +396,32 @@ def plot_confusion_matrix(
     # Plot the confusion matrix
     fig, ax = plt.subplots(figsize=kwargs["figsize"])
 
-    metrics.ConfusionMatrixDisplay.from_predictions(
-        y_true = actual_results,
-        y_pred = predicted_results,
-        ax = ax,
-        display_labels = display_labels,
-        cmap = kwargs["cmap"],
-        values_format = kwargs["values_format"],
-        colorbar = kwargs["colorbar"],
-        normalize = kwargs["normalize"]
-        )
+    try:
+        metrics.ConfusionMatrixDisplay.from_predictions(
+            y_true = actual_results,
+            y_pred = predicted_results,
+            ax = ax,
+            display_labels = display_labels,
+            cmap = kwargs["cmap"],
+            values_format = kwargs["values_format"],
+            colorbar = kwargs["colorbar"],
+            normalize = kwargs["normalize"]
+            )
+    except:
+        # If not all labels occur in the data:
+        if all_known_labels is None:
+            all_known_labels = [i for i in range(len(display_labels))]
+        metrics.ConfusionMatrixDisplay.from_predictions(
+            y_true = actual_results,
+            y_pred = predicted_results,
+            ax = ax,
+            display_labels = display_labels,
+            labels = [i for i in range(len(display_labels))],
+            cmap = kwargs["cmap"],
+            values_format = kwargs["values_format"],
+            colorbar = kwargs["colorbar"],
+            normalize = kwargs["normalize"]
+            )
     
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
 
@@ -480,10 +500,10 @@ if __name__ == "__main__":
     ======================
     """
 
-    # plot_confusion_matrix(
-    #     path_to_pkl_file = "Model_Accuracy/Neural_Network.pkl",
-    #     prediction_result_key = "test_predicted_results",
-    #     actual_result_keys = "test_actual_results",
-    #     display_labels = ["Wake", "LS", "DS", "REM"],
-    #     title = "Confusion Matrix of Neural Network",
-    # )
+    plot_confusion_matrix(
+        path_to_pkl_file = "Model_Accuracy/NN_SHHS_GIF.pkl",
+        prediction_result_key = "test_predicted_results",
+        actual_result_keys = "test_actual_results",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        title = "Confusion Matrix of Neural Network",
+    )
