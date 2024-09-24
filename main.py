@@ -225,28 +225,23 @@ Training And Testing Neural Network Model
 """
 
 
-def model_training_and_testing(
+def main_model_training(
         neural_network_model = SleepStageModel(),
+        load_model_state_path = None,
+        processed_path = "Processed_Data/shhs_data.pkl",
         save_accuracy_values_path: str = "Model_Accuracy/Neural_Network.pkl",
         save_model_state_path: str = "Model_State/Neural_Network.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
-        change_data_parameters: dict = {},
         window_reshape_parameters: dict = default_window_reshape_parameters,
         pad_feature_with = 0,
         pad_target_with = 0
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
-    dataset preprocessing and neural network architecture configurations.
+    neural network architecture configurations. Some Parameters are hardcoded by design.
 
-    First, the available datasets are preprocessed (functions: Process_SHHS_Dataset and Process_GIF_Dataset).
-    Using the SleepDataManager class from dataset_processing.py, the data is saved in a uniform way. How exactly
-    can be altered using the change_data_parameters argument.
-
-    Afterwards it is split into training, validation, and test datasets and accessed using the 
-    CustomSleepDataset class from neural_network_model.py. Before returning the data, this class reshapes the
-    data into windows. Adjustments can be made using the window_reshape_parameters argument.
+    The Data is accessed using the CustomSleepDataset class from neural_network_model.py. Before returning 
+    the data, this class reshapes the data into windows. Adjustments can be made using the 
+    window_reshape_parameters argument.
 
     Afterwards the neural network model is trained and tested. The accuracy results are saved in a pickle file
     and the model state dictionary is saved in a .pth file.
@@ -264,35 +259,25 @@ def model_training_and_testing(
     }
 
     RETURNS:
-    ================================================================================
+    ------------------------------
     None
 
-
-    ARGUMENTS:
-    ================================================================================
     
-    Arguments for Neural Network Section:
-    -------------------------------------
-
+    ARGUMENTS:
+    ------------------------------
     neural_network_model
         the neural network model to use
-    save_file_name: str
-        the name of the file to save the accuracy values and the model
-    save_accuracy_directory: str
-        the directory to save the accuracy values
-    save_model_directory: str
-        the directory to save the model state dictionary
-
-    Arguments for Data Preprocessing Section:
-    -----------------------------------------
-
-    processed_shhs_path: str
-        the path to save the processed SHHS dataset
-    processed_gif_path: str
-        the path to save the processed GIF dataset
-    change_data_parameters: dict
-        the parameters that are used to keep data uniform 
-        (see SleepDataManager class in dataset_processing.py)
+    load_model_state_path: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    processed_path: str
+        the path to the processed dataset 
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    save_accuracy_values_path: str
+        the path to save the accuracy values
+    save_model_state_path: str
+        the path to save the model state dictionary
     window_reshape_parameters: dict
         the parameters used when reshaping the signal to windows 
         (see reshape_signal_to_overlapping_windows function in dataset_processing.py)
@@ -302,19 +287,11 @@ def model_training_and_testing(
         Value to pad target (SLP) with if signal too short, by default 0
     """
 
+    
     """
-    ================
-    Preprocess Data
-    ================
-    """
-
-    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = change_data_parameters)
-    # Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = change_data_parameters)
-
-    """
-    ------------------------
-    Accessing SHHS Datasets
-    ------------------------
+    ------------------
+    Accessing Dataset
+    ------------------
     """
 
     CustomSleepDataset_keywords = {
@@ -324,35 +301,13 @@ def model_training_and_testing(
         "pad_target_with": pad_target_with
     }
 
-    shhs_training_data_path = processed_shhs_path[:-4] + "_training_pid.pkl"
-    shhs_validation_data_path = processed_shhs_path[:-4] + "_validation_pid.pkl"
-    shhs_test_data_path = processed_shhs_path[:-4] + "_test_pid.pkl"
+    training_data_path = processed_path[:-4] + "_training_pid.pkl"
+    validation_data_path = processed_path[:-4] + "_validation_pid.pkl"
+    test_data_path = processed_path[:-4] + "_test_pid.pkl"
 
-    if os.path.exists(shhs_training_data_path):
-        shhs_training_data = CustomSleepDataset(path_to_data = shhs_training_data_path, **CustomSleepDataset_keywords)
-        shhs_validation_data = CustomSleepDataset(path_to_data = shhs_validation_data_path, **CustomSleepDataset_keywords)
-        shhs_test_data = CustomSleepDataset(path_to_data = shhs_test_data_path, **CustomSleepDataset_keywords)
-
-    """
-    -----------------------
-    Accessing GIF Datasets
-    -----------------------
-    """
-
-    gif_training_data_path = processed_gif_path[:-4] + "_training_pid.pkl"
-    gif_validation_data_path = processed_gif_path[:-4] + "_validation_pid.pkl"
-    gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
-
-    if os.path.exists(gif_training_data_path):
-        gif_training_data = CustomSleepDataset(path_to_data = gif_training_data_path, **CustomSleepDataset_keywords)
-        gif_validation_data = CustomSleepDataset(path_to_data = gif_validation_data_path, **CustomSleepDataset_keywords)
-        gif_test_data = CustomSleepDataset(path_to_data = gif_test_data_path, **CustomSleepDataset_keywords)
-    
-    """
-    ===============
-    Neural Network
-    ===============
-    """
+    training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomSleepDataset_keywords)
+    validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomSleepDataset_keywords)
+    test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomSleepDataset_keywords)
     
     """
     ----------------
@@ -377,17 +332,11 @@ def model_training_and_testing(
     ---------------------------------------------
     """
 
-    if os.path.exists(shhs_training_data_path):
-        shhs_train_dataloader = DataLoader(shhs_training_data, batch_size = batch_size, shuffle=True)
-        shhs_validation_dataloader = DataLoader(shhs_validation_data, batch_size = batch_size, shuffle=True)
-        shhs_test_dataloader = DataLoader(shhs_test_data, batch_size = batch_size, shuffle=True)
+    train_dataloader = DataLoader(training_data, batch_size = batch_size, shuffle=True)
+    validation_dataloader = DataLoader(validation_data, batch_size = batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_data, batch_size = batch_size, shuffle=True)
     
-    if os.path.exists(gif_training_data_path):
-        gif_train_dataloader = DataLoader(gif_training_data, batch_size = batch_size, shuffle=True)
-        gif_validation_dataloader = DataLoader(gif_validation_data, batch_size = batch_size, shuffle=True)
-        gif_test_dataloader = DataLoader(gif_test_data, batch_size = batch_size, shuffle=True)
-    
-    del CustomSleepDataset_keywords, shhs_training_data_path, shhs_validation_data_path, shhs_test_data_path, gif_training_data_path, gif_validation_data_path, gif_test_data_path
+    del CustomSleepDataset_keywords, training_data_path, validation_data_path, test_data_path
 
     """
     ---------------
@@ -411,6 +360,9 @@ def model_training_and_testing(
     ----------------------------------
     """
    
+    if load_model_state_path is not None:
+        neural_network_model.load_state_dict(torch.load(load_model_state_path))
+    
     neural_network_model.to(device)
 
     """
@@ -445,7 +397,7 @@ def model_training_and_testing(
             collect_results = True
 
         train_results = train_loop(
-            dataloader = shhs_train_dataloader,
+            dataloader = train_dataloader,
             model = neural_network_model,
             device = device,
             loss_fn = loss_function,
@@ -459,7 +411,7 @@ def model_training_and_testing(
         train_accuracy.append(train_results[1])
 
         test_results = test_loop(
-            dataloader = shhs_validation_dataloader,
+            dataloader = validation_dataloader,
             model = neural_network_model,
             device = device,
             loss_fn = loss_function,
@@ -514,61 +466,191 @@ def predicting_sleep_stage_using_trained_model(
 
 
 if __name__ == "__main__":
+    train_size = 0.8
+    validation_size = 0.1
+    test_size = 0.1
 
-    model_training_and_testing()
-    raise SystemExit
+    # Preprocess SHHS Data
+    processed_shhs_path = "Processed_Data/shhs_data.pkl"
+    Process_SHHS_Dataset(
+        path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", 
+        path_to_save_processed_data = processed_shhs_path,
+        change_data_parameters = {},
+        train_size = train_size, 
+        validation_size = validation_size, 
+        test_size = test_size, 
+        )
 
-    # Testing Original Idea: Overlapping Windows and artifect = wake stage
-
-    model_training_and_testing(
+    # Train and test model on SHHS Data
+    main_model_training(
         neural_network_model = SleepStageModel(),
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
+        save_accuracy_values_path = "Model_Accuracy/NN_SHHS.pkl",
+        save_model_state_path = "Model_State/NN_SHHS.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+
+    # Preprocess GIF Data
+    processed_gif_path = "Processed_Data/gif_data.pkl"
+    Process_GIF_Dataset(
+        path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", 
+        path_to_save_processed_data = processed_gif_path,
+        change_data_parameters = {},
+        train_size = train_size, 
+        validation_size = validation_size, 
+        test_size = test_size
+        )
+
+    # Train and test model on GIF Data
+    main_model_training(
+        neural_network_model = SleepStageModel(),
+        load_model_state_path = "Model_State/NN_SHHS.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/NN_SHHS_GIF.pkl",
+        save_model_state_path = "Model_State/NN_SHHS_GIF.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+
+    """
+    ---------------------------------------------------------------------
+    Testing Original Idea: Overlapping Windows and artifect = wake stage
+    ---------------------------------------------------------------------
+    """
+
+    # Preprocess SHHS Data
+    processed_shhs_path = "Processed_Data/shhs_data.pkl"
+    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = {})
+
+    # Train and test different models on SHHS Data
+    main_model_training(
+        neural_network_model = SleepStageModel(),
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/SSM_Original.pkl",
         save_model_state_path = "Model_State/SSM_Original.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
-        change_data_parameters = {}
+        pad_feature_with = 0,
+        pad_target_with = 0
         )
     
-    model_training_and_testing(
+    main_model_training(
         neural_network_model = YaoModel(), # type: ignore
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/Yao_Original.pkl",
         save_model_state_path = "Model_State/Yao_Original.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
-        change_data_parameters = {}
+        pad_feature_with = 0,
+        pad_target_with = 0
         )
     
-    # Testing with Overlapping windows but artifect being a unique stage
+    # Preprocess GIF Data
+    processed_gif_path = "Processed_Data/gif_data.pkl"
+    Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = {})
+
+    # Train and test different models on GIF Data
+    main_model_training(
+        neural_network_model = SleepStageModel(),
+        load_model_state_path = "Model_State/SSM_Original.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/SSM_Original_GIF.pkl",
+        save_model_state_path = "Model_State/SSM_Original_GIF.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+    
+    main_model_training(
+        neural_network_model = YaoModel(), # type: ignore
+        load_model_state_path = "Model_State/Yao_Original.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/Yao_Original_GIF.pkl",
+        save_model_state_path = "Model_State/Yao_Original_GIF.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+    
+    """
+    -------------------------------------------------------------------
+    Testing with Overlapping windows but artifect being a unique stage
+    -------------------------------------------------------------------
+    """
+
+    # Preprocess SHHS Data
+    processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
+    change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}}
+    
+    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = change_data_parameters)
     
     default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
 
-    model_training_and_testing(
+    # Train and test different models on SHHS Data
+    main_model_training(
         neural_network_model = SleepStageModel(number_sleep_stages = 5),
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/SSM_Artifect.pkl",
         save_model_state_path = "Model_State/SSM_Artifect.pth",
-        processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
-        processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
-        change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
+        pad_feature_with = 0,
         pad_target_with = -1
         )
     
-    model_training_and_testing(
+    main_model_training(
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/Yao_Artifect.pkl",
         save_model_state_path = "Model_State/Yao_Artifect.pth",
-        processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl",
-        processed_gif_path = "Processed_Data/gif_data_artifect.pkl",
         window_reshape_parameters = default_window_reshape_parameters,
-        change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}},
+        pad_feature_with = 0,
+        pad_target_with = -1
+        )
+    
+    # Preprocess GIF Data
+    processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
+    Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = change_data_parameters)
+
+    # Train and test different models on GIF Data
+    main_model_training(
+        neural_network_model = SleepStageModel(number_sleep_stages = 5),
+        load_model_state_path = "Model_State/SSM_Artifect.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/SSM_Artifect_GIF.pkl",
+        save_model_state_path = "Model_State/SSM_Artifect_GIF.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = -1
+        )
+    
+    main_model_training(
+        neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
+        load_model_state_path = "Model_State/Yao_Artifect.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/Yao_Artifect_GIF.pkl",
+        save_model_state_path = "Model_State/Yao_Artifect_GIF.pth",
+        window_reshape_parameters = default_window_reshape_parameters,
+        pad_feature_with = 0,
         pad_target_with = -1
         )
     
     default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
 
-    # Testing with non-overlapping windows and artifect = wake stage
+    """
+    ---------------------------------------------------------------
+    Testing with non-overlapping windows and artifect = wake stage
+    ---------------------------------------------------------------
+    """
+
+    # Preprocess SHHS Data
+    processed_shhs_path = "Processed_Data/shhs_data.pkl"
+    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = {})
     
     window_reshape_parameters = {
         "nn_signal_duration_seconds": 10*3600,
@@ -578,22 +660,52 @@ if __name__ == "__main__":
         "priority_order": [3, 2, 1, 0]
     }
 
-    model_training_and_testing(
+    # Train and test different models on SHHS Data
+    main_model_training(
         neural_network_model = SleepStageModel(),
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/SSM_no_overlap.pkl",
         save_model_state_path = "Model_State/SSM_no_overlap.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
         window_reshape_parameters = window_reshape_parameters,
-        change_data_parameters = {}
+        pad_feature_with = 0,
+        pad_target_with = 0
         )
     
-    model_training_and_testing(
+    main_model_training(
         neural_network_model = YaoModel(), # type: ignore
+        load_model_state_path = None,
+        processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/Yao_no_overlap.pkl",
         save_model_state_path = "Model_State/Yao_no_overlap.pth",
-        processed_shhs_path = "Processed_Data/shhs_data.pkl",
-        processed_gif_path = "Processed_Data/gif_data.pkl",
         window_reshape_parameters = window_reshape_parameters,
-        change_data_parameters = {}
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+    
+    # Preprocess GIF Data
+    processed_gif_path = "Processed_Data/gif_data.pkl"
+    Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = {})
+
+    # Train and test different models on GIF Data
+    main_model_training(
+        neural_network_model = SleepStageModel(),
+        load_model_state_path = "Model_State/SSM_no_overlap.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/SSM_no_overlap_GIF.pkl",
+        save_model_state_path = "Model_State/SSM_no_overlap_GIF.pth",
+        window_reshape_parameters = window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
+        )
+    
+    main_model_training(
+        neural_network_model = YaoModel(), # type: ignore
+        load_model_state_path = "Model_State/Yao_no_overlap.pth",
+        processed_path = processed_gif_path,
+        save_accuracy_values_path = "Model_Accuracy/Yao_no_overlap_GIF.pkl",
+        save_model_state_path = "Model_State/Yao_no_overlap_GIF.pth",
+        window_reshape_parameters = window_reshape_parameters,
+        pad_feature_with = 0,
+        pad_target_with = 0
         )
