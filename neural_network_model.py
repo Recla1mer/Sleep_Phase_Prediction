@@ -987,8 +987,8 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
         # collect results if requested
         if collect_results:
-            this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
-            this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+            this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+            this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
             
             predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
             actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
@@ -1089,8 +1089,8 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = 
 
             # collect results if requested
             if collect_results:
-                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
-                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).numpy()
+                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
                 
                 predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
                 actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
