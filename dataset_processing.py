@@ -1577,40 +1577,36 @@ class SleepDataManager:
             priority_order: list = [3, 2, 1, 0],
         ):
         """
-        signal: list, 
-        target_frequency: float, 
-        nn_signal_duration_seconds: int = 10*3600,
-        pad_with = 0,
-        number_windows: int = 1197, 
-        window_duration_seconds: int = 120, 
-        overlap_seconds: int = 90,
-        signal_type: str = "feature",
-        priority_order: list = [3, 2, 1, 0],
+        Reshape all signals (RRI, MAD, SLP) in database with shape 
+        (n <= nn_signal_duration_seconds * target_frequency) to (number_windows, window_size), where windows 
+        overlap by 'overlap_seconds' and adjust the signal to the neural network's requirements.
+        (Using 'reshape_signal_to_overlapping_windows' function.)
 
-        default_file_info["RRI_frequency"] = 4
-        default_file_info["MAD_frequency"] = 1
-        default_file_info["SLP_frequency"] = 1/30
+        RETURNS:
+        ------------------------------
+        None
 
-        default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
-
-        default_file_info["signal_length_seconds"] = 36000
-        default_file_info["wanted_shift_length_seconds"] = 5400
-        default_file_info["absolute_shift_deviation_seconds"] = 1800
-
-        default_file_info["signal_reshape_applied"] = False
-
-        default_file_info["train_val_test_split_applied"] = False
-        default_file_info["main_file_path"] = "unassigned"
-        default_file_info["train_file_path"] = "unassigned"
-        default_file_info["validation_file_path"] = "unassigned"
-        default_file_info["test_file_path"] = "unassigned"
+        ARGUMENTS:
+        ------------------------------
+        pad_feature_with : int
+        Value to pad feature (RRI and MAD) with if signal too short, by default 0
+        pad_target_with : int
+            Value to pad target (SLP) with if signal too short, by default 0
+        number_windows: int
+            The number of windows to split the signal into.
+        window_duration_seconds: int
+            The window length in seconds.
+        overlap_seconds: int
+            The overlap between windows in seconds.
+        priority_order: list
+            The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
         """
 
         # variables to track progress
         start_time = time.time()
         total_number_datapoints = len(self)
         current_index = 0
-        print("\nReshaping all signals in database into windows:")
+        print("\nReshaping all signals (RRI, MAD, SLP) in database:")
         progress_bar(current_index, total_number_datapoints, 1, start_time)
 
         # prevent runnning this function if data was split into training, validation, and test files

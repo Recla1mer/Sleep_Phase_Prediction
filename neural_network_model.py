@@ -27,14 +27,6 @@ Implementing a Custom Dataset
 ==============================
 """
 
-default_window_reshape_parameters = {
-        "nn_signal_duration_seconds": 10*3600,
-        "number_windows": 1197, 
-        "window_duration_seconds": 120, 
-        "overlap_seconds": 90,
-        "priority_order": [3, 2, 1, 0]
-}
-
 class CustomReshapeSleepDataset(Dataset):
     """
     Custom Dataset class for our Sleep Stage Data. The class is used to load data from a file and
@@ -47,9 +39,12 @@ class CustomReshapeSleepDataset(Dataset):
             self, 
             path_to_data: str, 
             transform = None,
-            window_reshape_parameters: dict = default_window_reshape_parameters,
             pad_feature_with = 0,
-            pad_target_with = 0
+            pad_target_with = 0,
+            number_windows: int = 1197, 
+            window_duration_seconds: int = 120, 
+            overlap_seconds: int = 90,
+            priority_order: list = [3, 2, 1, 0],
         ):
         """
         ARGUMENTS:
@@ -58,13 +53,21 @@ class CustomReshapeSleepDataset(Dataset):
             Path to the data file
         transform : callable
             Optional transform to be applied on a sample, by default None
-        window_reshape_parameters : dict
-            Parameters for reshaping the data into overlapping windows, 
-            by default default_window_reshape_parameters
+        
+        ### Parameters for reshape_signal_to_overlapping_windows function in dataset_processing.py ###
+
         pad_feature_with : int
             Value to pad feature (RRI and MAD) with if signal too short, by default 0
         pad_target_with : int
             Value to pad target (SLP) with if signal too short, by default 0
+        number_windows: int
+            The number of windows to split the signal into.
+        window_duration_seconds: int
+            The window length in seconds.
+        overlap_seconds: int
+            The overlap between windows in seconds.
+        priority_order: list
+            The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
         """
 
         self.transform = transform
@@ -74,9 +77,16 @@ class CustomReshapeSleepDataset(Dataset):
         self.mad_frequency = self.data_manager.file_info["MAD_frequency"]
         self.slp_frequency = self.data_manager.file_info["SLP_frequency"]
         
-        self.window_reshape_parameters = window_reshape_parameters
         self.pad_feature_with = pad_feature_with
         self.pad_target_with = pad_target_with
+
+        self.window_reshape_parameters = {
+            "nn_signal_duration_seconds": self.data_manager.file_info["signal_length_seconds"],
+            "number_windows": number_windows, 
+            "window_duration_seconds": window_duration_seconds, 
+            "overlap_seconds": overlap_seconds,
+            "priority_order": priority_order
+        }
         
 
     def __len__(self):
@@ -170,7 +180,6 @@ class CustomSleepDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        start_time = time.time()
         # load dictionary with data from file using data_manager
         data_sample = self.data_manager.load(idx)
 
@@ -204,7 +213,6 @@ class CustomSleepDataset(Dataset):
             except:
                 pass
         
-        print(time.time() - start_time)
         return rri_sample, mad_sample, slp_labels
 
 
