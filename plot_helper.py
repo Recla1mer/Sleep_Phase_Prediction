@@ -501,7 +501,7 @@ if __name__ == "__main__":
     """
 
     plot_confusion_matrix(
-        path_to_pkl_file = "Model_Accuracy/NN_SHHS_GIF.pkl",
+        path_to_pkl_file = "Model_Accuracy/Yao_SHHS_GIF.pkl",
         prediction_result_key = "test_predicted_results",
         actual_result_keys = "test_actual_results",
         display_labels = ["Wake", "LS", "DS", "REM"],

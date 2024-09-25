@@ -333,7 +333,7 @@ def main_model_training(
     """
 
     batch_size = 8
-    number_epochs = 40
+    number_epochs = 2
 
     learning_rate_scheduler = CosineScheduler(
         number_updates_total = number_epochs,
@@ -500,7 +500,7 @@ if __name__ == "__main__":
 
     # Train and test model on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel(), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
         save_accuracy_values_path = "Model_Accuracy/NN_SHHS.pkl",
@@ -523,7 +523,7 @@ if __name__ == "__main__":
 
     # Train and test model on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel(), # type: ignore
         load_model_state_path = "Model_State/NN_SHHS.pth",
         processed_path = processed_gif_path,
         save_accuracy_values_path = "Model_Accuracy/NN_SHHS_GIF.pkl",
