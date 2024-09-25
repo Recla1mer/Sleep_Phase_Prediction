@@ -115,6 +115,9 @@ def Process_SHHS_Dataset(
     
     else:
         print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
+
+    # transform signal to overlapping windows
+    shhs_data_manager.apply_signal_reshape()
     
     # Train-, Validation- and Test-Split
     shhs_data_manager.separate_train_test_validation(

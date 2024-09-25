@@ -18,6 +18,9 @@ import numpy as np
 import os
 import copy
 
+# LOCAL IMPORTS:
+from side_functions import *
+
 
 """
 =====================
@@ -1035,6 +1038,7 @@ class SleepDataManager:
     # Define class variables
     signal_keys = ["RRI", "MAD", "SLP"]
     signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency"] # same order is important
+    signal_window_keys = ["RRI_windows", "MAD_windows", "SLP_windows"] # same order is important
     
     valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency"]
     
@@ -1048,6 +1052,8 @@ class SleepDataManager:
     default_file_info["signal_length_seconds"] = 36000
     default_file_info["wanted_shift_length_seconds"] = 5400
     default_file_info["absolute_shift_deviation_seconds"] = 1800
+
+    default_file_info["signal_reshape_applied"] = False
 
     default_file_info["train_val_test_split_applied"] = False
     default_file_info["main_file_path"] = "unassigned"
@@ -1561,6 +1567,159 @@ class SleepDataManager:
         del file_generator
     
 
+    def apply_signal_reshape(
+            self,
+            pad_feature_with = 0,
+            pad_target_with = 0,
+            number_windows: int = 1197, 
+            window_duration_seconds: int = 120, 
+            overlap_seconds: int = 90,
+            priority_order: list = [3, 2, 1, 0],
+        ):
+        """
+        signal: list, 
+        target_frequency: float, 
+        nn_signal_duration_seconds: int = 10*3600,
+        pad_with = 0,
+        number_windows: int = 1197, 
+        window_duration_seconds: int = 120, 
+        overlap_seconds: int = 90,
+        signal_type: str = "feature",
+        priority_order: list = [3, 2, 1, 0],
+
+        default_file_info["RRI_frequency"] = 4
+        default_file_info["MAD_frequency"] = 1
+        default_file_info["SLP_frequency"] = 1/30
+
+        default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+
+        default_file_info["signal_length_seconds"] = 36000
+        default_file_info["wanted_shift_length_seconds"] = 5400
+        default_file_info["absolute_shift_deviation_seconds"] = 1800
+
+        default_file_info["signal_reshape_applied"] = False
+
+        default_file_info["train_val_test_split_applied"] = False
+        default_file_info["main_file_path"] = "unassigned"
+        default_file_info["train_file_path"] = "unassigned"
+        default_file_info["validation_file_path"] = "unassigned"
+        default_file_info["test_file_path"] = "unassigned"
+        """
+
+        # variables to track progress
+        start_time = time.time()
+        total_number_datapoints = len(self)
+        current_index = 0
+        print("\nReshaping all signals in database into windows:")
+        progress_bar(current_index, total_number_datapoints, 1, start_time)
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+        
+        # if signal reshape was already applied, remove reshaped signals first
+        if self.file_info["signal_reshape_applied"]:
+            self.remove_reshaped_signals()
+        
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # Change file information
+        self.file_info["signal_reshape_applied"] = True
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # iterate over entries in database and reshape signals
+        for data_point in file_generator:
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                if signal_key in data_point:
+                    new_window_key = self.signal_window_keys[signal_key_index]
+                    this_pad_with = pad_target_with if signal_key == "SLP" else pad_feature_with
+                    this_signal_type = "target" if signal_key == "SLP" else "feature"
+
+                    data_point[new_window_key] = reshape_signal_to_overlapping_windows(
+                        signal = data_point[signal_key], 
+                        target_frequency = self.file_info[signal_frequency_key], 
+                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
+                        pad_with = this_pad_with,
+                        number_windows = number_windows, 
+                        window_duration_seconds = window_duration_seconds, 
+                        overlap_seconds = overlap_seconds,
+                        signal_type = this_signal_type,
+                        priority_order = priority_order
+                        )
+
+            # save data point to working file
+            append_to_pickle(data = data_point, file_name = working_file_path)
+
+            # print progress
+            current_index += 1
+            progress_bar(current_index, total_number_datapoints, 1, start_time)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+            
+        os.rename(working_file_path, self.file_path)
+
+    
+    def remove_reshaped_signals(self):
+        """
+        """
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+        
+        # skip function if signal reshape was not applied
+        if not self.file_info["signal_reshape_applied"]:
+            return
+        
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # Change file information
+        self.file_info["signal_reshape_applied"] = False
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # iterate over entries in database and reshape signals
+        for data_point in file_generator:
+            for signal_window_key in self.signal_window_keys:
+                if signal_window_key in data_point:
+                    del data_point[signal_window_key]
+
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+
     def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows"]):
         """
         Order the keys in the datapoints of the database for better readability when printing.
@@ -2018,7 +2177,11 @@ class SleepDataManager:
             The key to be loaded.
         """    
 
-        valid_keys = ["ID", "RRI", "MAD", "SLP"]
+        valid_keys = ["ID"]
+        for signal_key in self.signal_keys:
+            valid_keys.append(signal_key)
+        for signal_window_key in self.signal_window_keys:
+            valid_keys.append(signal_window_key)
 
         if key in valid_keys:
             # Load data generator from the file
