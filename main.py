@@ -334,7 +334,7 @@ def main_model_training(
 
     training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
     validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
-    test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
+    # test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
     
     del CustomDatasetKeywords
     
@@ -345,7 +345,7 @@ def main_model_training(
     """
 
     batch_size = 8
-    number_epochs = 2
+    number_epochs = 40
 
     learning_rate_scheduler = CosineScheduler(
         number_updates_total = number_epochs,
@@ -363,7 +363,7 @@ def main_model_training(
 
     train_dataloader = DataLoader(training_data, batch_size = batch_size, shuffle=True)
     validation_dataloader = DataLoader(validation_data, batch_size = batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_data, batch_size = batch_size, shuffle=True)
+    # test_dataloader = DataLoader(test_data, batch_size = batch_size, shuffle=True)
     
     del training_data_path, validation_data_path, test_data_path
 
@@ -390,10 +390,7 @@ def main_model_training(
     """
    
     if load_model_state_path is not None:
-        #model_state_dict = torch.load(load_model_state_path, map_location=device, weights_only=True)
-        model_state_dict = torch.load(load_model_state_path, map_location=lambda storage, loc: storage, weights_only=True) 
-        neural_network_model.load_state_dict(model_state_dict)
-        del model_state_dict
+        neural_network_model.load_state_dict(torch.load(load_model_state_path, map_location=device, weights_only=True))
     
     neural_network_model.to(device)
 
@@ -517,9 +514,9 @@ if __name__ == "__main__":
 
     # set train, validation, and test sizes
     split_data_parameters = {
-        "train_size": 0.1,
-        "validation_size": 0.1,
-        "test_size": 0.8,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True
     }
