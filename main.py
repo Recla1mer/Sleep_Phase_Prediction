@@ -605,9 +605,9 @@ if __name__ == "__main__":
 
     # set train, validation, and test sizes
     split_data_parameters = {
-        "train_size": 0.8,
+        "train_size": 0.1,
         "validation_size": 0.1,
-        "test_size": 0.1,
+        "test_size": 0.8,
         "random_state": None,
         "shuffle": True
     }
@@ -627,14 +627,14 @@ if __name__ == "__main__":
     ------------------------
     """
 
-    Process_SHHS_Dataset(
-        computation_mode = computation_mode,
-        path_to_shhs_dataset = original_shhs_data_path, 
-        path_to_save_processed_data = processed_shhs_path,
-        change_data_parameters = {},
-        ** window_reshape_parameters,
-        ** split_data_parameters
-        )
+    # Process_SHHS_Dataset(
+    #     computation_mode = computation_mode,
+    #     path_to_shhs_dataset = original_shhs_data_path, 
+    #     path_to_save_processed_data = processed_shhs_path,
+    #     change_data_parameters = {},
+    #     ** window_reshape_parameters,
+    #     ** split_data_parameters
+    #     )
     
     """
     ------------------------------
@@ -642,15 +642,15 @@ if __name__ == "__main__":
     ------------------------------
     """
 
-    main_model_training(
-        computation_mode = computation_mode,
-        neural_network_model = SleepStageModel(), # type: ignore
-        load_model_state_path = None,
-        processed_path = processed_shhs_path,
-        save_accuracy_values_path = save_accuracy_values_path + "_SHHS.pkl",
-        save_model_state_path = save_model_state_path + "_SHHS.pth",
-        ** window_reshape_parameters,
-        )
+    # main_model_training(
+    #     computation_mode = computation_mode,
+    #     neural_network_model = SleepStageModel(), # type: ignore
+    #     load_model_state_path = None,
+    #     processed_path = processed_shhs_path,
+    #     save_accuracy_values_path = save_accuracy_values_path + "_SHHS.pkl",
+    #     save_model_state_path = save_model_state_path + "_SHHS.pth",
+    #     ** window_reshape_parameters,
+    #     )
     
     """
     -----------------------
@@ -658,14 +658,14 @@ if __name__ == "__main__":
     -----------------------
     """
 
-    Process_GIF_Dataset(
-        computation_mode = computation_mode,
-        path_to_gif_dataset = original_gif_data_path, 
-        path_to_save_processed_data = processed_gif_path,
-        change_data_parameters = {},
-        ** window_reshape_parameters,
-        ** split_data_parameters
-        )
+    # Process_GIF_Dataset(
+    #     computation_mode = computation_mode,
+    #     path_to_gif_dataset = original_gif_data_path, 
+    #     path_to_save_processed_data = processed_gif_path,
+    #     change_data_parameters = {},
+    #     ** window_reshape_parameters,
+    #     ** split_data_parameters
+    #     )
 
     """
     -----------------------------
@@ -673,15 +673,15 @@ if __name__ == "__main__":
     -----------------------------
     """
 
-    main_model_training(
-        computation_mode = computation_mode,
-        neural_network_model = SleepStageModel(), # type: ignore
-        load_model_state_path = save_model_state_path + "_SHHS.pth",
-        processed_path = processed_gif_path,
-        save_accuracy_values_path = save_accuracy_values_path + "_SHHS_GIF.pkl",
-        save_model_state_path = save_model_state_path + "_SHHS_GIF.pth",
-        ** window_reshape_parameters,
-        )
+    # main_model_training(
+    #     computation_mode = computation_mode,
+    #     neural_network_model = SleepStageModel(), # type: ignore
+    #     load_model_state_path = save_model_state_path + "_SHHS.pth",
+    #     processed_path = processed_gif_path,
+    #     save_accuracy_values_path = save_accuracy_values_path + "_SHHS_GIF.pkl",
+    #     save_model_state_path = save_model_state_path + "_SHHS_GIF.pth",
+    #     ** window_reshape_parameters,
+    #     )
 
     """
     ---------------------------------------------------------------------
@@ -689,6 +689,7 @@ if __name__ == "__main__":
     ---------------------------------------------------------------------
     """
 
+    # Parameters
     save_accuracy_values_path_ssm = "Model_Accuracy/SSM"
     save_model_state_path_ssm = "Model_State/SSM"
 
@@ -765,65 +766,83 @@ if __name__ == "__main__":
     -------------------------------------------------------------------
     """
 
-    # Preprocess SHHS Data
+    # Parameters
     processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
+    processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
+
+    name_addition = "_Artifect"
+
     change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}}
+
+    window_reshape_parameters["pad_feature_with"] = 0
+    window_reshape_parameters["pad_target_with"] = -1
+    window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
     
-    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = change_data_parameters)
-    
-    default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
+    # Preprocess SHHS Data
+    Process_SHHS_Dataset(
+        computation_mode = computation_mode,
+        path_to_shhs_dataset = original_shhs_data_path, 
+        path_to_save_processed_data = processed_shhs_path,
+        change_data_parameters = change_data_parameters,
+        ** window_reshape_parameters,
+        ** split_data_parameters
+        )
 
     # Train and test different models on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(number_sleep_stages = 5),
+        computation_mode = computation_mode,
+        neural_network_model = SleepStageModel(number_sleep_stages = 5), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
-        save_accuracy_values_path = "Model_Accuracy/SSM_Artifect.pkl",
-        save_model_state_path = "Model_State/SSM_Artifect.pth",
-        window_reshape_parameters = default_window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = -1
+        save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS.pkl",
+        save_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
+        ** window_reshape_parameters,
         )
     
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
-        save_accuracy_values_path = "Model_Accuracy/Yao_Artifect.pkl",
-        save_model_state_path = "Model_State/Yao_Artifect.pth",
-        window_reshape_parameters = default_window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = -1
+        save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS.pkl",
+        save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
+        ** window_reshape_parameters,
         )
     
     # Preprocess GIF Data
-    processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
-    Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = change_data_parameters)
+    Process_GIF_Dataset(
+        computation_mode = computation_mode,
+        path_to_gif_dataset = original_gif_data_path, 
+        path_to_save_processed_data = processed_gif_path,
+        change_data_parameters = change_data_parameters,
+        ** window_reshape_parameters,
+        ** split_data_parameters
+        )
 
     # Train and test different models on GIF Data
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(number_sleep_stages = 5),
-        load_model_state_path = "Model_State/SSM_Artifect.pth",
+        load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
-        save_accuracy_values_path = "Model_Accuracy/SSM_Artifect_GIF.pkl",
-        save_model_state_path = "Model_State/SSM_Artifect_GIF.pth",
-        window_reshape_parameters = default_window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = -1
+        save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS_GIF.pkl",
+        save_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS_GIF.pth",
+        ** window_reshape_parameters,
         )
     
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
-        load_model_state_path = "Model_State/Yao_Artifect.pth",
+        load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
-        save_accuracy_values_path = "Model_Accuracy/Yao_Artifect_GIF.pkl",
-        save_model_state_path = "Model_State/Yao_Artifect_GIF.pth",
-        window_reshape_parameters = default_window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = -1
+        save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS_GIF.pkl",
+        save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS_GIF.pth",
+        ** window_reshape_parameters,
         )
     
-    default_window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
+    window_reshape_parameters["pad_feature_with"] = 0
+    window_reshape_parameters["pad_target_with"] = 0
+    window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
 
     """
     ---------------------------------------------------------------
@@ -831,64 +850,73 @@ if __name__ == "__main__":
     ---------------------------------------------------------------
     """
 
+    # Parameters
+    processed_shhs_path = "Processed_Data/shhs_data_no_overlap.pkl"
+    processed_gif_path = "Processed_Data/gif_data_no_overlap.pkl"
+
+    name_addition = "_no_overlap"
+
+    window_reshape_parameters["overlap_seconds"] = 0
+    window_reshape_parameters["number_windows"] = 300
+
     # Preprocess SHHS Data
-    processed_shhs_path = "Processed_Data/shhs_data.pkl"
-    Process_SHHS_Dataset(path_to_shhs_dataset = "Raw_Data/SHHS_dataset.h5", path_to_save_processed_data = processed_shhs_path, change_data_parameters = {})
-    
-    window_reshape_parameters = {
-        "nn_signal_duration_seconds": 10*3600,
-        "number_windows": 300, 
-        "window_duration_seconds": 120, 
-        "overlap_seconds": 0,
-        "priority_order": [3, 2, 1, 0]
-    }
+    Process_SHHS_Dataset(
+        computation_mode = computation_mode,
+        path_to_shhs_dataset = original_shhs_data_path, 
+        path_to_save_processed_data = processed_shhs_path,
+        change_data_parameters = {},
+        ** window_reshape_parameters,
+        ** split_data_parameters
+        )
 
     # Train and test different models on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        computation_mode = computation_mode,
+        neural_network_model = SleepStageModel(), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
-        save_accuracy_values_path = "Model_Accuracy/SSM_no_overlap.pkl",
-        save_model_state_path = "Model_State/SSM_no_overlap.pth",
-        window_reshape_parameters = window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = 0
+        save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS.pkl",
+        save_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
+        ** window_reshape_parameters,
         )
     
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = YaoModel(), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
-        save_accuracy_values_path = "Model_Accuracy/Yao_no_overlap.pkl",
-        save_model_state_path = "Model_State/Yao_no_overlap.pth",
-        window_reshape_parameters = window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = 0
+        save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS.pkl",
+        save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
+        ** window_reshape_parameters,
         )
     
     # Preprocess GIF Data
-    processed_gif_path = "Processed_Data/gif_data.pkl"
-    Process_GIF_Dataset(path_to_gif_dataset = "Raw_Data/GIF_dataset.h5", path_to_save_processed_data = processed_gif_path, change_data_parameters = {})
+    Process_GIF_Dataset(
+        computation_mode = computation_mode,
+        path_to_gif_dataset = original_gif_data_path, 
+        path_to_save_processed_data = processed_gif_path,
+        change_data_parameters = {},
+        ** window_reshape_parameters,
+        ** split_data_parameters
+        )
 
     # Train and test different models on GIF Data
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(),
-        load_model_state_path = "Model_State/SSM_no_overlap.pth",
+        load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
-        save_accuracy_values_path = "Model_Accuracy/SSM_no_overlap_GIF.pkl",
-        save_model_state_path = "Model_State/SSM_no_overlap_GIF.pth",
-        window_reshape_parameters = window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = 0
+        save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS_GIF.pkl",
+        save_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS_GIF.pth",
+        ** window_reshape_parameters,
         )
     
     main_model_training(
+        computation_mode = computation_mode,
         neural_network_model = YaoModel(), # type: ignore
-        load_model_state_path = "Model_State/Yao_no_overlap.pth",
+        load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
-        save_accuracy_values_path = "Model_Accuracy/Yao_no_overlap_GIF.pkl",
-        save_model_state_path = "Model_State/Yao_no_overlap_GIF.pth",
-        window_reshape_parameters = window_reshape_parameters,
-        pad_feature_with = 0,
-        pad_target_with = 0
+        save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS_GIF.pkl",
+        save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS_GIF.pth",
+        ** window_reshape_parameters,
         )
