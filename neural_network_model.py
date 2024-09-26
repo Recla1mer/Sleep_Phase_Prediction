@@ -27,7 +27,7 @@ Implementing a Custom Dataset
 ==============================
 """
 
-class CustomReshapeSleepDataset(Dataset):
+class CustomSleepDataset(Dataset):
     """
     Custom Dataset class for our Sleep Stage Data. The class is used to load data from a file and
     prepare it for training a neural network (reshape signal into windows).
@@ -130,77 +130,6 @@ class CustomReshapeSleepDataset(Dataset):
             target_frequency = self.slp_frequency,
             **self.window_reshape_parameters
         )
-        if slp_labels.dtype == np.int64:
-            slp_labels = slp_labels.astype(np.int32)
-        if slp_labels.dtype == np.float64:
-            slp_labels = slp_labels.astype(np.float32)
-
-        if self.transform:
-            rri_sample = self.transform(rri_sample)
-            try:
-                mad_sample = self.transform(mad_sample)
-            except:
-                pass
-        
-        return rri_sample, mad_sample, slp_labels
-
-
-class CustomSleepDataset(Dataset):
-    """
-    Custom Dataset class for our Sleep Stage Data. The class is used to load data from a file.
-    Expects reshape has already taken place and can be accessed.
-
-    Created in analogy to the PyTorch Tutorial: 
-    https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
-    """
-    def __init__(
-            self, 
-            path_to_data: str, 
-            transform = None,
-        ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        path_to_data : str
-            Path to the data file
-        transform : callable
-            Optional transform to be applied on a sample, by default None
-        """
-
-        self.transform = transform
-        
-        self.data_manager = SleepDataManager(path_to_data)
-        self.rri_frequency = self.data_manager.file_info["RRI_frequency"]
-        self.mad_frequency = self.data_manager.file_info["MAD_frequency"]
-        self.slp_frequency = self.data_manager.file_info["SLP_frequency"]
-        
-
-    def __len__(self):
-        return len(self.data_manager)
-
-
-    def __getitem__(self, idx):
-        # load dictionary with data from file using data_manager
-        data_sample = self.data_manager.load(idx)
-
-        # extract features from dictionary:
-        rri_sample = data_sample["RRI_windows"] # type: ignore
-
-        if rri_sample.dtype == np.float64:
-            rri_sample = rri_sample.astype(np.float32)
-
-        # mad not present in all files:
-        try:
-            mad_sample = data_sample["MAD_windows"] # type: ignore
-
-            if mad_sample.dtype == np.float64:
-                mad_sample = mad_sample.astype(np.float32)
-        except:
-            mad_sample = "None"
-
-        # extract labels from dictionary:
-        slp_labels = data_sample["SLP_windows"] # type: ignore
-
         if slp_labels.dtype == np.int64:
             slp_labels = slp_labels.astype(np.int32)
         if slp_labels.dtype == np.float64:
@@ -1253,7 +1182,7 @@ if __name__ == "__main__":
     print("")
 
     # Create dataset
-    dataset = CustomReshapeSleepDataset(path_to_data = random_file_path, transform=ToTensor())
+    dataset = CustomSleepDataset(path_to_data = random_file_path, transform=ToTensor())
 
     # Create DataLoader
     dataloader = DataLoader(dataset, batch_size=3, shuffle=True)

@@ -21,16 +21,9 @@ Applying SleepDataManager Class To Our Data
 import h5py
 
 def Process_SHHS_Dataset(
-        computation_mode: str,
         path_to_shhs_dataset: str,
         path_to_save_processed_data: str,
         change_data_parameters: dict = {},
-        pad_feature_with = 0,
-        pad_target_with = 0,
-        number_windows: int = 1197, 
-        window_duration_seconds: int = 120, 
-        overlap_seconds: int = 90,
-        priority_order: list = [3, 2, 1, 0],
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
@@ -56,17 +49,6 @@ def Process_SHHS_Dataset(
 
     ARGUMENTS:
     ------------------------------
-    computation_mode: str
-        Depending on the computation mode
-        the computation mode to use
-        if "fast":  Faster computation but more storage space needed: Signals are reshaped to windows and 
-                    saved to data file (additionally). When passing the data to the neural network, 
-                    the signals_in_windows just need to be loaded.
-        if "storage_saving":    Slower computation but less storage space necessary: Signals are loaded and 
-                                reshaped to windows when passed to the neural network. As every signal is 
-                                loaded once every epoch, the reshaping is done every epoch as well.
-                                Additional time = (number_epochs-1) * time_to_reshape_all_signals
-
     path_to_shhs_dataset: str
         the path to the SHHS dataset
     path_to_save_processed_data: str
@@ -77,21 +59,6 @@ def Process_SHHS_Dataset(
     change_data_parameters: dict
         the parameters that are used to keep data uniform 
         (see SleepDataManager class in dataset_processing.py)
-
-    ### Parameters for reshape_signal_to_overlapping_windows function in dataset_processing.py ###
-    
-    pad_feature_with : int
-        Value to pad feature (RRI and MAD) with if signal too short, by default 0
-    pad_target_with : int
-        Value to pad target (SLP) with if signal too short, by default 0
-    number_windows: int
-        The number of windows to split the signal into.
-    window_duration_seconds: int
-        The window length in seconds.
-    overlap_seconds: int
-        The overlap between windows in seconds.
-    priority_order: list
-        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
 
     ### Parameters for separate_train_test_validation function in dataset_processing.py ###
 
@@ -151,17 +118,6 @@ def Process_SHHS_Dataset(
 
             shhs_data_manager.save(new_datapoint, unique_id=True)
             progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
-        
-        if computation_mode == "fast":
-            # transform signal to overlapping windows
-            shhs_data_manager.apply_signal_reshape(
-                pad_feature_with = pad_feature_with,
-                pad_target_with = pad_target_with,
-                number_windows = number_windows, 
-                window_duration_seconds = window_duration_seconds, 
-                overlap_seconds = overlap_seconds,
-                priority_order = priority_order,
-            )
     
     else:
         print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -177,16 +133,9 @@ def Process_SHHS_Dataset(
 
 
 def Process_GIF_Dataset(
-        computation_mode: str,
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
         change_data_parameters: dict = {},
-        pad_feature_with = 0,
-        pad_target_with = 0,
-        number_windows: int = 1197, 
-        window_duration_seconds: int = 120, 
-        overlap_seconds: int = 90,
-        priority_order: list = [3, 2, 1, 0],
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
@@ -266,17 +215,6 @@ def Process_GIF_Dataset(
 
             gif_data_manager.save(new_datapoint, unique_id=True)
             progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
-        
-        if computation_mode == "fast":
-            # transform signal to overlapping windows
-            gif_data_manager.apply_signal_reshape(
-                pad_feature_with = pad_feature_with,
-                pad_target_with = pad_target_with,
-                number_windows = number_windows, 
-                window_duration_seconds = window_duration_seconds, 
-                overlap_seconds = overlap_seconds,
-                priority_order = priority_order,
-            )
 
     else:
         print("\nATTENTION: GIF dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -299,7 +237,6 @@ Training And Testing Neural Network Model
 
 
 def main_model_training(
-        computation_mode: str = "fast",
         neural_network_model = SleepStageModel(),
         load_model_state_path = None,
         processed_path = "Processed_Data/shhs_data.pkl",
@@ -342,16 +279,6 @@ def main_model_training(
     
     ARGUMENTS:
     ------------------------------
-    computation_mode: str
-        Depending on the computation mode
-        the computation mode to use
-        if "fast":  Faster computation but more storage space needed: Signals are reshaped to windows and 
-                    saved to data file (additionally). When passing the data to the neural network, 
-                    the signals_in_windows just need to be loaded.
-        if "storage_saving":    Slower computation but less storage space necessary: Signals are loaded and 
-                                reshaped to windows when passed to the neural network. As every signal is 
-                                loaded once every epoch, the reshaping is done every epoch as well.
-                                Additional time = (number_epochs-1) * time_to_reshape_all_signals
     neural_network_model
         the neural network model to use
     
@@ -370,7 +297,6 @@ def main_model_training(
         the path to save the model state dictionary
     
     ### Parameters for CustomReshapeSleepDataset class in neural_network_model.py ###
-    ### only relevant if computation_mode = "storage_saving"                      ###
 
     pad_feature_with : int
         Value to pad feature (RRI and MAD) with if signal too short, by default 0
@@ -396,32 +322,19 @@ def main_model_training(
     validation_data_path = processed_path[:-4] + "_validation_pid.pkl"
     test_data_path = processed_path[:-4] + "_test_pid.pkl"
 
-    # depending on computation mode, choose responsible custom dataset class
-    if computation_mode == "storage_saving":
+    CustomDatasetKeywords = {
+        "transform": ToTensor(), 
+        "pad_feature_with": pad_feature_with, 
+        "pad_target_with": pad_target_with,
+        "number_windows": number_windows,
+        "window_duration_seconds": window_duration_seconds,
+        "overlap_seconds": overlap_seconds,
+        "priority_order": priority_order
+    }
 
-        CustomDatasetKeywords = {
-            "transform": ToTensor(), 
-            "pad_feature_with": pad_feature_with, 
-            "pad_target_with": pad_target_with,
-            "number_windows": number_windows,
-            "window_duration_seconds": window_duration_seconds,
-            "overlap_seconds": overlap_seconds,
-            "priority_order": priority_order
-        }
-
-        training_data = CustomReshapeSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
-        validation_data = CustomReshapeSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
-        test_data = CustomReshapeSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
-    
-    elif computation_mode == "fast":
-
-        CustomDatasetKeywords = {
-            "transform": ToTensor()
-        }
-
-        training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
-        validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
-        test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
+    training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
+    validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
+    test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
     
     del CustomDatasetKeywords
     
@@ -477,7 +390,10 @@ def main_model_training(
     """
    
     if load_model_state_path is not None:
-        neural_network_model.load_state_dict(torch.load(load_model_state_path, map_location=device, weights_only=True))
+        #model_state_dict = torch.load(load_model_state_path, map_location=device, weights_only=True)
+        model_state_dict = torch.load(load_model_state_path, map_location=lambda storage, loc: storage, weights_only=True) 
+        neural_network_model.load_state_dict(model_state_dict)
+        del model_state_dict
     
     neural_network_model.to(device)
 
@@ -589,10 +505,6 @@ if __name__ == "__main__":
     ----------
     """
 
-    # set computation mode
-    # computation_mode = "fast"
-    computation_mode = "storage_saving"
-
     # set window reshape parameters
     window_reshape_parameters = {
         "pad_feature_with": 0,
@@ -632,7 +544,6 @@ if __name__ == "__main__":
     #     path_to_shhs_dataset = original_shhs_data_path, 
     #     path_to_save_processed_data = processed_shhs_path,
     #     change_data_parameters = {},
-    #     ** window_reshape_parameters,
     #     ** split_data_parameters
     #     )
     
@@ -663,7 +574,6 @@ if __name__ == "__main__":
     #     path_to_gif_dataset = original_gif_data_path, 
     #     path_to_save_processed_data = processed_gif_path,
     #     change_data_parameters = {},
-    #     ** window_reshape_parameters,
     #     ** split_data_parameters
     #     )
 
@@ -700,17 +610,14 @@ if __name__ == "__main__":
 
     # Preprocess SHHS Data
     Process_SHHS_Dataset(
-        computation_mode = computation_mode,
         path_to_shhs_dataset = original_shhs_data_path, 
         path_to_save_processed_data = processed_shhs_path,
         change_data_parameters = {},
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on SHHS Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -720,7 +627,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -731,17 +637,14 @@ if __name__ == "__main__":
     
     # Preprocess GIF Data
     Process_GIF_Dataset(
-        computation_mode = computation_mode,
         path_to_gif_dataset = original_gif_data_path, 
         path_to_save_processed_data = processed_gif_path,
         change_data_parameters = {},
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on GIF Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(),
         load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -751,7 +654,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(), # type: ignore
         load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -778,17 +680,14 @@ if __name__ == "__main__":
     
     # Preprocess SHHS Data
     Process_SHHS_Dataset(
-        computation_mode = computation_mode,
         path_to_shhs_dataset = original_shhs_data_path, 
         path_to_save_processed_data = processed_shhs_path,
         change_data_parameters = change_data_parameters,
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on SHHS Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(number_sleep_stages = 5), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -798,7 +697,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -809,17 +707,14 @@ if __name__ == "__main__":
     
     # Preprocess GIF Data
     Process_GIF_Dataset(
-        computation_mode = computation_mode,
         path_to_gif_dataset = original_gif_data_path, 
         path_to_save_processed_data = processed_gif_path,
         change_data_parameters = change_data_parameters,
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on GIF Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(number_sleep_stages = 5),
         load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -829,7 +724,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(number_sleep_stages = 5), # type: ignore
         load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -857,17 +751,14 @@ if __name__ == "__main__":
 
     # Preprocess SHHS Data
     Process_SHHS_Dataset(
-        computation_mode = computation_mode,
         path_to_shhs_dataset = original_shhs_data_path, 
         path_to_save_processed_data = processed_shhs_path,
         change_data_parameters = {},
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on SHHS Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -877,7 +768,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
@@ -888,17 +778,14 @@ if __name__ == "__main__":
     
     # Preprocess GIF Data
     Process_GIF_Dataset(
-        computation_mode = computation_mode,
         path_to_gif_dataset = original_gif_data_path, 
         path_to_save_processed_data = processed_gif_path,
         change_data_parameters = {},
-        ** window_reshape_parameters,
         ** split_data_parameters
         )
 
     # Train and test different models on GIF Data
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = SleepStageModel(windows_per_signal = window_reshape_parameters["number_windows"]),
         load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -908,7 +795,6 @@ if __name__ == "__main__":
         )
     
     main_model_training(
-        computation_mode = computation_mode,
         neural_network_model = YaoModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
@@ -916,3 +802,5 @@ if __name__ == "__main__":
         save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS_GIF.pth",
         ** window_reshape_parameters,
         )
+
+# IDEAS: max conv channels for mad
