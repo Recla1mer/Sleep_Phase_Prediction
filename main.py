@@ -590,8 +590,8 @@ if __name__ == "__main__":
     """
 
     # set computation mode
-    computation_mode = "fast"
-    # computation_mode = "storage_saving"
+    # computation_mode = "fast"
+    computation_mode = "storage_saving"
 
     # set window reshape parameters
     window_reshape_parameters = {
@@ -765,7 +765,7 @@ if __name__ == "__main__":
     Testing with Overlapping windows but artifect being a unique stage
     -------------------------------------------------------------------
     """
-
+    """
     # Parameters
     processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
     processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
@@ -839,7 +839,7 @@ if __name__ == "__main__":
         )
     
     window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
-
+    """
     """
     ---------------------------------------------------------------
     Testing with non-overlapping windows and artifect = wake stage
@@ -868,7 +868,7 @@ if __name__ == "__main__":
     # Train and test different models on SHHS Data
     main_model_training(
         computation_mode = computation_mode,
-        neural_network_model = SleepStageModel(), # type: ignore
+        neural_network_model = SleepStageModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
         save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS.pkl",
@@ -878,7 +878,7 @@ if __name__ == "__main__":
     
     main_model_training(
         computation_mode = computation_mode,
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = None,
         processed_path = processed_shhs_path,
         save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS.pkl",
@@ -899,7 +899,7 @@ if __name__ == "__main__":
     # Train and test different models on GIF Data
     main_model_training(
         computation_mode = computation_mode,
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel(windows_per_signal = window_reshape_parameters["number_windows"]),
         load_model_state_path = save_model_state_path_ssm + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
         save_accuracy_values_path = save_accuracy_values_path_ssm + name_addition + "_SHHS_GIF.pkl",
@@ -909,7 +909,7 @@ if __name__ == "__main__":
     
     main_model_training(
         computation_mode = computation_mode,
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel(windows_per_signal = window_reshape_parameters["number_windows"]), # type: ignore
         load_model_state_path = save_model_state_path_yao + name_addition + "_SHHS.pth",
         processed_path = processed_gif_path,
         save_accuracy_values_path = save_accuracy_values_path_yao + name_addition + "_SHHS_GIF.pkl",
