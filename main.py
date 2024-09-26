@@ -695,7 +695,7 @@ if __name__ == "__main__":
 
     save_accuracy_values_path_yao = "Model_Accuracy/Yao"
     save_model_state_path_yao = "Model_State/Yao"
-    """
+
     name_addition = "_Original"
 
     # Preprocess SHHS Data
@@ -759,13 +759,13 @@ if __name__ == "__main__":
         save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS_GIF.pth",
         ** window_reshape_parameters,
         )
-    """
+
     """
     -------------------------------------------------------------------
     Testing with Overlapping windows but artifect being a unique stage
     -------------------------------------------------------------------
     """
-    """
+
     # Parameters
     processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
     processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
@@ -839,7 +839,7 @@ if __name__ == "__main__":
         )
     
     window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
-    """
+
     """
     ---------------------------------------------------------------
     Testing with non-overlapping windows and artifect = wake stage
