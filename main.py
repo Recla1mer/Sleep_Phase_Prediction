@@ -247,7 +247,7 @@ def Process_GIF_Dataset(
         # showing progress bar
         start_time = time.time()
         total_data_points = len(patients)
-        print("\nPreproccessing datapoints drom GIF dataset (ensuring uniformity):")
+        print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
         progress_bar(0, total_data_points, 1, start_time, None, None)
 
         # saving all data from GIF dataset to the gif_data.pkl file
@@ -695,7 +695,7 @@ if __name__ == "__main__":
 
     save_accuracy_values_path_yao = "Model_Accuracy/Yao"
     save_model_state_path_yao = "Model_State/Yao"
-
+    """
     name_addition = "_Original"
 
     # Preprocess SHHS Data
@@ -759,7 +759,7 @@ if __name__ == "__main__":
         save_model_state_path = save_model_state_path_yao + name_addition + "_SHHS_GIF.pth",
         ** window_reshape_parameters,
         )
-    
+    """
     """
     -------------------------------------------------------------------
     Testing with Overlapping windows but artifect being a unique stage
@@ -772,11 +772,9 @@ if __name__ == "__main__":
 
     name_addition = "_Artifect"
 
-    change_data_parameters = {"sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1}}
+    change_data_parameters = {"sleep_stage_label": {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}}
 
-    window_reshape_parameters["pad_feature_with"] = 0
-    window_reshape_parameters["pad_target_with"] = -1
-    window_reshape_parameters["priority_order"] = [3, 2, 1, 0, -1]
+    window_reshape_parameters["priority_order"] = [4, 3, 2, 1, 0]
     
     # Preprocess SHHS Data
     Process_SHHS_Dataset(
@@ -840,8 +838,6 @@ if __name__ == "__main__":
         ** window_reshape_parameters,
         )
     
-    window_reshape_parameters["pad_feature_with"] = 0
-    window_reshape_parameters["pad_target_with"] = 0
     window_reshape_parameters["priority_order"] = [3, 2, 1, 0]
 
     """

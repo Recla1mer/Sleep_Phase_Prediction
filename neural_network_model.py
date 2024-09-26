@@ -1253,7 +1253,7 @@ if __name__ == "__main__":
     print("")
 
     # Create dataset
-    dataset = CustomSleepDataset(path_to_data = random_file_path, transform=ToTensor())
+    dataset = CustomReshapeSleepDataset(path_to_data = random_file_path, transform=ToTensor())
 
     # Create DataLoader
     dataloader = DataLoader(dataset, batch_size=3, shuffle=True)
