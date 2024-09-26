@@ -1602,13 +1602,6 @@ class SleepDataManager:
             The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
         """
 
-        # variables to track progress
-        start_time = time.time()
-        total_number_datapoints = len(self)
-        current_index = 0
-        print("\nReshaping all signals (RRI, MAD, SLP) in database:")
-        progress_bar(current_index, total_number_datapoints, 1, start_time)
-
         # prevent runnning this function if data was split into training, validation, and test files
         if self.file_info["train_val_test_split_applied"]:
             raise ValueError("This function can only be called before data was split into training, validation, and test files.")
@@ -1616,6 +1609,13 @@ class SleepDataManager:
         # if signal reshape was already applied, remove reshaped signals first
         if self.file_info["signal_reshape_applied"]:
             self.remove_reshaped_signals()
+
+        # variables to track progress
+        start_time = time.time()
+        total_number_datapoints = len(self)
+        current_index = 0
+        print("\nReshaping all signals (RRI, MAD, SLP) in database:")
+        progress_bar(current_index, total_number_datapoints, 1, start_time)
         
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -1814,6 +1814,9 @@ class SleepDataManager:
         # Fuse data back together if train_val_test_split_applied is True
         if self.file_info["train_val_test_split_applied"]:
             self.fuse_train_test_validation()
+        
+        # variables to track progress
+        total_number_datapoints = len(self)
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -1873,12 +1876,21 @@ class SleepDataManager:
                 
                 save_to_pickle(data = self.file_info, file_name = file_path)
             
+            # variables to track progress
+            start_time = time.time()
+            current_index = 0
+
+            # print progress
+            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:")
+            progress_bar(current_index, total_number_datapoints, 1, start_time)
+            
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
 
             # skip file information
             next(file_generator)
 
+            # save each data point to corresponding file
             for data_point in file_generator:
                 if data_point["ID"] in train_data_ids:
                     append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
@@ -1886,6 +1898,10 @@ class SleepDataManager:
                     append_to_pickle(data = data_point, file_name = self.file_info["validation_file_path"])
                 else:
                     append_to_pickle(data = data_point, file_name = working_file_path)
+                
+                # print progress
+                current_index += 1
+                progress_bar(current_index, total_number_datapoints, 1, start_time)
         
         else:
             """
@@ -1918,12 +1934,21 @@ class SleepDataManager:
                 
                 save_to_pickle(data = self.file_info, file_name = file_path)
             
+            # variables to track progress
+            start_time = time.time()
+            current_index = 0
+
+            # print progress
+            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:")
+            progress_bar(current_index, total_number_datapoints, 1, start_time)
+            
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
 
             # skip file information
             next(file_generator)
 
+            # save each data point to corresponding file
             for data_point in file_generator:
                 if data_point["ID"] in train_data_ids:
                     append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
@@ -1933,6 +1958,10 @@ class SleepDataManager:
                     append_to_pickle(data = data_point, file_name = self.file_info["test_file_path"])
                 else:
                     append_to_pickle(data = data_point, file_name = working_file_path)
+                
+                # print progress
+                current_index += 1
+                progress_bar(current_index, total_number_datapoints, 1, start_time)
         
         # Remove the old file and rename the working file
         try:
