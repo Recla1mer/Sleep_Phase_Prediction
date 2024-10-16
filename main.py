@@ -6,7 +6,7 @@ It is basically the less commented version of the notebook: "Classification_Demo
 """
 
 # IMPORTS
-from sklearn.metrics import cohen_kappa_score, f1_score
+from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, recall_score, f1_score
 
 # LOCAL IMPORTS
 from dataset_processing import *
@@ -484,7 +484,69 @@ def main_model_training(
     torch.save(neural_network_model.state_dict(), save_model_state_path)
 
 
-def predicting_sleep_stage_using_trained_model(
+"""
+============================
+Retrieving Accuracy Results
+============================
+"""
+
+
+def print_model_accuracy(
+        paths_to_pkl_files: list,
+        prediction_result_key: str,
+        actual_result_keys: str,
+        display_labels: list = ["Wake", "LS", "DS", "REM"],
+    ):
+    """
+    This function calculates various accuracy parameters from the given pickle files (need to contain
+    actual and predicted value).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_pkl_file: list
+        the paths to the pickle files containing the data
+    prediction_result_key: str
+        the key that accesses the predicted results in the data (for example: "test_predicted_results")
+    actual_result_keys: str
+        the key that accesses the actual results in the data (for example: "test_actual_results")
+    display_labels: list
+        the labels for the sleep stages
+    """
+
+    # variables to store results
+    all_predicted_results = np.empty(0)
+    all_actual_results = np.empty(0)
+
+    for file_path in paths_to_pkl_files:
+        # Load the data
+        data_generator = load_from_pickle(file_path)
+        data = next(data_generator)
+
+        # Get the predicted and actual results
+        predicted_results = data[prediction_result_key]
+        actual_results = data[actual_result_keys]
+
+        # Flatten the arrays
+        predicted_results = predicted_results.flatten()
+        actual_results = actual_results.flatten()
+
+        # Add the results to the arrays
+        all_predicted_results = np.append(all_predicted_results, predicted_results)
+        all_actual_results = np.append(all_actual_results, actual_results)
+
+
+"""
+======================================
+Applying Trained Neural Network Model
+======================================
+"""
+
+
+def predicting_sleep_stage(
         neural_network_model = SleepStageModel(),
         path_to_model_state: str = "Model_State/Neural_Network.pth",
         path_to_processed_data: str = "Processed_Data/shhs_data_validation_pid.pkl",
@@ -492,6 +554,29 @@ def predicting_sleep_stage_using_trained_model(
     ):
     """
     """
+    # torch.save(model, 'model.pth')
+    # model = torch.load('model.pth')
+
+    # classes = [
+    #     "T-shirt/top",
+    #     "Trouser",
+    #     "Pullover",
+    #     "Dress",
+    #     "Coat",
+    #     "Sandal",
+    #     "Shirt",
+    #     "Sneaker",
+    #     "Bag",
+    #     "Ankle boot",
+    # ]
+
+    # model.eval()
+    # x, y = test_data[0][0], test_data[0][1]
+    # with torch.no_grad():
+    #     x = x.to(device)
+    #     pred = model(x)
+    #     predicted, actual = classes[pred[0].argmax(0)], classes[y]
+    #     print(f'Predicted: "{predicted}", Actual: "{actual}"')
 
 
 if __name__ == "__main__":
