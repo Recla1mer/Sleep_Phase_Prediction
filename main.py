@@ -296,7 +296,7 @@ def main_model_training(
     save_model_state_path: str
         the path to save the model state dictionary
     
-    ### Parameters for CustomReshapeSleepDataset class in neural_network_model.py ###
+    ### Parameters for CustomSleepDataset class in neural_network_model.py ###
 
     pad_feature_with : int
         Value to pad feature (RRI and MAD) with if signal too short, by default 0
@@ -496,10 +496,12 @@ def print_model_accuracy(
         prediction_result_key: str,
         actual_result_keys: str,
         display_labels: list = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 2
     ):
     """
     This function calculates various accuracy parameters from the given pickle files (need to contain
-    actual and predicted value).
+    actual and predicted values).
 
     RETURNS:
     ------------------------------
@@ -515,6 +517,10 @@ def print_model_accuracy(
         the key that accesses the actual results in the data (for example: "test_actual_results")
     display_labels: list
         the labels for the sleep stages
+    average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
+        average parameter of the sklearn functions: precision_score, recall_score, f1_score
+    number_of_decimals: int
+        the number of decimals to round the results to
     """
 
     # variables to store results
@@ -537,6 +543,99 @@ def print_model_accuracy(
         # Add the results to the arrays
         all_predicted_results = np.append(all_predicted_results, predicted_results)
         all_actual_results = np.append(all_actual_results, actual_results)
+    
+    # Calculate the accuracy values
+    accuracy = accuracy_score(all_actual_results, all_predicted_results)
+    kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
+
+    precision = precision_score(all_actual_results, all_predicted_results, average = average)
+    recall = recall_score(all_actual_results, all_predicted_results, average = average)
+    f1 = f1_score(all_actual_results, all_predicted_results, average = average)
+
+    # Define description of accuracy parameters
+    accuracy_description = "Accuracy"
+    kappa_description = "Cohen's Kappa"
+    precision_description = "Precision"
+    recall_description = "Recall"
+    f1_description = "f1"
+
+    # Print the results
+    if average is not None:
+        print()
+        print(accuracy_description, round(accuracy, number_of_decimals))
+        print(kappa_description, round(kappa, number_of_decimals))
+        print(precision_description, round(precision, number_of_decimals)) # type: ignore
+        print(recall_description, round(recall, number_of_decimals)) # type: ignore
+        print(f1_description, round(f1, number_of_decimals)) # type: ignore
+    else:
+        # check if the display_labels have the right length
+        unique_labels_actual = np.unique(all_actual_results)
+        unique_labels_predicted = np.unique(all_predicted_results)
+        unique_labels = np.unique(np.concatenate((unique_labels_actual, unique_labels_predicted)))
+        if len(display_labels) != len(precision): # type: ignore
+            display_labels = np.sort(unique_labels) # type: ignore
+            display_labels = np.array(display_labels, dtype = str) # type: ignore
+            print("\nGiven display labels do not match the number of labels in the data. Display labels are set to the unique labels in the data.")
+        else:
+            print("\nThe display labels correspond to the following labels in the data:")
+            for i in range(len(display_labels)):
+                print(f"{display_labels[i]}: {unique_labels[i]}")
+
+        # Round the results
+        precision = np.round(precision, number_of_decimals)
+        recall = np.round(recall, number_of_decimals)
+        f1 = np.round(f1, number_of_decimals)
+
+        # Calculate column width
+        longest_precision_value = max([len(str(value)) for value in precision])
+        longest_recall_value = max([len(str(value)) for value in recall])
+        longest_f1_value = max([len(str(value)) for value in f1])
+
+        column_width = max([len(label) for label in display_labels])
+        column_width = max([column_width, longest_precision_value, longest_recall_value, longest_f1_value])
+        column_width += 2
+
+        first_column_width = max([len(precision_description), len(recall_description), len(f1_description)]) + 1
+
+        # Print the results
+        print()
+        print(accuracy_description, round(accuracy, number_of_decimals))
+        print(kappa_description, round(kappa, number_of_decimals))
+        print()
+        
+        # Print the header
+        print(" "*first_column_width, end = "")
+        for label in display_labels:
+            print(f"|{label:^{column_width}}", end = "")
+        print()
+        print("-"*(first_column_width + len(display_labels)*(column_width + 1)))
+
+        # Print the results
+        print(f"{precision_description:<{first_column_width}}", end = "")
+        for value in precision:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+        print(f"{recall_description:<{first_column_width}}", end = "")
+        for value in recall:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+        print(f"{f1_description:<{first_column_width}}", end = "")
+        for value in f1:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+
+
+        
+# print_model_accuracy(
+#     paths_to_pkl_files = ["Model_Accuracy/NN_SHHS.pkl"],
+#     prediction_result_key = "test_predicted_results",
+#     actual_result_keys = "test_actual_results",
+#     display_labels = ["Wake", "LS", "DS", "REM"],
+#     average = None,
+#     number_of_decimals = 3
+# )
+
+        
 
 
 """
@@ -546,37 +645,150 @@ Applying Trained Neural Network Model
 """
 
 
-def predicting_sleep_stage(
+def main_model_predicting(
         neural_network_model = SleepStageModel(),
         path_to_model_state: str = "Model_State/Neural_Network.pth",
         path_to_processed_data: str = "Processed_Data/shhs_data_validation_pid.pkl",
         path_to_save_results: str = "Results/Neural_Network.pkl",
+        pad_feature_with = 0,
+        pad_target_with = 0,
+        number_windows: int = 1197, 
+        window_duration_seconds: int = 120, 
+        overlap_seconds: int = 90,
+        priority_order: list = [3, 2, 1, 0],
     ):
     """
+    
+
+    The accuracy values are saved in a dictionary with the following format:
+    {
+        "train_accuracy": train_accuracy for each epoch (list),
+        "train_avg_loss": train_avg_loss for each epoch (list),
+        "train_predicted_results": all predicted results for last epoch (list),
+        "train_actual_results": all actual results for last epoch (list),
+        "test_accuracy": test_accuracy for each epoch (list),
+        "test_avg_loss": test_avg_loss for each epoch (list),
+        "test_predicted_results": all predicted results for last epoch (list),
+        "test_actual_results": all actual results for last epoch (list)
+    }
+
+    RETURNS:
+    ------------------------------
+    None
+
+    
+    ARGUMENTS:
+    ------------------------------
+    neural_network_model
+        the neural network model to use
+    
+    ### Parameters that set the paths to the data and the results ###
+        
+    path_to_model_state: str
+        the path to load the model state dictionary
+    path_to_processed_data: str
+        the path to the processed dataset 
+    path_to_save_results: str
+        the path to save the accuracy values
+    
+    ### Parameters for CustomSleepDataset class in neural_network_model.py ###
+
+    pad_feature_with : int
+        Value to pad feature (RRI and MAD) with if signal too short, by default 0
+    pad_target_with : int
+        Value to pad target (SLP) with if signal too short, by default 0
+    number_windows: int
+        The number of windows to split the signal into.
+    window_duration_seconds: int
+        The window length in seconds.
+    overlap_seconds: int
+        The overlap between windows in seconds.
+    priority_order: list
+        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
     """
-    # torch.save(model, 'model.pth')
-    # model = torch.load('model.pth')
+    
+    """
+    ------------------
+    Accessing Dataset
+    ------------------
+    """
 
-    # classes = [
-    #     "T-shirt/top",
-    #     "Trouser",
-    #     "Pullover",
-    #     "Dress",
-    #     "Coat",
-    #     "Sandal",
-    #     "Shirt",
-    #     "Sneaker",
-    #     "Bag",
-    #     "Ankle boot",
-    # ]
+    CustomDatasetKeywords = {
+        "transform": ToTensor(), 
+        "pad_feature_with": pad_feature_with, 
+        "pad_target_with": pad_target_with,
+        "number_windows": number_windows,
+        "window_duration_seconds": window_duration_seconds,
+        "overlap_seconds": overlap_seconds,
+        "priority_order": priority_order
+    }
 
-    # model.eval()
-    # x, y = test_data[0][0], test_data[0][1]
-    # with torch.no_grad():
-    #     x = x.to(device)
-    #     pred = model(x)
-    #     predicted, actual = classes[pred[0].argmax(0)], classes[y]
-    #     print(f'Predicted: "{predicted}", Actual: "{actual}"')
+    data = CustomSleepDataset(path_to_data = path_to_processed_data, **CustomDatasetKeywords)
+    
+    del CustomDatasetKeywords
+
+    """
+    ---------------------------------------------
+    Preparing Data For Training With Dataloaders
+    ---------------------------------------------
+    """
+
+    dataloader = DataLoader(data, batch_size = 1, shuffle = False)
+
+    """
+    ---------------
+    Setting Device
+    ---------------
+    """
+
+    # Neural network model is unable to function properly on mps device, option to use it is removed
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        # else "mps"
+        # if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"\nUsing {device} device")
+
+    """
+    ----------------------------------
+    Initializing Neural Network Model
+    ----------------------------------
+    """
+   
+    neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
+    
+    neural_network_model.to(device)
+
+    """
+    ------------------------
+    Predicting Sleep Phases
+    ------------------------
+    """
+
+    # variables to store results
+    actual_results = np.empty(0)
+    predicted_results = np.empty(0)
+
+    test_accuracy = []
+    test_avg_loss = []
+
+    
+    """
+    -----------------------
+    Saving Results
+    -----------------------
+    """
+
+    create_directories_along_path(path_to_save_results)
+
+    accuracy_values = {
+        "actual_results": actual_results,
+        "predicted_results": predicted_results
+    }
+
+    save_to_pickle(accuracy_values, path_to_save_results)
 
 
 if __name__ == "__main__":

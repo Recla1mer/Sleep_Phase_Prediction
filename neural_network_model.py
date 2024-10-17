@@ -125,15 +125,18 @@ class CustomSleepDataset(Dataset):
         self.window_reshape_parameters["signal_type"] = "target"
         self.window_reshape_parameters["pad_with"] = self.pad_target_with
 
-        slp_labels = reshape_signal_to_overlapping_windows(
-            signal = data_sample["SLP"], # type: ignore 
-            target_frequency = self.slp_frequency,
-            **self.window_reshape_parameters
-        )
-        if slp_labels.dtype == np.int64:
-            slp_labels = slp_labels.astype(np.int32)
-        if slp_labels.dtype == np.float64:
-            slp_labels = slp_labels.astype(np.float32)
+        try:
+            slp_labels = reshape_signal_to_overlapping_windows(
+                signal = data_sample["SLP"], # type: ignore 
+                target_frequency = self.slp_frequency,
+                **self.window_reshape_parameters
+            )
+            if slp_labels.dtype == np.int64:
+                slp_labels = slp_labels.astype(np.int32)
+            if slp_labels.dtype == np.float64:
+                slp_labels = slp_labels.astype(np.float32)
+        except:
+            slp_labels = "None"
 
         if self.transform:
             rri_sample = self.transform(rri_sample)
