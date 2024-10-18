@@ -100,7 +100,7 @@ class CustomSleepDataset(Dataset):
         self.window_reshape_parameters["signal_type"] = "feature"
         self.window_reshape_parameters["pad_with"] = self.pad_feature_with
 
-        # extract features from dictionary:
+        # extract feature (RRI) from dictionary:
         rri_sample = reshape_signal_to_overlapping_windows(
             signal = data_sample["RRI"], # type: ignore
             target_frequency = self.rri_frequency,
@@ -109,7 +109,7 @@ class CustomSleepDataset(Dataset):
         if rri_sample.dtype == np.float64:
             rri_sample = rri_sample.astype(np.float32)
 
-        # mad not present in all files:
+        # extract feature (MAD) from dictionary:
         try:
             mad_sample = reshape_signal_to_overlapping_windows(
                 signal = data_sample["MAD"], # type: ignore
@@ -121,22 +121,19 @@ class CustomSleepDataset(Dataset):
         except:
             mad_sample = "None"
 
-        # extract labels from dictionary:
         self.window_reshape_parameters["signal_type"] = "target"
         self.window_reshape_parameters["pad_with"] = self.pad_target_with
 
-        try:
-            slp_labels = reshape_signal_to_overlapping_windows(
-                signal = data_sample["SLP"], # type: ignore 
-                target_frequency = self.slp_frequency,
-                **self.window_reshape_parameters
-            )
-            if slp_labels.dtype == np.int64:
-                slp_labels = slp_labels.astype(np.int32)
-            if slp_labels.dtype == np.float64:
-                slp_labels = slp_labels.astype(np.float32)
-        except:
-            slp_labels = "None"
+        # extract labels (Sleep Phase) from dictionary:
+        slp_labels = reshape_signal_to_overlapping_windows(
+            signal = data_sample["SLP"], # type: ignore 
+            target_frequency = self.slp_frequency,
+            **self.window_reshape_parameters
+        )
+        if slp_labels.dtype == np.int64:
+            slp_labels = slp_labels.astype(np.int32)
+        if slp_labels.dtype == np.float64:
+            slp_labels = slp_labels.astype(np.float32)
 
         if self.transform:
             rri_sample = self.transform(rri_sample)

@@ -786,6 +786,63 @@ def reshape_signal_to_overlapping_windows(
     return signal_windows
 
 
+def reverse_signal_to_windows_reshape(
+        signal_in_windows: list, 
+        target_frequency: int,
+        original_signal_length: int,
+        number_windows: int = 1197, 
+        window_duration_seconds: int = 120, 
+        overlap_seconds: int = 90,
+    ) -> np.ndarray:
+    """
+    Revert the Reshape that was done by 'reshape_signal_to_overlapping_windows'.
+
+    From the overlapping part of each window, the mean value will be taken to create the original signal.
+
+    Mainly used so that Predictions can be transformed back, using it for different purposes is not recommended.
+
+    RETURNS:
+    ------------------------------
+    recovered_signal: list
+        The recovered signal. 
+    
+    ARGUMENTS:
+    ------------------------------
+    signal: list
+        The signal to be split into windows.
+    target_frequency: int
+        Frequency of signal in the neural network.
+    original_signal_length: int
+        The number of datapoints in the original signal.
+    number_windows: int
+        The number of windows the signal was split into.
+    window_duration_seconds: int
+        The window length in seconds.
+    overlap_seconds: int
+        The overlap between windows in seconds.
+    """
+
+    assert len(signal_in_windows) == number_windows, "Number of windows does not match signal length."
+
+    datapoints_per_window = window_duration_seconds * target_frequency
+    overlapping_datapoints = overlap_seconds * target_frequency
+    new_datapoints_per_window = datapoints_per_window - overlapping_datapoints
+
+    count_overlaps = [0 for _ in range(new_datapoints_per_window*(number_windows-1)+datapoints_per_window)]
+    sum_up_windows = [0 for _ in range(new_datapoints_per_window*(number_windows-1)+datapoints_per_window)]
+
+    for i in range(0, len(signal_in_windows)):
+        assert datapoints_per_window == len(signal_in_windows[i]), "Window length does not match signal length."
+
+        for j in range(0, datapoints_per_window):
+            sum_up_windows[j+i*new_datapoints_per_window] += signal_in_windows[i][j]
+            count_overlaps[j+i*new_datapoints_per_window] += 1
+    
+    recovered_signal = [sum_up_windows[i] / count_overlaps[i] for i in range(0, len(sum_up_windows))]
+
+    return np.array(recovered_signal[:original_signal_length])
+
+
 def slp_label_transformation(
         current_labels: dict,
         desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1},
