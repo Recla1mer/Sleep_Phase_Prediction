@@ -12,6 +12,35 @@ from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, 
 from dataset_processing import *
 from neural_network_model import *
 
+# HARD CODED SIGNAL PROCESSING PARAMETERS
+
+# parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
+sleep_data_manager_parameters = {
+    "RRI_frequency": 4,
+    "MAD_frequency": 1,
+    "SLP_frequency": 1/30,
+    "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+    "signal_length_seconds": 36000,
+    "wanted_shift_length_seconds": 5400,
+    "absolute_shift_deviation_seconds": 1800
+}
+
+window_reshape_parameters = {
+    "nn_signal_duration_seconds": sleep_data_manager_parameters["signal_length_seconds"],
+    "number_windows": 1197,
+    "window_duration_seconds": 120,
+    "overlap_seconds": 90,
+    "priority_order": [3, 2, 1, 0],
+    "pad_feature_with": 0,
+    "pad_target_with": 0
+}
+
+dataset_class_transform_parameters = {
+    "transform": ToTensor(), 
+    "target_transform": None,
+}
+
+
 """
 ============================================
 Applying SleepDataManager Class To Our Data
@@ -23,7 +52,7 @@ import h5py
 def Process_SHHS_Dataset(
         path_to_shhs_dataset: str,
         path_to_save_processed_data: str,
-        change_data_parameters: dict = {},
+        path_to_signal_processing_parameters: str,
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
@@ -56,9 +85,9 @@ def Process_SHHS_Dataset(
 
     ### Parameters for change_file_information function in dataset_processing.py ###
 
-    change_data_parameters: dict
-        the parameters that are used to keep data uniform 
-        (see SleepDataManager class in dataset_processing.py)
+    path_to_signal_processing_parameters: str
+        the path to all signal processing parameters 
+        (includes more parameters, but only the sleep_data_manager_parameters are needed here)
 
     ### Parameters for separate_train_test_validation function in dataset_processing.py ###
 
@@ -80,9 +109,13 @@ def Process_SHHS_Dataset(
     # initializing the database
     shhs_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
 
-    # update data parameters, if necessary
-    if len(change_data_parameters) > 0:
-        shhs_data_manager.change_file_information(change_data_parameters)
+    # load signal processing parameters
+    with open(path_to_signal_processing_parameters, "rb") as f:
+        signal_processing_parameters = pickle.load(f)
+    
+    # access data manager parameters and update them
+    change_data_parameters = {key: signal_processing_parameters[key] for key in sleep_data_manager_parameters}
+    shhs_data_manager.change_file_information(change_data_parameters)
 
     if not os.path.exists(shhs_training_data_path):
 
@@ -135,7 +168,7 @@ def Process_SHHS_Dataset(
 def Process_GIF_Dataset(
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
-        change_data_parameters: dict = {},
+        path_to_signal_processing_parameters: str,
         train_size = 0.8, 
         validation_size = 0.1, 
         test_size = 0.1, 
@@ -175,9 +208,13 @@ def Process_GIF_Dataset(
     # initializing the database
     gif_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
 
-    # update data parameters, if necessary
-    if len(change_data_parameters) > 0:
-        gif_data_manager.change_file_information(change_data_parameters)
+    # load signal processing parameters
+    with open(path_to_signal_processing_parameters, "rb") as f:
+        signal_processing_parameters = pickle.load(f)
+    
+    # access data manager parameters and update them
+    change_data_parameters = {key: signal_processing_parameters[key] for key in sleep_data_manager_parameters}
+    gif_data_manager.change_file_information(change_data_parameters)
 
     if not os.path.exists(gif_training_data_path):
 
@@ -238,16 +275,11 @@ Training And Testing Neural Network Model
 
 def main_model_training(
         neural_network_model = SleepStageModel(),
-        load_model_state_path = None,
-        processed_path = "Processed_Data/shhs_data.pkl",
+        path_to_model_state = None,
+        path_to_processed_data = "Processed_Data/shhs_data.pkl",
         save_accuracy_values_path: str = "Model_Accuracy/Neural_Network.pkl",
         save_model_state_path: str = "Model_State/Neural_Network.pth",
-        pad_feature_with = 0,
-        pad_target_with = 0,
-        number_windows: int = 1197, 
-        window_duration_seconds: int = 120, 
-        overlap_seconds: int = 90,
-        priority_order: list = [3, 2, 1, 0],
+        path_to_signal_processing_parameters: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
@@ -272,6 +304,7 @@ def main_model_training(
         "test_actual_results": all actual results for last epoch (list)
     }
 
+    
     RETURNS:
     ------------------------------
     None
@@ -284,10 +317,10 @@ def main_model_training(
     
     ### Parameters that set the paths to the data and the results ###
         
-    load_model_state_path: str
+    path_to_model_state: str
         the path to load the model state dictionary
         if None, the model will be trained from scratch
-    processed_path: str
+    path_to_processed_data: str
         the path to the processed dataset 
         (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
         [after removing '.pkl'] accesses the training, validation, and test datasets)
@@ -298,18 +331,9 @@ def main_model_training(
     
     ### Parameters for CustomSleepDataset class in neural_network_model.py ###
 
-    pad_feature_with : int
-        Value to pad feature (RRI and MAD) with if signal too short, by default 0
-    pad_target_with : int
-        Value to pad target (SLP) with if signal too short, by default 0
-    number_windows: int
-        The number of windows to split the signal into.
-    window_duration_seconds: int
-        The window length in seconds.
-    overlap_seconds: int
-        The overlap between windows in seconds.
-    priority_order: list
-        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
+    path_to_signal_processing_parameters: str
+        the path to all signal processing parameters 
+        (includes more parameters, but only the window_reshape_parameters are needed here)
     """
     
     """
@@ -318,19 +342,21 @@ def main_model_training(
     ------------------
     """
 
-    training_data_path = processed_path[:-4] + "_training_pid.pkl"
-    validation_data_path = processed_path[:-4] + "_validation_pid.pkl"
-    test_data_path = processed_path[:-4] + "_test_pid.pkl"
+    # paths to access the training, validation, and test datasets
+    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
+    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
+    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
 
-    CustomDatasetKeywords = {
-        "transform": ToTensor(), 
-        "pad_feature_with": pad_feature_with, 
-        "pad_target_with": pad_target_with,
-        "number_windows": number_windows,
-        "window_duration_seconds": window_duration_seconds,
-        "overlap_seconds": overlap_seconds,
-        "priority_order": priority_order
-    }
+    # load signal processing parameters
+    with open(path_to_signal_processing_parameters, "rb") as f:
+        signal_processing_parameters = pickle.load(f)
+    
+    # access window_reshape_parameters
+    CustomDatasetKeywords = {key: signal_processing_parameters[key] for key in window_reshape_parameters}
+
+    # add transform parameters
+    for key in dataset_class_transform_parameters:
+        CustomDatasetKeywords[key] = signal_processing_parameters[key]
 
     training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
     validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
@@ -389,8 +415,8 @@ def main_model_training(
     ----------------------------------
     """
    
-    if load_model_state_path is not None:
-        neural_network_model.load_state_dict(torch.load(load_model_state_path, map_location=device, weights_only=True))
+    if path_to_model_state is not None:
+        neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
     
     neural_network_model.to(device)
 
@@ -645,32 +671,99 @@ Applying Trained Neural Network Model
 """
 
 
+def predict(dataloader, model, device):
+    """
+    Iterate over a given dataset to predict sleep stages
+
+    RETURNS:
+    ------------------------------
+    test_loss : float
+        Average loss value of the test dataset
+    correct : float
+        Ratio of correctly predicted values of the test dataset
+    predicted_results : list
+        Predicted sleep stages
+    actual_results : list
+        Actual sleep stages
+
+
+    ARGUMENTS:
+    ------------------------------
+    dataloader : DataLoader
+        DataLoader object containing the dataset
+    model : nn.Module
+        Neural Network model to use
+    device : str
+        Device to run the model on
+    """
+
+    # get number of windows the signals are reshaped to
+    windows_per_signal = model.windows_per_signal
+
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    model.eval()
+
+    # variables to track progress
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    total_number_predictions = 0
+    start_time = time.time()
+    print("\nPredicting Sleep Stages:")
+    progress_bar(0, size, 1, start_time, None, None)
+
+    # variables to save results
+    predicted_results = np.empty((0, windows_per_signal))
+    actual_results = np.empty((0, windows_per_signal))
+
+    # Evaluating the model with torch.no_grad() ensures that no gradients are computed
+    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
+    with torch.no_grad():
+        # Iterate over the dataset
+        for batch, (rri, mad, slp) in enumerate(dataloader):
+            # check if MAD signal was not provided
+            if mad[0] == "None":
+                mad = None
+            else:
+                mad = mad.to(device)
+
+            # Send data to device
+            rri = rri.to(device)
+
+            # Compute prediction
+            pred = model(rri, mad)
+            slp = slp.long()
+
+            # collect results if requested
+            if collect_results:
+                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                
+                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
+                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
+
+            # print progress bar
+            datapoints_done = (batch+1) * batch_size
+            if datapoints_done > size:
+                datapoints_done = size
+            progress_bar(datapoints_done, size, batch_size, start_time, None, None)
+
+    test_loss /= num_batches
+    correct /= total_number_predictions
+    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+    return test_loss, correct, predicted_results, actual_results):
+
+
 def main_model_predicting(
         neural_network_model = SleepStageModel(),
         path_to_model_state: str = "Model_State/Neural_Network.pth",
-        path_to_processed_data: str = "Processed_Data/shhs_data_validation_pid.pkl",
-        path_to_save_results: str = "Results/Neural_Network.pkl",
-        pad_feature_with = 0,
-        pad_target_with = 0,
-        number_windows: int = 1197, 
-        window_duration_seconds: int = 120, 
-        overlap_seconds: int = 90,
-        priority_order: list = [3, 2, 1, 0],
+        path_to_processed_data = "Processed_Data/shhs_data.pkl",
+        save_accuracy_values_path: str = "Model_Accuracy/Neural_Network.pkl",
+        save_model_state_path: str = "Model_State/Neural_Network.pth",
+        path_to_signal_processing_parameters: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
     ):
     """
     
-
-    The accuracy values are saved in a dictionary with the following format:
-    {
-        "train_accuracy": train_accuracy for each epoch (list),
-        "train_avg_loss": train_avg_loss for each epoch (list),
-        "train_predicted_results": all predicted results for last epoch (list),
-        "train_actual_results": all actual results for last epoch (list),
-        "test_accuracy": test_accuracy for each epoch (list),
-        "test_avg_loss": test_avg_loss for each epoch (list),
-        "test_predicted_results": all predicted results for last epoch (list),
-        "test_actual_results": all actual results for last epoch (list)
-    }
 
     RETURNS:
     ------------------------------
@@ -686,46 +779,49 @@ def main_model_predicting(
         
     path_to_model_state: str
         the path to load the model state dictionary
+        if None, the model will be trained from scratch
     path_to_processed_data: str
         the path to the processed dataset 
-    path_to_save_results: str
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    save_accuracy_values_path: str
         the path to save the accuracy values
+    save_model_state_path: str
+        the path to save the model state dictionary
     
     ### Parameters for CustomSleepDataset class in neural_network_model.py ###
 
-    pad_feature_with : int
-        Value to pad feature (RRI and MAD) with if signal too short, by default 0
-    pad_target_with : int
-        Value to pad target (SLP) with if signal too short, by default 0
-    number_windows: int
-        The number of windows to split the signal into.
-    window_duration_seconds: int
-        The window length in seconds.
-    overlap_seconds: int
-        The overlap between windows in seconds.
-    priority_order: list
-        The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
+    path_to_signal_processing_parameters: str
+        the path to all signal processing parameters 
+        (includes more parameters, but only the window_reshape_parameters are needed here)
     """
     
     """
     ------------------
     Accessing Dataset
     ------------------
+
+    During Training, reshaping the signals to overlapping windows is done using the CustomSleepDataset class,
+    which uses the SleepDataManager class from dataset_processing.py to access the data.
+    Using this here would be possible as well, but not as clear because we want to add the predicted sleep
+    stages directly to the database. Making the code more complex than necessary. Therefore, we will use the
+    SleepDataManager class directly to access the data and reshape the signals to overlapping windows.
     """
 
-    CustomDatasetKeywords = {
-        "transform": ToTensor(), 
-        "pad_feature_with": pad_feature_with, 
-        "pad_target_with": pad_target_with,
-        "number_windows": number_windows,
-        "window_duration_seconds": window_duration_seconds,
-        "overlap_seconds": overlap_seconds,
-        "priority_order": priority_order
-    }
+    # accessing database
+    data_manager = SleepDataManager(file_path = path_to_processed_data)
 
-    data = CustomSleepDataset(path_to_data = path_to_processed_data, **CustomDatasetKeywords)
+    """
+    ---------------------------------------
+    Accessing Signal Processing Parameters
+    ---------------------------------------
+    """
+
+    # load signal processing parameters
+    with open(path_to_signal_processing_parameters, "rb") as f:
+        signal_processing_parameters = pickle.load(f)
     
-    del CustomDatasetKeywords
+    # access window_reshape_parameters
 
     """
     ---------------------------------------------
@@ -733,7 +829,7 @@ def main_model_predicting(
     ---------------------------------------------
     """
 
-    dataloader = DataLoader(data, batch_size = 1, shuffle = False)
+    dataloader = DataLoader(training_data, batch_size = 1, shuffle=False)
 
     """
     ---------------
