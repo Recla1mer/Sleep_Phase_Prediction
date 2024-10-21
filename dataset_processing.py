@@ -1264,7 +1264,7 @@ class SleepDataManager:
             signal_key = self.signal_keys[signal_key_index]
             signal_frequency_key = self.signal_frequency_keys[signal_key_index]
             if signal_key in new_data:   
-                if len(new_data[signal_key]) > self.file_info["signal_length_seconds"] * new_data[signal_frequency_key]:
+                if len(new_data[signal_key]) > round(self.file_info["signal_length_seconds"] * new_data[signal_frequency_key]):
                     split_signals_needed = True
                     break
                 

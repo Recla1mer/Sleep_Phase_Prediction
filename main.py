@@ -671,99 +671,53 @@ Applying Trained Neural Network Model
 """
 
 
-def predict(dataloader, model, device):
-    """
-    Iterate over a given dataset to predict sleep stages
-
-    RETURNS:
-    ------------------------------
-    test_loss : float
-        Average loss value of the test dataset
-    correct : float
-        Ratio of correctly predicted values of the test dataset
-    predicted_results : list
-        Predicted sleep stages
-    actual_results : list
-        Actual sleep stages
-
-
-    ARGUMENTS:
-    ------------------------------
-    dataloader : DataLoader
-        DataLoader object containing the dataset
-    model : nn.Module
-        Neural Network model to use
-    device : str
-        Device to run the model on
-    """
-
-    # get number of windows the signals are reshaped to
-    windows_per_signal = model.windows_per_signal
-
-    # Set the model to evaluation mode - important for batch normalization and dropout layers
-    model.eval()
-
-    # variables to track progress
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    total_number_predictions = 0
-    start_time = time.time()
-    print("\nPredicting Sleep Stages:")
-    progress_bar(0, size, 1, start_time, None, None)
-
-    # variables to save results
-    predicted_results = np.empty((0, windows_per_signal))
-    actual_results = np.empty((0, windows_per_signal))
-
-    # Evaluating the model with torch.no_grad() ensures that no gradients are computed
-    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
-    with torch.no_grad():
-        # Iterate over the dataset
-        for batch, (rri, mad, slp) in enumerate(dataloader):
-            # check if MAD signal was not provided
-            if mad[0] == "None":
-                mad = None
-            else:
-                mad = mad.to(device)
-
-            # Send data to device
-            rri = rri.to(device)
-
-            # Compute prediction
-            pred = model(rri, mad)
-            slp = slp.long()
-
-            # collect results if requested
-            if collect_results:
-                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                
-                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
-                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
-
-            # print progress bar
-            datapoints_done = (batch+1) * batch_size
-            if datapoints_done > size:
-                datapoints_done = size
-            progress_bar(datapoints_done, size, batch_size, start_time, None, None)
-
-    test_loss /= num_batches
-    correct /= total_number_predictions
-    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
-
-    return test_loss, correct, predicted_results, actual_results):
-
-
 def main_model_predicting(
         neural_network_model = SleepStageModel(),
         path_to_model_state: str = "Model_State/Neural_Network.pth",
         path_to_processed_data = "Processed_Data/shhs_data.pkl",
-        save_accuracy_values_path: str = "Model_Accuracy/Neural_Network.pkl",
-        save_model_state_path: str = "Model_State/Neural_Network.pth",
         path_to_signal_processing_parameters: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
+        path_to_save_results: str = "Model_Accuracy/Neural_Network.pkl",
     ):
     """
+    Applies the trained neural network model to the processed data. The processed data is accessed using the
+    SleepDataManager class from dataset_processing.py. The predictions are retransformed to the original
+    signal structure (they were reshaped to overlapping windows during training).
     
+    If the database was previously split into training, validation, and test datasets, the algorithm assumes
+    that the data also contains the actual sleep stages and you want to do statistics using them and the 
+    predictions. Therefore, the results are saved to a pkl-file as individual dictionaries for every patient.
+    These dictionaries have the following format:
+    {
+        "Predicted_Probabilities": 
+            - shape: (patients, number_sleep_stages) 
+            - probabilities for each sleep stage,
+        "Predicted": 
+            - shape: (patients) 
+            - predicted sleep stage with highest probability,
+        "Actual": 
+            - shape: (patients) 
+            - actual sleep stages,
+        "Predicted_in_windows": 
+            - shape: (patients, windows_per_signal) 
+            - predicted sleep stages with highest probability, signal still as overlapping windows (output of neural network), 
+        "Actual_in_windows":
+            - shape: (patients, windows_per_signal) 
+            - actual sleep stages, signal still as overlapping windows (used by the neural network),
+    }
+
+    If the database was not split, the algorithm assumes you want to collect the predicted sleep stages and 
+    saves them directly to the database for easy access. Each appropriate datapoint is updated with the
+    predicted sleep stages:
+
+    {
+        "SLP_pred_prob":
+            - shape: (windows_per_signal, number_sleep_stages) 
+            - probabilities for each sleep stage,
+        "SLP_pred":
+            - shape: (windows_per_signal) 
+            - predicted sleep stage with highest probability,
+    }
+
 
     RETURNS:
     ------------------------------
@@ -784,10 +738,8 @@ def main_model_predicting(
         the path to the processed dataset 
         (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
         [after removing '.pkl'] accesses the training, validation, and test datasets)
-    save_accuracy_values_path: str
-        the path to save the accuracy values
-    save_model_state_path: str
-        the path to save the model state dictionary
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
     
     ### Parameters for CustomSleepDataset class in neural_network_model.py ###
 
@@ -811,6 +763,16 @@ def main_model_predicting(
     # accessing database
     data_manager = SleepDataManager(file_path = path_to_processed_data)
 
+    # retrieve rri, mad, and slp frequencies
+    rri_frequency = data_manager.file_info["RRI_frequency"]
+    mad_frequency = data_manager.file_info["MAD_frequency"]
+    slp_frequency = data_manager.file_info["SLP_frequency"]
+
+    # determine if data contains sleep phases (split into training, validation, and test data)
+    actual_results_available = False
+    if data_manager.file_info["train_val_test_split_applied"]:
+        actual_results_available = True
+
     """
     ---------------------------------------
     Accessing Signal Processing Parameters
@@ -822,14 +784,24 @@ def main_model_predicting(
         signal_processing_parameters = pickle.load(f)
     
     # access window_reshape_parameters
+    common_window_reshape_parameters = {key: signal_processing_parameters[key] for key in window_reshape_parameters}
 
-    """
-    ---------------------------------------------
-    Preparing Data For Training With Dataloaders
-    ---------------------------------------------
-    """
+    # following values need to be assigned to "pad_with" parameter depending on "signal_type"
+    del common_window_reshape_parameters["pad_feature_with"]
+    del common_window_reshape_parameters["pad_target_with"]
 
-    dataloader = DataLoader(training_data, batch_size = 1, shuffle=False)
+    # access pad_with values
+    pad_feature_with = signal_processing_parameters["pad_feature_with"]
+    pad_target_with = signal_processing_parameters["pad_target_with"]
+
+    # access feature and target transformations
+    feature_transform = signal_processing_parameters["transform"]
+    target_transform = signal_processing_parameters["target_transform"]
+
+    # access number of sleep stages
+    number_sleep_stages = signal_processing_parameters["number_sleep_stages"]
+
+    del signal_processing_parameters
 
     """
     ---------------
@@ -852,10 +824,34 @@ def main_model_predicting(
     Initializing Neural Network Model
     ----------------------------------
     """
+    neural_network_model = neural_network_model(number_sleep_stages = number_sleep_stages)
    
     neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
     
     neural_network_model.to(device)
+
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    neural_network_model.eval()
+
+    """
+    -----------------------------
+    Preparations for Saving Data
+    -----------------------------
+    """
+
+    # prepare path that stores results, if necessary
+    if actual_results_available:
+        if os.path.exists(path_to_save_results):
+            os.remove(path_to_save_results)
+        else:
+            create_directories_along_path(path_to_save_results)
+    else:
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(path_to_processed_data))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = data_manager.file_info, file_name = working_file_path)
 
     """
     ------------------------
@@ -863,28 +859,141 @@ def main_model_predicting(
     ------------------------
     """
 
-    # variables to store results
-    actual_results = np.empty(0)
-    predicted_results = np.empty(0)
+    # variables to track progress
+    size = len(data_manager)
+    progress = 0
+    start_time = time.time()
+    print("\nPredicting Sleep Stages:")
+    progress_bar(progress, size, 1, start_time, None, None)
 
-    test_accuracy = []
-    test_avg_loss = []
+
+    with torch.no_grad():
+        # Iterate over Database
+        for data_dict in data_manager:
+
+            """
+            Data Processing (Analogue to CustomSleepDataset class in neural_network_model.py)
+            """
+
+            # set window_reshape_parameters for features
+            common_window_reshape_parameters["pad_with"] = pad_feature_with
+            common_window_reshape_parameters["signal_type"] = "feature"
+
+            # access processed features, reshape to overlapping windows and apply transformations
+            rri = reshape_signal_to_overlapping_windows(
+                signal = copy.deepcopy(data_dict["RRI"]),
+                target_frequency = rri_frequency,
+                **common_window_reshape_parameters
+            )
+
+            # retrieve signal length in seconds
+            signal_length_seconds = len(data_dict["RRI"]) / rri_frequency
+
+            if rri.dtype == np.float64:
+                rri = rri.astype(np.float32)
+            if feature_transform:
+                rri = feature_transform(rri)
+            rri = rri.to(device) # type: ignore
+
+            try:
+                mad = reshape_signal_to_overlapping_windows(
+                    signal = data_dict["MAD"],
+                    target_frequency = mad_frequency,
+                    **common_window_reshape_parameters
+                )
+                if mad.dtype == np.float64:
+                    mad = mad.astype(np.float32)
+                if feature_transform:
+                    mad = feature_transform(mad)
+                mad = mad.to(device) # type: ignore
+            except:
+                mad = None
+
+            if actual_results_available:
+                # set window_reshape_parameters for target
+                common_window_reshape_parameters["pad_with"] = pad_target_with
+                common_window_reshape_parameters["signal_type"] = "target"
+
+                actual_original_structure = data_dict["SLP"]
+
+                signal_length_seconds = len(copy.deepcopy(actual_original_structure)) / slp_frequency
+
+                # access processed target, reshape to overlapping windows and apply transformations
+                slp = reshape_signal_to_overlapping_windows(
+                    signal = copy.deepcopy(actual_original_structure),
+                    target_frequency = slp_frequency,
+                    **common_window_reshape_parameters
+                )
+                if slp.dtype == np.int64:
+                    slp = slp.astype(np.int32)
+                if slp.dtype == np.float64:
+                    slp = slp.astype(np.float32)
+                if target_transform:
+                    slp = target_transform(slp)
+            
+            """
+            Applying Neural Network Model
+            """
+
+            predictions_in_windows = neural_network_model(rri, mad)
+
+            """
+            Preparing Predicted Sleep Phases
+            """
+
+            predictions_in_windows = predictions_in_windows.cpu().numpy()
+
+            # reshape windows to original signal structure
+            predictions_probability = np.empty((signal_length_seconds*slp_frequency, 0))
+            for i in range(predictions_in_windows.shape[1]):
+                temp_original_structure = reverse_signal_to_windows_reshape(
+                    signal_in_windows = predictions_in_windows[:, i],
+                    target_frequency = slp_frequency,
+                    original_signal_length = round(signal_length_seconds*slp_frequency),
+                    number_windows = common_window_reshape_parameters["number_windows"],
+                    window_duration_seconds = common_window_reshape_parameters["window_duration_seconds"],
+                    overlap_seconds = common_window_reshape_parameters["overlap_seconds"],
+                )
+                temp_original_structure = np.array([[temp_val] for temp_val in temp_original_structure])
+                predictions_probability = np.append(predictions_probability, temp_original_structure, axis=1)
+            
+            # convert probabilities to sleep stages
+            predictions_original_structure = np.argmax(predictions_probability, axis=1)
+
+            """
+            Saving Predicted (and Actual) Sleep Phases
+            """
+            
+            if actual_results_available:
+                results = {
+                    "Predicted_Probabilities": predictions_probability,
+                    "Predicted": predictions_original_structure,
+                    "Actual": actual_original_structure,
+                    "Predicted_in_windows": predictions_in_windows,
+                    "Actual_in_windows": slp
+                }
+
+                append_to_pickle(results, path_to_save_results)
+            
+            else:
+                data_dict["SLP_pred_prob"] = predictions_probability
+                data_dict["SLP_pred"] = predictions_original_structure
+
+                append_to_pickle(data_dict, working_file_path)
+            
+            # update progress
+            progress += 1
+            progress_bar(progress, size, 1, start_time, None, None)
 
     
-    """
-    -----------------------
-    Saving Results
-    -----------------------
-    """
-
-    create_directories_along_path(path_to_save_results)
-
-    accuracy_values = {
-        "actual_results": actual_results,
-        "predicted_results": predicted_results
-    }
-
-    save_to_pickle(accuracy_values, path_to_save_results)
+    # Remove the old file and rename the working file
+    if not actual_results_available:
+        try:
+            os.remove(path_to_processed_data)
+        except:
+            pass
+            
+        os.rename(working_file_path, path_to_processed_data)
 
 
 if __name__ == "__main__":
