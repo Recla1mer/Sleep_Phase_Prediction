@@ -708,12 +708,11 @@ def main_model_predicting(
     If the database was not split, the algorithm assumes you want to collect the predicted sleep stages and 
     saves them directly to the database for easy access. Each appropriate datapoint is updated with the
     predicted sleep stages:
-
     {
-        "SLP_pred_prob":
+        "SLP_predicted_probability":
             - shape: (windows_per_signal, number_sleep_stages) 
             - probabilities for each sleep stage,
-        "SLP_pred":
+        "SLP_predicted":
             - shape: (windows_per_signal) 
             - predicted sleep stage with highest probability,
     }
@@ -976,8 +975,8 @@ def main_model_predicting(
                 append_to_pickle(results, path_to_save_results)
             
             else:
-                data_dict["SLP_pred_prob"] = predictions_probability
-                data_dict["SLP_pred"] = predictions_original_structure
+                data_dict["SLP_predicted_probability"] = predictions_probability
+                data_dict["SLP_predicted"] = predictions_original_structure
 
                 append_to_pickle(data_dict, working_file_path)
             

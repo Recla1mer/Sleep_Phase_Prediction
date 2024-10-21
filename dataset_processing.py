@@ -1096,8 +1096,11 @@ class SleepDataManager:
     signal_keys = ["RRI", "MAD", "SLP"]
     signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency"] # same order is important
     signal_window_keys = ["RRI_windows", "MAD_windows", "SLP_windows"] # same order is important
+
+    predicted_signal_keys = ["SLP_predicted", "SLP_predicted_probability"]
+    predicted_signal_frequency_keys = ["SLP_predicted_frequency", "SLP_predicted_frequency"] # same order is important
     
-    valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency"]
+    valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability", "SLP_predicted_frequency"]
     
     default_file_info = dict()
     default_file_info["RRI_frequency"] = 4
@@ -1118,9 +1121,12 @@ class SleepDataManager:
     default_file_info["validation_file_path"] = "unassigned"
     default_file_info["test_file_path"] = "unassigned"
 
+    default_file_info["SLP_predicted_frequency"] = None
+
 
     def __init__(self, file_path):
         """
+
         ARGUMENTS:
         ------------------------------
         file_path: str
@@ -1219,7 +1225,47 @@ class SleepDataManager:
             raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
         if "sleep_stage_label" in new_data and "SLP" not in new_data:
             raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
-            
+        
+        # Check if predicted frequency keys are provided if predicted signal keys are provided
+        # make sure predicted signals match the length of the other signals (rescaling not possible for predicted signals)
+        for pred_signal_key_index in range(0, len(self.predicted_signal_keys)):
+            pred_signal_key = self.predicted_signal_keys[pred_signal_key_index]
+            pred_signal_frequency_key = self.predicted_signal_frequency_keys[pred_signal_key_index]
+            if pred_signal_key in new_data and pred_signal_frequency_key not in new_data:
+                raise ValueError(f"If you want to add a {pred_signal_key} Signal (key: \"{pred_signal_key}\"), then you must also provide the sampling frequency: \"{pred_signal_frequency_key}\" !")
+            if pred_signal_frequency_key in new_data and pred_signal_key not in new_data:
+                raise ValueError(f"What sense does it make to provide a sampling frequency \"{pred_signal_frequency_key}\" without the corresponding signal \"{pred_signal_key}\" ?")
+            if pred_signal_key in new_data:
+                if self.file_info[pred_signal_frequency_key] == None:
+
+                    """
+                    Change predicted signal frequency key in file information
+                    """
+
+                    # Create temporary file to save data in progress
+                    working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+                    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+                    # Change file information
+                    self.file_info["SLP_predicted_frequency"] = new_data[pred_signal_frequency_key]
+
+                    # save file information to working file
+                    save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+                    # save all other data to working file
+                    for data_dict in self:
+                        append_to_pickle(data = data_dict, file_name = working_file_path)
+                    
+                    # delete old file
+                    os.remove(self.file_path)
+                    os.rename(working_file_path, self.file_path)
+                
+                if self.file_info[pred_signal_frequency_key] != new_data[pred_signal_frequency_key]:
+                    raise ValueError(f"Predicted signal frequency does not match the frequency in the file. Frequency in file: {self.file_info[pred_signal_frequency_key]}, frequency in new data: {new_data[pred_signal_frequency_key]}")
+                if len(new_data[pred_signal_key]) > round(self.file_info["signal_length_seconds"] * new_data[pred_signal_frequency_key]):
+                    raise ValueError(f"Predicted signal is too long. Predicted signal expected to be added after all datapoints were added, modified and passed to neural network model. Therefore splitting it is prohibited, as it should match the signal length, unless something went wrong.")
+
+        
         """
         -------------------------------
         Alter Entries In New Datapoint
@@ -1233,6 +1279,10 @@ class SleepDataManager:
         for signal_key in self.signal_keys:
             if signal_key in new_data:
                 new_data[signal_key] = np.array(new_data[signal_key])
+        
+        for pred_signal_key in self.predicted_signal_keys:
+            if pred_signal_key in new_data:
+                new_data[pred_signal_key] = np.array(new_data[pred_signal_key])
 
         # make sure sampling frequency matches the one in the file, rescale signal if necessary
         for signal_key_index in range(0, len(self.signal_keys)):
@@ -1322,6 +1372,9 @@ class SleepDataManager:
         for signal_frequency_key in self.signal_frequency_keys:
             if signal_frequency_key in new_data:
                 del new_data[signal_frequency_key]
+        for pred_signal_frequency_key in self.predicted_signal_frequency_keys:
+            if pred_signal_frequency_key in new_data:
+                del new_data[pred_signal_frequency_key]
         
         # Remove sleep stage label key from new_data (label should match the one in the file, saving it is unnecessary)
         if "sleep_stage_label" in new_data:
@@ -2138,7 +2191,7 @@ class SleepDataManager:
             if key not in self.file_info:
                 print(f"Attention: Key {key} not recognized. It will be skipped.")
                 continue
-            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path"]:
+            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_reshape_applied"]:
                 print(f"Attention: Key {key} is a reserved key and cannot be changed.")
                 continue
             self.file_info[key] = new_file_info[key]
