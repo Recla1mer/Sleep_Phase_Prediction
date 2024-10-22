@@ -1126,6 +1126,11 @@ class SleepDataManager:
 
     def __init__(self, file_path):
         """
+        Initialize the SleepDataManager class.
+
+        RETURNS:
+        ------------------------------
+        None
 
         ARGUMENTS:
         ------------------------------
@@ -1538,7 +1543,7 @@ class SleepDataManager:
 
         # check if key_id_index is an id, a key, or an index
         load_keys = False
-        valid_keys = ["ID", "RRI", "MAD", "SLP"]
+        valid_keys = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]
         load_id = False
         load_index = False
 
@@ -1581,7 +1586,7 @@ class SleepDataManager:
             if count_data_points_missing_key > 0:
                 print(f"Attention: {count_data_points_missing_key} data points are missing the key {key_id_index}")
             
-            return values_for_key_from_all_data_points
+            return np.array(values_for_key_from_all_data_points)
 
         elif load_index:
             count = 0
@@ -1599,6 +1604,12 @@ class SleepDataManager:
         """
         Remove data from the file path. The data can be removed by ID, key, or index.
 
+        If removed key is one of the reshaped signals (RRI_windows, MAD_windows, SLP_windows), all reshaped 
+        signals are removed (using 'remove_reshaped_signals' function).
+
+        If removed key is one of the predicted signals (SLP_predicted, SLP_predicted_probability), all 
+        predicted signals are removed (using 'remove_predicted_signals' function).
+
         RETURNS:
         ------------------------------
         None
@@ -1609,9 +1620,19 @@ class SleepDataManager:
             The ID, key, or index of the data to be removed.
         """
 
+        # check if key_id_index is a reshaped signal key
+        if key_id_index in self.signal_window_keys:
+            self.remove_reshaped_signals()
+            return
+        
+        # check if key_id_index is a predicted signal key
+        if key_id_index in self.predicted_signal_keys:
+            self.remove_predicted_signals()
+            return
+
         # check if key_id_index is an id, a key, or an index
         remove_keys = False
-        valid_keys = ["ID", "RRI", "MAD", "SLP", "RRI_windows", "MAD_windows", "SLP_windows"]
+        valid_keys = ["ID", "RRI", "MAD", "SLP"]
         remove_id = False
         remove_index = False
 
@@ -1783,6 +1804,15 @@ class SleepDataManager:
     
     def remove_reshaped_signals(self):
         """
+        Remove all reshaped signals (RRI_windows, MAD_windows, SLP_windows) from the database.
+
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
         """
 
         # prevent runnning this function if data was split into training, validation, and test files
@@ -1824,9 +1854,63 @@ class SleepDataManager:
             pass
 
         os.rename(working_file_path, self.file_path)
+    
+
+    def remove_predicted_signals(self):
+        """
+        Removes all predicted signals (SLP_predicted, SLP_predicted_probability) from the database.
+
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
+        """
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+        
+        # skip function if no precited signals were added
+        if self.file_info["SLP_predicted_frequency"] == None:
+            return
+        
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # Change file information
+        self.file_info["SLP_predicted_frequency"] = None
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # iterate over entries in database and predicted signals
+        for data_point in file_generator:
+            for pred_signal_key in self.predicted_signal_keys:
+                if pred_signal_key in data_point:
+                    del data_point[pred_signal_key]
+
+            append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
 
 
-    def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows"]):
+    def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]):
         """
         Order the keys in the datapoints of the database for better readability when printing.
         Quite useless I know... But you know, maybe there is someone out there who appreciates this feature.
@@ -1877,7 +1961,7 @@ class SleepDataManager:
             shuffle = True
         ):
         """
-        Depending whether "test_size" = None/float: Separate the data in the file into training and validation, 
+        Depending whether "test_size" = None/float: Separate the data in the file into training and validation 
         data / training, validation, and test data. New files will be created in the same directory as the 
         main file. The file information will be saved to each file.
 
@@ -2095,9 +2179,9 @@ class SleepDataManager:
         None
         """
 
-        # Check if train_val_test_split_applied is True
+        # Skip if train_val_test_split was not applied
         if not self.file_info["train_val_test_split_applied"]:
-            raise ValueError("Train-Validation-Test split was not applied to the data file. Therefore, it cannot be fused back.")
+            return
         
         # edit file information
         self.file_info["train_val_test_split_applied"] = False
@@ -2178,6 +2262,10 @@ class SleepDataManager:
             The new file information.
         """
 
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+
         # check if there are datapoints in the file
         if len(self) > 0:
             raise ValueError("File information can only be changed if no data points are in the file.")
@@ -2210,7 +2298,8 @@ class SleepDataManager:
 
     def __len__(self):
         """
-        Returns the number of data points in the file. Usage: len(data_manager_instance)
+        Returns the number of data points in the file. 
+        Usage: len(data_manager_instance)
 
         RETURNS:
         ------------------------------
@@ -2239,7 +2328,8 @@ class SleepDataManager:
 
     def __contains__(self, id):
         """
-        Check if the ID is in the file. Usage: id in data_manager_instance:
+        Check if the ID is in the file. 
+        Usage: id in data_manager_instance:
 
         RETURNS:
         ------------------------------
@@ -2271,7 +2361,8 @@ class SleepDataManager:
 
     def __iter__(self):
         """
-        Iterate over all data points in the file. Usage: for data_point in data_manager_instance:
+        Iterate over all data points in the file. 
+        Usage: for data_point in data_manager_instance:
 
         RETURNS:
         ------------------------------
@@ -2295,51 +2386,30 @@ class SleepDataManager:
         del file_generator
     
 
-    def __getitem__(self, key):
+    def __getitem__(self, key_id_index):
         """
-        Get all data with the given key from the file. Usage: data_manager_instance[key]
+        Loads data from file path. The data can be loaded by ID, key or index.
+        Usage: data_manager_instance[key]
 
-        Identical to data_manager_instance.load(key), but more convenient.
+        Identical to data_manager_instance.load(key_id_index)
 
         RETURNS:
         ------------------------------
+        data_point: dict
+            The data point that was loaded.
+        
+                        OR
+
         values_for_key_from_all_data_points: list
             The values for the key from all data points.
         
         ARGUMENTS:
         ------------------------------
-        key: str
-            The key to be loaded.
+        key_id_index: str, int
+            The ID, key, or index of the data to be loaded.
         """    
 
-        valid_keys = ["ID"]
-        for signal_key in self.signal_keys:
-            valid_keys.append(signal_key)
-        for signal_window_key in self.signal_window_keys:
-            valid_keys.append(signal_window_key)
-
-        if key in valid_keys:
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
-
-            # Skip file information
-            next(file_generator)
-
-            values_for_key_from_all_data_points = list()
-            count_data_points_missing_key = 0
-
-            for data_point in file_generator:
-                if key in data_point:
-                    values_for_key_from_all_data_points.append(data_point[key])
-                else:
-                    count_data_points_missing_key += 1
-            
-            del file_generator
-
-            if count_data_points_missing_key > 0:
-                print(f"Attention: {count_data_points_missing_key} data points are missing the key {key}")
-            
-            return values_for_key_from_all_data_points
+        return self.load(key_id_index)
     
 
     def __str__(self):
