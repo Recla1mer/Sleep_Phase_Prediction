@@ -1600,6 +1600,45 @@ class SleepDataManager:
         del file_generator
     
 
+    def _collect_splitted_datapoint_ids(self, id):
+        """
+        Collect all IDs of the datapoints that resulted from splitting a datapoint with the ID 'id'.
+
+        RETURNS:
+        ------------------------------
+        ids: list
+            List of IDs of the splitted datapoints.
+        
+        ARGUMENTS:
+        ------------------------------
+        id: str
+            The ID of the datapoint that might have been split.
+        """
+
+        for char_index in range(0, len(id)):
+            if "_shift" in id[char_index:]:
+                return self._collect_splitted_datapoint_ids(id[:char_index+1])
+        
+        ids = [id]
+
+        common_string = id + "_shift"
+        common_string_length = len(common_string)
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # Skip file information
+        next(file_generator)
+
+        for data_point in file_generator:
+            if data_point["ID"][:common_string_length] == common_string:
+                ids.append(data_point["ID"])
+        
+        del file_generator
+
+        return ids
+    
+
     def remove(self, key_id_index):
         """
         Remove data from the file path. The data can be removed by ID, key, or index.
@@ -1634,7 +1673,6 @@ class SleepDataManager:
         remove_keys = False
         valid_keys = ["ID", "RRI", "MAD", "SLP"]
         remove_id = False
-        remove_index = False
 
         if isinstance(key_id_index, str):
             if key_id_index in valid_keys:
@@ -1642,7 +1680,22 @@ class SleepDataManager:
             else:
                 remove_id = True
         elif isinstance(key_id_index, int):
-            remove_index = True
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
+
+            count = -1
+            index_out_of_bounds = True
+            for data_point in file_generator:
+                if count == key_id_index:
+                    self.remove(data_point["ID"])
+                    index_out_of_bounds = False
+                count += 1
+            
+            if index_out_of_bounds:
+                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+            
+            del file_generator
+            return
         else:
             raise ValueError("\'key_id_index\' must be a string, integer, or a key from the valid_datapoint_keys (also a string).")
 
@@ -1658,9 +1711,10 @@ class SleepDataManager:
 
         # Remove data point from the working file
         if remove_id:
+            ids_from_splitted_datapoints = self._collect_splitted_datapoint_ids(key_id_index)
             id_found = False
             for data_point in file_generator:
-                if data_point["ID"] == key_id_index:
+                if data_point["ID"] in ids_from_splitted_datapoints:
                     id_found = True
                 else:
                     append_to_pickle(data = data_point, file_name = working_file_path)
@@ -1673,19 +1727,6 @@ class SleepDataManager:
                 if key_id_index in data_point:
                     del data_point[key_id_index]
                 append_to_pickle(data = data_point, file_name = working_file_path)
-        
-        elif remove_index:
-            count = 0
-            index_out_of_bounds = True
-            for data_point in file_generator:
-                if count != key_id_index:
-                    append_to_pickle(data = data_point, file_name = working_file_path)
-                else:
-                    index_out_of_bounds = False
-                count += 1
-            
-            if index_out_of_bounds:
-                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
 
         # Remove the old file and rename the working file
         try:
