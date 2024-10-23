@@ -495,7 +495,8 @@ def split_signals_within_dictionary(
         signal_target_frequencies: list,
         nn_signal_duration_seconds: int,
         wanted_shift_length_seconds: int,
-        absolute_shift_deviation_seconds: int):
+        absolute_shift_deviation_seconds: int
+    ):
     """
     You might handle with data where multiple signals are stored in a dictionary. If those signals are too long,
     they all need to be split, using 'split_long_signal'. After splitting, you have more datapoints than before, 
@@ -540,8 +541,8 @@ def split_signals_within_dictionary(
         signal_key = valid_signal_keys[signal_key_index]
 
         this_splitted_signal, previous_shift_length_seconds = split_long_signal(
-            signal = data_dict[signal_key], # type: ignore
-            sampling_frequency = signal_frequencies[signal_key_index],
+            signal = copy.deepcopy(data_dict[signal_key]), # type: ignore
+            sampling_frequency = copy.deepcopy(signal_frequencies[signal_key_index]),
             target_frequency = signal_target_frequencies[signal_key_index],
             nn_signal_duration_seconds = nn_signal_duration_seconds,
             wanted_shift_length_seconds = wanted_shift_length_seconds,
@@ -552,6 +553,13 @@ def split_signals_within_dictionary(
         splitted_signals.append(this_splitted_signal)
         this_shift_length_seconds = int(previous_shift_length_seconds)
         del this_splitted_signal
+
+        if "RRI" in valid_signal_keys:
+            if signal_key == "RRI":
+                signal_length_s_for_recover = len(data_dict[signal_key])/signal_frequencies[signal_key_index]
+        else:
+            signal_length_s_for_recover = len(data_dict[signal_key])/signal_frequencies[signal_key_index]
+            
 
     # create new dictionaries for splitted signals
     new_dictionaries_for_splitted_signals = list()
@@ -564,9 +572,140 @@ def split_signals_within_dictionary(
                 splitted_data_dict[key] = data_dict[key]
         if i > 0:
             splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_{this_shift_length_seconds}s_x{i}"
+        splitted_data_dict["pre_split_recover"] = [signal_length_s_for_recover, previous_shift_length_seconds]
         new_dictionaries_for_splitted_signals.append(splitted_data_dict)
     
     return new_dictionaries_for_splitted_signals
+
+
+def fuse_splitted_signals(
+        signals: list,
+        shift_length: int,
+        original_signal_length: int,
+        signal_type: str = "feature"
+    ):
+    """
+    Reverse Operation to 'split_long_signal'.
+
+    RETURNS:
+    ------------------------------
+    fused_signal: list
+        The fused signal.
+    
+    ARGUMENTS:
+    ------------------------------
+    signals: list
+        The splitted signals.
+    shift_length: int
+        shift length used to split the signals.
+    original_signal_length: int
+        The length of the original signal.
+    signal_type: str
+        The type of signal. Either 'feature' or 'target'.
+        If 'feature':   The signals will be fused by taking the mean of the overlapping entries.
+        If 'target':    The signals will be fused by collecting the overlapping entries into a list.
+    """
+
+    # choose return data type
+    data_types = [np.array(i).dtype for i in signals]
+    use_data_type = data_types[0]
+    for data_type in data_types:
+        if data_type == float:
+            use_data_type = data_type
+            break
+
+    # check if signal length is uniform
+    signal_length = len(signals[0])
+    for signal in signals:
+        if len(signal) != signal_length:
+            raise ValueError("All signals must have the same length.")
+
+    # initialize fused signal
+    fused_signal = [[i] for i in signals[0]]
+
+    # fuse signals (collect duplicate entries into list)
+    for signal_index in range(1, len(signals)):
+        current_length = len(fused_signal)
+        if signal_index == len(signals) - 1:
+            remaining = original_signal_length - current_length
+            last_shift = current_length-signal_length+remaining
+            for i in range(0,  signal_length-remaining):
+                fused_signal[last_shift+i].append(signals[signal_index][i])
+            for entry in signals[signal_index][-remaining:]:
+                fused_signal.append([entry])
+        else:
+            for i in range(signal_index*shift_length, len(fused_signal)):
+                fused_signal[i].append(signals[signal_index][i-signal_index*shift_length])
+            for entry in signals[signal_index][signal_length-shift_length:]:
+                fused_signal.append([entry])
+    
+    # mean collected entries or return them
+    if signal_type == "feature":
+        if isinstance(fused_signal[0][0], list):
+            return np.array([np.array(i).sum(axis=0) / len(i) for i in fused_signal], dtype=use_data_type)
+        return np.array([sum(i) / len(i) for i in fused_signal], dtype=use_data_type)
+    elif signal_type == "target":
+        return fused_signal
+
+
+def fuse_splitted_signals_within_dictionaries(
+        data_dictionaries: list,
+        valid_signal_keys: list,
+        valid_signal_frequencies: list,
+    ):
+    """
+    Reverse Operation to 'split_signals_within_dictionary'.
+
+    ATTENTION: The order of the signals in 'valid_signal_keys' must be the same as the order of the frequencies
+    in 'signal_frequencies'.
+
+    RETURNS:
+    ------------------------------
+    restored_dictionary: list
+        Dictionary with refused signals.
+    
+    ARGUMENTS:
+    ------------------------------
+    data_dictionaries: list
+        List of dictionaries, containing the splitted signals.
+    valid_signal_keys: list
+        The keys of the signals that should be refused.
+    signal_frequencies: list
+        The frequencies of the above signals.
+    """
+
+    # initialize restored dictionary and extract original ID
+    restored_dictionary = dict()
+    for data_dict in data_dictionaries:
+        if "shift" not in data_dict["ID"]:
+            restored_dictionary["ID"] = data_dict["ID"]
+
+    # Iterate over different signals, refuse and store them
+    for signal_key_index in range(0, len(valid_signal_keys)):
+        signal_key = valid_signal_keys[signal_key_index]
+        signal_frequency = valid_signal_frequencies[signal_key_index]
+
+        signals = [data_dict[signal_key] for data_dict in data_dictionaries]
+
+        signal_type = "feature"
+        if signal_key == "SLP_predicted":
+            signal_type = "target"
+
+        fused_signal = fuse_splitted_signals(
+            signals = signals,
+            shift_length = int(data_dictionaries[0]["pre_split_recover"][1]*signal_frequency),
+            original_signal_length = int(np.ceil(data_dictionaries[0]["pre_split_recover"][0] * signal_frequency)),
+            signal_type = signal_type
+        )
+
+        restored_dictionary[signal_key] = fused_signal
+    
+    # Add all other entries to restored dictionary
+    for key in data_dictionaries[0]:
+        if key not in valid_signal_keys and key != "pre_split_recover":
+            restored_dictionary[key] = data_dictionaries[0][key]
+    
+    return restored_dictionary
 
 
 def signal_to_windows(
@@ -1737,6 +1876,65 @@ class SleepDataManager:
         os.rename(working_file_path, self.file_path)
 
         del file_generator
+    
+
+    def reverse_signal_split(self):
+        """
+        """
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # find all splitted signals
+        splitted_signal_ids = list()
+
+        for data_point in file_generator:
+            for id_list in splitted_signal_ids:
+                if data_point["ID"] in id_list:
+                    continue
+            if "_shift" in data_point["ID"]:
+                splitted_signal_ids.append(self._collect_splitted_datapoint_ids(data_point["ID"]))
+        
+        del file_generator
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+
+        # iterate over entries in database and reverse signal split
+        for id_list in splitted_signal_ids:
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
+
+            # skip file information
+            next(file_generator)
+
+            # collect splitted data dictionaries
+            splitted_data_dictionaries = list()
+
+            for data_dict in file_generator:
+                if data_dict["ID"] in id_list:
+                    splitted_data_dictionaries.append(data_dict)
+            
+            del file_generator
+
+            # fuse splitted data dictionaries
+            fused_dictionary = fuse_splitted_signals_within_dictionaries(
+                data_dictionaries = splitted_data_dictionaries,
+                valid_signal_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"],
+                valid_signal_frequencies = [self.file_info["RRI_frequency"], self.file_info["MAD_frequency"], self.file_info["SLP_frequency"], self.file_info["SLP_predicted_frequency"], self.file_info["SLP_predicted_frequency"]],
+            )
+    
+
+    def prepare_for_repredicting(self):
+        """
+        """
     
 
     def apply_signal_reshape(
