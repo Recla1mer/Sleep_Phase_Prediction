@@ -645,6 +645,7 @@ def fuse_splitted_signals(
             return np.array([np.array(i).sum(axis=0) / len(i) for i in fused_signal], dtype=use_data_type)
         return np.array([sum(i) / len(i) for i in fused_signal], dtype=use_data_type)
     elif signal_type == "target":
+        print(signals)
         return fused_signal
 
 
@@ -1349,7 +1350,8 @@ class SleepDataManager:
         if new_data["ID"] in self.valid_datapoint_keys:
             raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
         if "shift" in new_data["ID"]:
-            raise ValueError("Value for ID key: \"ID\" must not contain the string: \"shift\"!")
+            if len(self._collect_splitted_datapoint_ids(new_data["ID"])) == 1:
+                raise ValueError("Value for ID key: \"ID\" must not contain the string: \"shift\"!")
         
         # Check if key in new_data is unknown
         for new_data_key in new_data:
@@ -1908,14 +1910,19 @@ class SleepDataManager:
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
+        # skip file information
+        next(file_generator)
+
         # find all splitted signals
         splitted_signal_ids = list()
 
         for data_point in file_generator:
+            already_appended = False
             for id_list in splitted_signal_ids:
                 if data_point["ID"] in id_list:
+                    already_appended = True
                     continue
-            if "_shift" in data_point["ID"]:
+            if "_shift" in data_point["ID"] and not already_appended:
                 splitted_signal_ids.append(self._collect_splitted_datapoint_ids(data_point["ID"]))
         
         del file_generator
@@ -1937,8 +1944,8 @@ class SleepDataManager:
 
         # create a separate file for each id list (massively reduces computation time)
         id_list_paths = list()
-        for _ in splitted_signal_ids:
-            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/splitted_signals"
+        for i in range(len(splitted_signal_ids)):
+            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/splitted_signals_" + str(i)
             id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
             id_list_paths.append(id_list_path)
 
@@ -1946,7 +1953,7 @@ class SleepDataManager:
         for data_point in file_generator:
             this_id = data_point["ID"]
             appended = False
-            for id_list_index in splitted_signal_ids:
+            for id_list_index in range(len(splitted_signal_ids)):
                 if this_id in splitted_signal_ids[id_list_index]:
                     append_to_pickle(data = data_point, file_name = id_list_paths[id_list_index])
                     appended = True
@@ -1970,11 +1977,22 @@ class SleepDataManager:
             
             del file_generator
 
+            # find valid signal keys and frequencies in data dictionaries
+            valid_signal_keys = copy.deepcopy(self.signal_keys)
+            valid_signal_keys.extend(self.predicted_signal_keys)
+            valid_signal_frequencies = copy.deepcopy(self.signal_frequency_keys)
+            valid_signal_frequencies.extend(self.predicted_signal_frequency_keys)
+            valid_signal_frequencies = [self.file_info[key] for key in valid_signal_frequencies]
+            for valid_signal_key_index in range(len(valid_signal_keys)-1, -1, -1):
+                if valid_signal_keys[valid_signal_key_index] not in splitted_data_dictionaries[0]:
+                    del valid_signal_keys[valid_signal_key_index]
+                    del valid_signal_frequencies[valid_signal_key_index]
+
             # fuse splitted data dictionaries
             fused_dictionary = fuse_splitted_signals_within_dictionaries(
                 data_dictionaries = splitted_data_dictionaries,
-                valid_signal_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"],
-                valid_signal_frequencies = [self.file_info["RRI_frequency"], self.file_info["MAD_frequency"], self.file_info["SLP_frequency"], self.file_info["SLP_predicted_frequency"], self.file_info["SLP_predicted_frequency"]],
+                valid_signal_keys = valid_signal_keys,
+                valid_signal_frequencies = valid_signal_frequencies,
             )
 
             # append fused dictionary to working file
