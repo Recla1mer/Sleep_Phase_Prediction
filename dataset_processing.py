@@ -1253,6 +1253,7 @@ class SleepDataManager:
     default_file_info["absolute_shift_deviation_seconds"] = 1800
 
     default_file_info["signal_reshape_applied"] = False
+    default_file_info["signal_split_reversed"] = False
 
     default_file_info["train_val_test_split_applied"] = False
     default_file_info["main_file_path"] = "unassigned"
@@ -1880,7 +1881,29 @@ class SleepDataManager:
 
     def reverse_signal_split(self):
         """
+        Reverses the signal split that was applied to the data during saving process.
+
+        ATTENTION:  This function should be applied after the predicted Sleep Stage signals were added to 
+                    the data.
+
+                    Afterwards the data will not be suitable for our neural network model anymore, as the
+                    signals might have overlength.
+        
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
         """
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+
+        # signal in windows not needed anymore (saves storage space)
+        self.remove_reshaped_signals()
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -1900,27 +1923,50 @@ class SleepDataManager:
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
-        # Create temporary file to save data in progress
+        # skip file information
+        next(file_generator)
+
+        # Create temporary files to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
+        self.file_info["signal_split_reversed"] = True
+
         # save file information to working file
-        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # create a separate file for each id list (massively reduces computation time)
+        id_list_paths = list()
+        for _ in splitted_signal_ids:
+            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/splitted_signals"
+            id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
+            id_list_paths.append(id_list_path)
+
+        # iterate over entries and append them to appropriate files
+        for data_point in file_generator:
+            this_id = data_point["ID"]
+            appended = False
+            for id_list_index in splitted_signal_ids:
+                if this_id in splitted_signal_ids[id_list_index]:
+                    append_to_pickle(data = data_point, file_name = id_list_paths[id_list_index])
+                    appended = True
+                    break
+            if not appended:
+                append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        del file_generator
 
         # iterate over entries in database and reverse signal split
-        for id_list in splitted_signal_ids:
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
+        for id_path in id_list_paths:
 
-            # skip file information
-            next(file_generator)
+            # Load data generator from the file
+            file_generator = load_from_pickle(id_path)
 
             # collect splitted data dictionaries
             splitted_data_dictionaries = list()
 
             for data_dict in file_generator:
-                if data_dict["ID"] in id_list:
-                    splitted_data_dictionaries.append(data_dict)
+                splitted_data_dictionaries.append(data_dict)
             
             del file_generator
 
@@ -1930,11 +1976,83 @@ class SleepDataManager:
                 valid_signal_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"],
                 valid_signal_frequencies = [self.file_info["RRI_frequency"], self.file_info["MAD_frequency"], self.file_info["SLP_frequency"], self.file_info["SLP_predicted_frequency"], self.file_info["SLP_predicted_frequency"]],
             )
+
+            # append fused dictionary to working file
+            append_to_pickle(data = fused_dictionary, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+
+        # remove all splitted signal files
+        for id_path in id_list_paths:
+            os.remove(id_path)
     
 
-    def prepare_for_repredicting(self):
+    def reapply_signal_split(self):
         """
+        This function re-applies the signal split to the data by saving each data point using a class instance
+        again.
+
+        ATTENTION:  This function is designed to prepare the data for the neural network model again to 
+                    repredict the Sleep Stage signals. Therefore it also gets rid of the predicted Sleep Stage
+                    signals.
+        
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
         """
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+
+        # skip function if reverse signal split was not applied
+        if not self.file_info["signal_split_reversed"]:
+            return
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        self.file_info["signal_split_reversed"] = False
+        self.file_info["SLP_predicted_frequency"] = None
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # iterate over entries in database and reapply signal split by saving each data point
+        working_file_class = SleepDataManager(working_file_path)
+
+        for data_point in file_generator:
+            for key in self.predicted_signal_keys:
+                if key in data_point:
+                    del data_point[key]
+            working_file_class.save(data_point, unique_id = True)
+        
+        del file_generator, working_file_class
+
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
     
 
     def apply_signal_reshape(
@@ -1971,6 +2089,10 @@ class SleepDataManager:
         priority_order: list
             The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
         """
+
+        # prevent running this function if signal split was reversed
+        if self.file_info["signal_split_reversed"]:
+            raise ValueError("This function can not be called after the signal split was reversed. The data can not be passed to the neural network model anymore. This function would therefore only lead to unnecessary storage space and computation time.")
 
         # prevent runnning this function if data was split into training, validation, and test files
         if self.file_info["train_val_test_split_applied"]:
@@ -2164,6 +2286,10 @@ class SleepDataManager:
             The order in which the keys should be ordered.
         """
 
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
         
@@ -2239,6 +2365,10 @@ class SleepDataManager:
         shuffle: bool
             If True, the data will be shuffled before splitting.
         """
+
+        # prevent running this function if signal split was reversed
+        if self.file_info["signal_split_reversed"]:
+            raise ValueError("This function can not be called after the signal split was reversed. The data can not be passed to the neural network model anymore. Splitting the data into training, validation, and test files is unnecessary.")
 
         # prevent runnning this function from secondary files (train, validation, test)
         if self.file_path != self.file_info["main_file_path"]:
