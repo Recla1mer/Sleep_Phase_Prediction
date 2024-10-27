@@ -311,11 +311,12 @@ def scale_signal(
 
 
 def calculate_optimal_shift_length(
-        signal_length: int, 
-        desired_length: int, 
-        wanted_shift_length: float,
-        absolute_shift_deviation: float,
-    ) -> float:
+        signal_length_seconds: float, 
+        desired_length_seconds: float, 
+        wanted_shift_length_seconds: float,
+        absolute_shift_deviation_seconds: float,
+        all_signal_frequencies: list,
+    ) -> int: # type: ignore
     """
     The neural network must always be applied with a signal of the same length. If the signal is longer
     than the desired length, it will be split into multiple signals of the desired length. To create more data, 
@@ -327,63 +328,95 @@ def calculate_optimal_shift_length(
 
     RETURNS:
     ------------------------------
-    best_possible_shift_length: float
-        The optimal shift length.
+    possible_shift_length: int
+        The optimal shift length in seconds.
     
     ARGUMENTS:
     ------------------------------
-    signal_length: int
-        The length of the signal.
-    desired_length: int
-        The desired length of the signal.
-    wanted_shift_length: float
-        The shift length that is desired.
-    absolute_shift_deviation: float
-        The allowed deviation from the wanted shift length.
+    signal_length_seconds: float
+        The length of the signal in seconds.
+    desired_length_seconds: float
+        The desired length of the signal in seconds.
+    wanted_shift_length_seconds: float
+        The shift length that is desired in seconds.
+    absolute_shift_deviation_seconds: float
+        The allowed deviation from the wanted shift length in seconds.
+    all_signal_frequencies: list
+        The frequencies of all signals that must be split.
     """
 
     # Calculate min and max shift length
-    min_shift = wanted_shift_length - absolute_shift_deviation
-    max_shift = wanted_shift_length + absolute_shift_deviation
+    min_shift = wanted_shift_length_seconds - absolute_shift_deviation_seconds
+    if min_shift < 1:
+        min_shift = 1
+    max_shift = wanted_shift_length_seconds + absolute_shift_deviation_seconds
+
+    # collect all shift length seconds that result in an integer number shift length for all signals
+    possible_shift_lengths = []
+    for shift_length in range(int(min_shift), int(np.ceil(max_shift))+1):
+        possible = True
+        for signal_frequency in all_signal_frequencies:
+            if shift_length * signal_frequency != int(shift_length * signal_frequency):
+                possible = False
+                break
+        if possible:
+            possible_shift_lengths.append(shift_length)
+    
+    if len(possible_shift_lengths) == 0:
+        raise ValueError("No possible shift length found. Increase allowed deviation.")
+    
+    possible_shift_lengths = np.array(possible_shift_lengths)
 
     # Initialize variables
     number_shifts = 1
 
     collect_shift_length = []
-    collect_shift_deviation = []
+    collect_wanted_deviation = []
+    collect_possible_deviation = []
 
-    integer_shift_lengths = []
-    integer_shift_length_deviation = []
-
-    # Find all possible shift lengths:
+    # Find shift lengths that result in an integer number of shifts:
     # The idea is that the number of shifts is always increased by 1, until the shift length is 
     # smaller than the minimum shift length.
     while True:
-        current_shift_length = (signal_length-desired_length) / number_shifts
-        current_shift_deviation = abs(current_shift_length - wanted_shift_length)
+        current_shift_length_seconds = (signal_length_seconds-desired_length_seconds) / number_shifts
+        current_shift_deviation_seconds = abs(current_shift_length_seconds - wanted_shift_length_seconds)
 
-        if current_shift_length < min_shift:
+        if current_shift_length_seconds < min_shift:
             break
 
-        if current_shift_length <= max_shift:
-            collect_shift_length.append(current_shift_length)
-            collect_shift_deviation.append(current_shift_deviation)
-            if int(current_shift_length) == current_shift_length:
-                integer_shift_lengths.append(current_shift_length)
-                integer_shift_length_deviation.append(current_shift_deviation)
+        if current_shift_length_seconds <= max_shift:
+            collect_shift_length.append(current_shift_length_seconds)
+            collect_wanted_deviation.append(current_shift_deviation_seconds)
+
+            deviation_to_possible_shifts = copy.deepcopy(possible_shift_lengths) - current_shift_length_seconds
+            # remove negative values (shift length must be integer, if integer is smaller than float, then not all entries will be collected)
+            this_max = max(deviation_to_possible_shifts)
+            for i in range(0, len(deviation_to_possible_shifts)):
+                if deviation_to_possible_shifts[i] < 0:
+                    deviation_to_possible_shifts[i] = this_max
+            
+            collect_possible_deviation.append(min(deviation_to_possible_shifts))
 
         number_shifts += 1
     
-    if len(collect_shift_deviation) == 0:
-        return 0
+    if len(collect_shift_length) == 0:
+        possible_wanted_deviation = np.abs(possible_shift_lengths - wanted_shift_length_seconds)
+        return possible_shift_lengths[np.argmin(possible_wanted_deviation)]
     
-    # Find the shift length with the smallest deviation, prioritize integer shift lengths
-    if len(integer_shift_lengths) > 0:
-        best_possible_shift_length = integer_shift_lengths[integer_shift_length_deviation.index(min(integer_shift_length_deviation))]
-    else:
-        best_possible_shift_length = collect_shift_length[collect_shift_deviation.index(min(collect_shift_deviation))]
+    # return shift length with smallest deviation to wanted shift length and possible shift length, 
+    # slightly prioritize deviation to possible shift length
+    collect_possible_deviation = np.array(collect_possible_deviation) + 0.1
+    collect_wanted_deviation = np.array(collect_wanted_deviation) + 0.1
+    collect_wanted_deviation *= 2
 
-    return best_possible_shift_length
+    criterium = collect_possible_deviation * collect_wanted_deviation
+    best_possible_shift_length = collect_shift_length[np.argmin(criterium)]
+
+    for possible_shift_length in possible_shift_lengths:
+        if possible_shift_length >= best_possible_shift_length:
+            return possible_shift_length
+    
+    return possible_shift_lengths[-1]
 
 
 def split_long_signal(
@@ -393,8 +426,9 @@ def split_long_signal(
         nn_signal_duration_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
         absolute_shift_deviation_seconds: int = 1800,
-        use_shift_length_seconds: float = 0
-    ) -> tuple[np.ndarray, float]:
+        all_signal_frequencies: list = [4, 1, 1/30, 1/120],
+        use_shift_length_seconds: int = 0
+    ) -> tuple[list, int]:
     """
     If the signal is longer than nn_signal_duration_seconds, the signal will be split into multiple signals of 
     length 'nn_signal_duration_seconds'. The signal will only be shifted by a certain amount though, to
@@ -427,6 +461,8 @@ def split_long_signal(
         The shift length that is desired by user.
     absolute_shift_deviation_seconds: int
         The allowed deviation from the wanted shift length.
+    all_signal_frequencies: list
+        The frequencies of all signals that must be split.
     use_shift_length_seconds: int
         If this parameter is set to a value > 0, the function will use this shift length to split the signal.
         This can be useful if you want to split multiple signals with the same shift length.
@@ -450,41 +486,33 @@ def split_long_signal(
 
     # Check if signal is shorter than those that will be passed to the neural network
     if len(signal) <= number_nn_datapoints:
-        return np.array([signal]), 0
+        raise ValueError("Signal is shorter than the desired signal length. Splitting unnecessary.")
     
-    splitted_signals = np.empty((0, number_nn_datapoints), signal.dtype) # type: ignore
+    splitted_signals = list() # type: ignore
 
     # evaluate shift length
-    if use_shift_length_seconds > 0:
-        optimal_shift_length = int(use_shift_length_seconds * target_frequency)
-        shift_length_seconds = use_shift_length_seconds
-    else:
+    if use_shift_length_seconds == 0:
         # Calculate optimal shift length
-        optimal_shift_length = calculate_optimal_shift_length(
-            signal_length = len(signal),
-            desired_length = number_nn_datapoints,
-            wanted_shift_length = wanted_shift_length_seconds * target_frequency,
-            absolute_shift_deviation = absolute_shift_deviation_seconds * target_frequency
+        use_shift_length_seconds = calculate_optimal_shift_length(
+            signal_length_seconds = len(signal) / target_frequency,
+            desired_length_seconds = nn_signal_duration_seconds,
+            wanted_shift_length_seconds = wanted_shift_length_seconds,
+            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
+            all_signal_frequencies = all_signal_frequencies
             )
-        
-        # to ensure that we not miss any datapoints by reducing the shift length to nearest integer,
-        # we will not perform the last shift within the loop, but instead use the last 'number_nn_datapoints'
-        # of the signal
-        shift_length_seconds = optimal_shift_length / target_frequency
-        optimal_shift_length = int(optimal_shift_length)
     
-    # Split signal into multiple signals by shifting, transform to windows and append to reshaped_signals
-    if optimal_shift_length > 0:
-        for start_index in range(0, len(signal)-number_nn_datapoints-optimal_shift_length+1, optimal_shift_length):
-            splitted_signals = np.append(splitted_signals, [signal[start_index:start_index+number_nn_datapoints]], axis=0)
-    else:
-        splitted_signals = np.append(splitted_signals, [signal[0:number_nn_datapoints]], axis=0)
+    optimal_shift_length = int(use_shift_length_seconds * target_frequency)
+    
+    # Split long signal into multiple signals by shifting
+    start_index = 0
+    while True:
+        end_index = start_index + number_nn_datapoints
+        splitted_signals.append(np.array(signal[start_index:end_index]))
+        start_index += optimal_shift_length
+        if end_index >= len(signal):
+            break
 
-    
-    # Append last 'number_nn_datapoints' of signal to reshaped_signals
-    splitted_signals = np.append(splitted_signals, [signal[-number_nn_datapoints:]], axis=0)
-    
-    return splitted_signals, shift_length_seconds
+    return splitted_signals, use_shift_length_seconds
 
 
 def split_signals_within_dictionary(
@@ -493,6 +521,7 @@ def split_signals_within_dictionary(
         valid_signal_keys: list,
         signal_frequencies: list,
         signal_target_frequencies: list,
+        all_signal_frequencies: list,
         nn_signal_duration_seconds: int,
         wanted_shift_length_seconds: int,
         absolute_shift_deviation_seconds: int
@@ -525,6 +554,8 @@ def split_signals_within_dictionary(
         The frequencies of the above signals.
     signal_target_frequencies: list
         The target frequencies of the above signals.
+    all_signal_frequencies: list
+        The frequencies of all signals in the database
     nn_signal_duration_seconds: int
         The duration of the signal that will be passed to the neural network.
     wanted_shift_length_seconds: int
@@ -547,19 +578,12 @@ def split_signals_within_dictionary(
             nn_signal_duration_seconds = nn_signal_duration_seconds,
             wanted_shift_length_seconds = wanted_shift_length_seconds,
             absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
+            all_signal_frequencies = all_signal_frequencies,
             use_shift_length_seconds = previous_shift_length_seconds
             )
 
         splitted_signals.append(this_splitted_signal)
-        this_shift_length_seconds = int(previous_shift_length_seconds)
         del this_splitted_signal
-
-        if "RRI" in valid_signal_keys:
-            if signal_key == "RRI":
-                signal_length_s_for_recover = len(data_dict[signal_key])/signal_frequencies[signal_key_index]
-        else:
-            signal_length_s_for_recover = len(data_dict[signal_key])/signal_frequencies[signal_key_index]
-            
 
     # create new dictionaries for splitted signals
     new_dictionaries_for_splitted_signals = list()
@@ -567,12 +591,12 @@ def split_signals_within_dictionary(
         splitted_data_dict = dict()
         for key in data_dict:
             if key in valid_signal_keys:
-                splitted_data_dict[key] = splitted_signals[valid_signal_keys.index(key)][i]
+                splitted_data_dict[key] = np.array(splitted_signals[valid_signal_keys.index(key)][i])
             else:
                 splitted_data_dict[key] = data_dict[key]
         if i > 0:
-            splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_{this_shift_length_seconds}s_x{i}"
-        splitted_data_dict["pre_split_recover"] = [signal_length_s_for_recover, previous_shift_length_seconds]
+            splitted_data_dict[id_key] = f"{data_dict[id_key]}_shift_x{i}"
+        splitted_data_dict["shift_length_seconds"] = previous_shift_length_seconds
         new_dictionaries_for_splitted_signals.append(splitted_data_dict)
     
     return new_dictionaries_for_splitted_signals
@@ -581,7 +605,6 @@ def split_signals_within_dictionary(
 def fuse_splitted_signals(
         signals: list,
         shift_length: int,
-        original_signal_length: int,
         signal_type: str = "feature"
     ):
     """
@@ -614,30 +637,16 @@ def fuse_splitted_signals(
             use_data_type = data_type
             break
 
-    # check if signal length is uniform
-    signal_length = len(signals[0])
-    for signal in signals:
-        if len(signal) != signal_length:
-            raise ValueError("All signals must have the same length.")
-
     # initialize fused signal
     fused_signal = [[i] for i in signals[0]]
 
     # fuse signals (collect duplicate entries into list)
     for signal_index in range(1, len(signals)):
-        current_length = len(fused_signal)
-        if signal_index == len(signals) - 1:
-            remaining = original_signal_length - current_length
-            last_shift = current_length-signal_length+remaining
-            for i in range(0,  signal_length-remaining):
-                fused_signal[last_shift+i].append(signals[signal_index][i])
-            for entry in signals[signal_index][-remaining:]:
-                fused_signal.append([entry])
-        else:
-            for i in range(signal_index*shift_length, len(fused_signal)):
-                fused_signal[i].append(signals[signal_index][i-signal_index*shift_length])
-            for entry in signals[signal_index][signal_length-shift_length:]:
-                fused_signal.append([entry])
+        signal_length = len(signals[signal_index])
+        for i in range(signal_index*shift_length, len(fused_signal)):
+            fused_signal[i].append(signals[signal_index][i-signal_index*shift_length])
+        for entry in signals[signal_index][signal_length-shift_length:]:
+            fused_signal.append([entry])
     
     # mean collected entries or return them
     if signal_type == "feature":
@@ -645,7 +654,6 @@ def fuse_splitted_signals(
             return np.array([np.array(i).sum(axis=0) / len(i) for i in fused_signal], dtype=use_data_type)
         return np.array([sum(i) / len(i) for i in fused_signal], dtype=use_data_type)
     elif signal_type == "target":
-        print(signals)
         return fused_signal
 
 
@@ -691,11 +699,14 @@ def fuse_splitted_signals_within_dictionaries(
         signal_type = "feature"
         if signal_key == "SLP_predicted":
             signal_type = "target"
+        
+        shift_length = data_dictionaries[0]["shift_length_seconds"] * signal_frequency
+        if shift_length != int(shift_length):
+            raise ValueError("Shift length must be an integer number of datapoints.")
 
         fused_signal = fuse_splitted_signals(
             signals = signals,
-            shift_length = int(data_dictionaries[0]["pre_split_recover"][1]*signal_frequency),
-            original_signal_length = int(np.ceil(data_dictionaries[0]["pre_split_recover"][0] * signal_frequency)),
+            shift_length = int(shift_length),
             signal_type = signal_type
         )
 
@@ -703,7 +714,7 @@ def fuse_splitted_signals_within_dictionaries(
     
     # Add all other entries to restored dictionary
     for key in data_dictionaries[0]:
-        if key not in valid_signal_keys and key != "pre_split_recover":
+        if key not in valid_signal_keys and key != "shift_length_seconds":
             restored_dictionary[key] = data_dictionaries[0][key]
     
     return restored_dictionary
@@ -1223,6 +1234,74 @@ def check_if_splitted_signals_align_with_data(
         collect_indices.append(fits_for_this_signal)
     
     return collect_indices
+
+
+def is_multiple(
+        number: float, 
+        multiple: float
+    ) -> bool:
+    """
+    Checks if "multiple" is a multiple of "number".
+
+    RETURNS:
+    ------------------------------
+    True, if "multiple" is a multiple of "number"
+    False, if "multiple" is not a multiple of "number"
+
+    ARGUMENTS:
+    ------------------------------
+    number: float,
+    multiple: float
+    """
+    i = 0
+    while True:
+        if i * number == multiple:
+            return True
+        if i * number > multiple:
+            return False
+        i += 1
+
+
+def check_signal_length(
+        data_point: dict,
+        file_info: dict,
+        signal_keys: list,
+        signal_frequency_keys: list,
+        tolerance: float = 0.05
+    ):
+    """
+    Checks if all signals in a data point have approximately the same length. Raises error if not.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    data_point: dict
+        Dictionary that stores signals that need to be checked
+    file_info: dict
+        Dictionary that holds information on signal frequencies
+    signal_keys: list
+        List of signal keys (strings) that access the signals in data_point
+    signal_frequency_keys: list
+        List of signal frequency keys (strings) that access the signals sampling frequency in file_info
+    tolerance: float
+        Tolerance that decides whether the signal lengths are close enough
+    """
+
+    temporary_signal_length_seconds = list()
+
+    for signal_key_index in range(0, len(signal_keys)):
+        signal_key = signal_keys[signal_key_index]
+        signal_frequency_key = signal_frequency_keys[signal_key_index]
+        if signal_key in data_point:
+            temporary_signal_length_seconds.append(len(data_point[signal_key]) / file_info[signal_frequency_key])
+
+    if len(temporary_signal_length_seconds) > 1:
+        temporary_signal_length_seconds = np.array(temporary_signal_length_seconds)
+        if not np.allclose(temporary_signal_length_seconds, np.min(temporary_signal_length_seconds), rtol = tolerance):
+            raise ValueError("Signal lengths are not uniform. Check signal lengths and frequencies.")
     
 
 """
@@ -1240,29 +1319,28 @@ class SleepDataManager:
     predicted_signal_keys = ["SLP_predicted", "SLP_predicted_probability"]
     predicted_signal_frequency_keys = ["SLP_predicted_frequency", "SLP_predicted_frequency"] # same order is important
     
-    valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability", "SLP_predicted_frequency"]
-    
-    default_file_info = dict()
-    default_file_info["RRI_frequency"] = 4
-    default_file_info["MAD_frequency"] = 1
-    default_file_info["SLP_frequency"] = 1/30
+    file_info = dict()
+    file_info["RRI_frequency"] = 4
+    file_info["MAD_frequency"] = 1
+    file_info["SLP_frequency"] = 1/30
 
-    default_file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+    file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
 
-    default_file_info["signal_length_seconds"] = 36000
-    default_file_info["wanted_shift_length_seconds"] = 5400
-    default_file_info["absolute_shift_deviation_seconds"] = 1800
+    file_info["signal_length_seconds"] = 36000
+    file_info["wanted_shift_length_seconds"] = 5400
+    file_info["absolute_shift_deviation_seconds"] = 1800
 
-    default_file_info["signal_reshape_applied"] = False
-    default_file_info["signal_split_reversed"] = False
+    file_info["signal_reshape_applied"] = False
+    file_info["signal_split_reversed"] = False
 
-    default_file_info["train_val_test_split_applied"] = False
-    default_file_info["main_file_path"] = "unassigned"
-    default_file_info["train_file_path"] = "unassigned"
-    default_file_info["validation_file_path"] = "unassigned"
-    default_file_info["test_file_path"] = "unassigned"
+    file_info["train_val_test_split_applied"] = False
+    file_info["main_file_path"] = "unassigned"
+    file_info["train_file_path"] = "unassigned"
+    file_info["validation_file_path"] = "unassigned"
+    file_info["test_file_path"] = "unassigned"
 
-    default_file_info["SLP_predicted_frequency"] = None
+    file_info["SLP_predicted_frequency"] = None
+    file_info["SLP_expected_predicted_frequency"] = 1/120
 
 
     def __init__(self, file_path):
@@ -1311,7 +1389,19 @@ class SleepDataManager:
 
         # Check if file exists, if not create it and save default file information
         if not os.path.exists(self._file_path):
-            save_to_pickle(data = self.default_file_info, file_name = self._file_path)
+            # check if default signal frequencies are multiples of each other
+            all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
+            all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+            all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
+            minimum_signal_frequency = min(all_signal_frequencies)
+            if minimum_signal_frequency <= 0:
+                raise ValueError("Signal Frequencies must be larger than 0!")
+
+            for signal_frequency in all_signal_frequencies:
+                if not is_multiple(minimum_signal_frequency, signal_frequency):
+                    raise ValueError("All default signal frequencies must be multiples of each other. This ensures that signals can be split and fused correctly.")
+            
+            save_to_pickle(data = self.file_info, file_name = self._file_path)
     
 
     def _correct_datapoint(self, new_data):
@@ -1346,8 +1436,10 @@ class SleepDataManager:
         if "ID" not in new_data:
             raise ValueError("The ID key: \"ID\" must be provided in the datapoint.")
         
+        valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability", "SLP_predicted_frequency"]
+        
         # Check if ID key is misleading
-        if new_data["ID"] in self.valid_datapoint_keys:
+        if new_data["ID"] in valid_datapoint_keys:
             raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
         if "shift" in new_data["ID"]:
             if len(self._collect_splitted_datapoint_ids(new_data["ID"])) == 1:
@@ -1355,7 +1447,7 @@ class SleepDataManager:
         
         # Check if key in new_data is unknown
         for new_data_key in new_data:
-            if new_data_key not in self.valid_datapoint_keys:
+            if new_data_key not in valid_datapoint_keys:
                 raise ValueError(f"Unknown key in datapoint: {new_data_key}")
         
         # Check if frequency keys are provided if signal keys are provided
@@ -1386,6 +1478,20 @@ class SleepDataManager:
                 if self.file_info[pred_signal_frequency_key] == None:
 
                     """
+                    Check if predicted signal frequency is appropriate (must be multiple of another signal frequency)
+                    """
+
+                    all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
+                    all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+                    all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
+                    minimum_signal_frequency = min(all_signal_frequencies)
+                    if minimum_signal_frequency <= 0:
+                        raise ValueError("Signal Frequencies must be larger than 0!")
+
+                    if not is_multiple(minimum_signal_frequency, new_data[pred_signal_frequency_key]):
+                        raise ValueError(f"All signal frequencies must be multiples of each other. Change the predicted signal frequency (Sorry, I know this sucks).\nMinimum Signal Frequency: {min(all_signal_frequencies)}")
+
+                    """
                     Change predicted signal frequency key in file information
                     """
 
@@ -1394,7 +1500,7 @@ class SleepDataManager:
                     working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
                     # Change file information
-                    self.file_info["SLP_predicted_frequency"] = new_data[pred_signal_frequency_key]
+                    self.file_info[pred_signal_frequency_key] = new_data[pred_signal_frequency_key]
 
                     # save file information to working file
                     save_to_pickle(data = self.file_info, file_name = working_file_path)
@@ -1409,7 +1515,7 @@ class SleepDataManager:
                 
                 if self.file_info[pred_signal_frequency_key] != new_data[pred_signal_frequency_key]:
                     raise ValueError(f"Predicted signal frequency does not match the frequency in the file. Frequency in file: {self.file_info[pred_signal_frequency_key]}, frequency in new data: {new_data[pred_signal_frequency_key]}")
-                if len(new_data[pred_signal_key]) > round(self.file_info["signal_length_seconds"] * new_data[pred_signal_frequency_key]):
+                if len(new_data[pred_signal_key]) > np.ceil(self.file_info["signal_length_seconds"] * new_data[pred_signal_frequency_key]):
                     raise ValueError(f"Predicted signal is too long. Predicted signal expected to be added after all datapoints were added, modified and passed to neural network model. Therefore splitting it is prohibited, as it should match the signal length, unless something went wrong.")
 
         
@@ -1461,7 +1567,7 @@ class SleepDataManager:
             signal_key = self.signal_keys[signal_key_index]
             signal_frequency_key = self.signal_frequency_keys[signal_key_index]
             if signal_key in new_data:   
-                if len(new_data[signal_key]) > round(self.file_info["signal_length_seconds"] * new_data[signal_frequency_key]):
+                if len(new_data[signal_key]) > np.ceil(self.file_info["signal_length_seconds"] * new_data[signal_frequency_key]):
                     split_signals_needed = True
                     break
                 
@@ -1473,16 +1579,21 @@ class SleepDataManager:
             corresponding_frequencies = [new_data[key] for key in signal_frequency_keys_in_new_data]
             corresponding_target_frequencies = [self.file_info[key] for key in signal_frequency_keys_in_new_data]
 
+            all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
+            all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+            all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
+
             splitted_data_dictionaries = split_signals_within_dictionary(
                 data_dict = new_data,
                 id_key = "ID",
                 valid_signal_keys = signal_keys_in_new_data,
                 signal_frequencies = corresponding_frequencies,
                 signal_target_frequencies = corresponding_target_frequencies,
+                all_signal_frequencies = all_signal_frequencies,
                 nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
                 wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"],
                 absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
-                ) # returns a list of dictionaries, len == 1 if signal was not split
+                ) # returns a list of dictionaries
 
             return splitted_data_dictionaries
         else:
@@ -1527,6 +1638,14 @@ class SleepDataManager:
         if "sleep_stage_label" in new_data:
             del new_data["sleep_stage_label"]
         
+        # check if signal length is uniform in new data point (in case ID does not exist in database)
+        check_signal_length(
+            data_point = new_data,
+            file_info = self.file_info,
+            signal_keys = self.signal_keys,
+            signal_frequency_keys = self.signal_frequency_keys,
+        )
+        
         if unique_id:
             # Append new data point to the file
             append_to_pickle(data = new_data, file_name = self.file_path)
@@ -1548,9 +1667,19 @@ class SleepDataManager:
             for data_point in file_generator:
                 if data_point["ID"] == new_data["ID"]:
                     not_appended = False
+
+                    # overwrite signals in datapoint if possible
                     if overwrite_id:
                         for key in new_data:
                             data_point[key] = new_data[key]
+                        
+                        # check if signal length is uniform with new signals
+                        check_signal_length(
+                            data_point = data_point,
+                            file_info = self.file_info,
+                            signal_keys = self.signal_keys,
+                            signal_frequency_keys = self.signal_frequency_keys,
+                        )
                     else:
                         overwrite_denied = True
                 
@@ -1697,7 +1826,7 @@ class SleepDataManager:
         elif isinstance(key_id_index, int):
             load_index = True
         else:
-            raise ValueError("\'key_id_index\' must be a string, integer, or a key from the valid_datapoint_keys (also a string).")
+            raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -1728,7 +1857,7 @@ class SleepDataManager:
             if count_data_points_missing_key > 0:
                 print(f"Attention: {count_data_points_missing_key} data points are missing the key {key_id_index}")
             
-            return np.array(values_for_key_from_all_data_points)
+            return values_for_key_from_all_data_points
 
         elif load_index:
             count = 0
@@ -1813,7 +1942,7 @@ class SleepDataManager:
 
         # check if key_id_index is an id, a key, or an index
         remove_keys = False
-        valid_keys = ["ID", "RRI", "MAD", "SLP"]
+        valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
         remove_id = False
 
         if isinstance(key_id_index, str):
@@ -1839,7 +1968,7 @@ class SleepDataManager:
             del file_generator
             return
         else:
-            raise ValueError("\'key_id_index\' must be a string, integer, or a key from the valid_datapoint_keys (also a string).")
+            raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2013,8 +2142,11 @@ class SleepDataManager:
 
     def reapply_signal_split(self):
         """
-        This function re-applies the signal split to the data by saving each data point using a class instance
-        again.
+        This function re-applies the signal split to the data by saving each data point using a class 
+        instance.
+
+        This function is designed to reprepare the data for passing it to the neural network. Predicted 
+        signals will therefore be removed.
 
         ATTENTION:  This function is designed to prepare the data for the neural network model again to 
                     repredict the Sleep Stage signals. Therefore it also gets rid of the predicted Sleep Stage
@@ -2036,6 +2168,8 @@ class SleepDataManager:
         # skip function if reverse signal split was not applied
         if not self.file_info["signal_split_reversed"]:
             return
+        
+        self.remove_predicted_signals()
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2048,7 +2182,6 @@ class SleepDataManager:
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
         self.file_info["signal_split_reversed"] = False
-        self.file_info["SLP_predicted_frequency"] = None
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)
@@ -2279,6 +2412,66 @@ class SleepDataManager:
                     del data_point[pred_signal_key]
 
             append_to_pickle(data = data_point, file_name = working_file_path)
+        
+        # Remove the old file and rename the working file
+        try:
+            os.remove(self.file_path)
+        except:
+            pass
+
+        os.rename(working_file_path, self.file_path)
+    
+
+    def crop_predicted_signals(self):
+        """
+        If you pass a signal to the neural network, which has less datapoints than it was trained with, then 
+        the signal will be padded with numbers to match the length. The resulting predictions will therefore 
+        have overlength and can be cropped using this function, to match the original signal length.
+
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
+        """
+
+        # prevent runnning this function if data was split into training, validation, and test files
+        if self.file_info["train_val_test_split_applied"]:
+            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+            
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+        
+        # Create temporary file to save data in progress
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+
+        # iterate over database
+        for datapoint in file_generator:
+            # calculate signal length in seconds from signals
+            temporary_signal_length_seconds = list()
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                if signal_key in datapoint:
+                    temporary_signal_length_seconds.append(len(datapoint[signal_key]) / self.file_info[signal_frequency_key])
+            signal_length_seconds = int(max(temporary_signal_length_seconds))
+
+            # crop predicted signals to respective signal length
+            for pred_signal_key_index in range(len(self.predicted_signal_keys)):
+                pred_signal_key = self.predicted_signal_keys[pred_signal_key_index]
+                pred_signal_frequency = self.file_info[self.predicted_signal_frequency_keys[pred_signal_key_index]]
+                pred_signal_length = signal_length_seconds * pred_signal_frequency
+                if pred_signal_key in datapoint:
+                    datapoint[pred_signal_key] = datapoint[pred_signal_key][:pred_signal_length]
+            
+            # append datapoint to working file
+            append_to_pickle(data = datapoint, file_name = working_file_path)
         
         # Remove the old file and rename the working file
         try:
@@ -2670,6 +2863,18 @@ class SleepDataManager:
                 print(f"Attention: Key {key} is a reserved key and cannot be changed.")
                 continue
             self.file_info[key] = new_file_info[key]
+        
+        # check if signal frequencies are multiples of each other
+        all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
+        all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+        all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
+        minimum_signal_frequency = min(all_signal_frequencies)
+        if minimum_signal_frequency <= 0:
+            raise ValueError("Signal Frequencies must be larger than 0!")
+
+        for signal_frequency in all_signal_frequencies:
+            if not is_multiple(minimum_signal_frequency, signal_frequency):
+                raise ValueError("All default signal frequencies must be multiples of each other. This ensures that signals can be split and fused correctly.")
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)
