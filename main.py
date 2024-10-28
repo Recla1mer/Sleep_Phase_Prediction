@@ -12,21 +12,17 @@ from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, 
 from dataset_processing import *
 from neural_network_model import *
 
-# HARD CODED SIGNAL PROCESSING PARAMETERS
 
-# parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
-sleep_data_manager_parameters = {
-    "RRI_frequency": 4,
-    "MAD_frequency": 1,
-    "SLP_frequency": 1/30,
-    "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
-    "signal_length_seconds": 36000,
-    "wanted_shift_length_seconds": 5400,
-    "absolute_shift_deviation_seconds": 1800
-}
+"""
+=====================================
+Default Signal Processing Parameters
+=====================================
+"""
 
+# parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
+# function in dataset_processing.py
 window_reshape_parameters = {
-    "nn_signal_duration_seconds": sleep_data_manager_parameters["signal_length_seconds"],
+    "nn_signal_duration_seconds": 36000,
     "number_windows": 1197,
     "window_duration_seconds": 120,
     "overlap_seconds": 90,
@@ -35,10 +31,71 @@ window_reshape_parameters = {
     "pad_target_with": 0
 }
 
+# parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
+sleep_data_manager_parameters = {
+    "RRI_frequency": 4,
+    "MAD_frequency": 1,
+    "SLP_frequency": 1/30,
+    "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+    "signal_length_seconds": window_reshape_parameters["nn_signal_duration_seconds"],
+    "wanted_shift_length_seconds": 5400,
+    "absolute_shift_deviation_seconds": 1800,
+    "SLP_expected_predicted_frequency": 1/window_reshape_parameters["window_duration_seconds"],
+}
+
 dataset_class_transform_parameters = {
     "transform": ToTensor(), 
     "target_transform": None,
 }
+
+
+def check_parameters(parameters: dict):
+    """
+    This function checks if a correct computation is guaranteed by the chosen signal processing parameters.
+
+    Running this function does not mean that the parameters ensure an error-free computation. But further
+    along the way, especially when calculating number of datapoints from signal duration and sampling 
+    frequency, you can be sure that the computation will not lead to unexpected results.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    parameters: dict
+        the parameters to check
+    """
+    frequencies = [parameters["RRI_frequency"], parameters["MAD_frequency"], parameters["SLP_frequency"]]
+
+    for freq in frequencies:
+        # Calculate number of datapoints from signal length in seconds
+        number_nn_datapoints = parameters["signal_length_seconds"] * freq
+        datapoints_per_window = parameters["window_duration_seconds"] * freq
+        window_overlap = parameters["overlap_seconds"] * freq
+        
+        # Check parameters
+        
+        if int(number_nn_datapoints) != number_nn_datapoints:
+            raise ValueError("Number of datapoints must be an integer. Choose 'signal_length_seconds' and 'target_frequency' accordingly.")
+        number_nn_datapoints = int(number_nn_datapoints)
+
+        if int(datapoints_per_window) != datapoints_per_window:
+            raise ValueError("Datapoints per window must be an integer. Choose 'window_duration_seconds' and 'target_frequency' accordingly.")
+        datapoints_per_window = int(datapoints_per_window)
+
+        if int(window_overlap) != window_overlap:
+            raise ValueError("Window overlap must be an integer. Choose 'overlap_seconds' and 'target_frequency' accordingly.")
+        window_overlap = int(window_overlap)
+
+        check_overlap = calculate_overlap(
+            signal_length = number_nn_datapoints, 
+            number_windows = parameters["number_windows"], 
+            datapoints_per_window = datapoints_per_window
+            )
+    
+        if window_overlap != check_overlap:
+            raise ValueError("Overlap does not match the number of windows and datapoints per window. Check parameters.")
 
 
 """
@@ -67,8 +124,8 @@ def Process_SHHS_Dataset(
 
     The datapoints from the SHHS dataset are resaved to a pickle file using the SleepDataManager class.
     The class is designed to save the data in a uniform way. How exactly can be altered using the
-    change_data_parameters argument. Afterwards we will use the class to split the data into training,
-    validation, and test pids (individual files).
+    parameters this function accesses from "path_to_signal_processing_parameters". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
 
     If already processed, the function will only shuffle the data in the pids again.
 
@@ -112,6 +169,7 @@ def Process_SHHS_Dataset(
     # load signal processing parameters
     with open(path_to_signal_processing_parameters, "rb") as f:
         signal_processing_parameters = pickle.load(f)
+        check_parameters(signal_processing_parameters)
     
     # access data manager parameters and update them
     change_data_parameters = {key: signal_processing_parameters[key] for key in sleep_data_manager_parameters}
@@ -183,8 +241,8 @@ def Process_GIF_Dataset(
 
     The datapoints from the GIF dataset are resaved to a pickle file using the SleepDataManager class.
     The class is designed to save the data in a uniform way. How exactly can be altered using the
-    change_data_parameters argument. Afterwards we will use the class to split the data into training,
-    validation, and test pids (individual files).
+    parameters this function accesses from "path_to_signal_processing_parameters". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
 
     If already processed, the function will only shuffle the data in the pids again.
 
@@ -211,6 +269,7 @@ def Process_GIF_Dataset(
     # load signal processing parameters
     with open(path_to_signal_processing_parameters, "rb") as f:
         signal_processing_parameters = pickle.load(f)
+        check_parameters(signal_processing_parameters)
     
     # access data manager parameters and update them
     change_data_parameters = {key: signal_processing_parameters[key] for key in sleep_data_manager_parameters}
@@ -287,7 +346,7 @@ def main_model_training(
 
     The Data is accessed using the CustomSleepDataset class from neural_network_model.py. Before returning 
     the data, this class reshapes the data into windows. Adjustments can be made using the 
-    window_reshape_parameters argument.
+    parameters this function accesses from "path_to_signal_processing_parameters".
 
     Afterwards the neural network model is trained and tested. The accuracy results are saved in a pickle file
     and the model state dictionary is saved in a .pth file.
@@ -296,12 +355,8 @@ def main_model_training(
     {
         "train_accuracy": train_accuracy for each epoch (list),
         "train_avg_loss": train_avg_loss for each epoch (list),
-        "train_predicted_results": all predicted results for last epoch (list),
-        "train_actual_results": all actual results for last epoch (list),
         "test_accuracy": test_accuracy for each epoch (list),
         "test_avg_loss": test_avg_loss for each epoch (list),
-        "test_predicted_results": all predicted results for last epoch (list),
-        "test_actual_results": all actual results for last epoch (list)
     }
 
     
@@ -446,11 +501,6 @@ def main_model_training(
         print(f"\nEpoch {t+1}:")
         print("-"*130)
 
-        # get all the results from the training and testing loop in the last epoch
-        collect_results = False
-        if t == number_epochs - 1:
-            collect_results = True
-
         train_results = train_loop(
             dataloader = train_dataloader,
             model = neural_network_model,
@@ -459,8 +509,7 @@ def main_model_training(
             optimizer_fn = optimizer_function,
             lr_scheduler = learning_rate_scheduler,
             current_epoch = t,
-            batch_size = batch_size,
-            collect_results = collect_results
+            batch_size = batch_size
         )
         train_avg_loss.append(train_results[0])
         train_accuracy.append(train_results[1])
@@ -470,8 +519,7 @@ def main_model_training(
             model = neural_network_model,
             device = device,
             loss_fn = loss_function,
-            batch_size = batch_size,
-            collect_results = collect_results
+            batch_size = batch_size
         )
 
         test_avg_loss.append(test_results[0])
@@ -489,12 +537,8 @@ def main_model_training(
     accuracy_values = {
         "train_accuracy": train_accuracy,
         "train_avg_loss": train_avg_loss,
-        "train_predicted_results": train_results[2],
-        "train_actual_results": train_results[3],
         "test_accuracy": test_accuracy,
-        "test_avg_loss": test_avg_loss,
-        "test_predicted_results": test_results[2],
-        "test_actual_results": test_results[3]
+        "test_avg_loss": test_avg_loss
     }
 
     save_to_pickle(accuracy_values, save_accuracy_values_path)
@@ -547,6 +591,14 @@ def print_model_accuracy(
         average parameter of the sklearn functions: precision_score, recall_score, f1_score
     number_of_decimals: int
         the number of decimals to round the results to
+    
+        # collect results if requested
+            if collect_results:
+                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                
+                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
+                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
     """
 
     # variables to store results
@@ -915,7 +967,7 @@ def main_model_predicting(
 
                 actual_original_structure = data_dict["SLP"]
 
-                signal_length_seconds = len(copy.deepcopy(actual_original_structure)) / slp_frequency
+                original_signal_length = len(copy.deepcopy(actual_original_structure))
 
                 # access processed target, reshape to overlapping windows and apply transformations
                 slp = reshape_signal_to_overlapping_windows(
@@ -929,6 +981,8 @@ def main_model_predicting(
                     slp = slp.astype(np.float32)
                 if target_transform:
                     slp = target_transform(slp)
+            else:
+                original_signal_length = int(np.ceil(signal_length_seconds * slp_frequency))
             
             """
             Applying Neural Network Model
@@ -943,12 +997,24 @@ def main_model_predicting(
             predictions_in_windows = predictions_in_windows.cpu().numpy()
 
             # reshape windows to original signal structure
-            predictions_probability = np.empty((signal_length_seconds*slp_frequency, 0))
+            # Lot of stuff happening below, so i explain the process:
+            # predictions_in_windows is a 2D array with shape (windows_per_signal, number_sleep_stages)
+            predictions_probability = np.empty((original_signal_length, 0))
             for i in range(predictions_in_windows.shape[1]):
+                # get a list of probabilities for this sleep stage
+                this_slp_stage_pred_probability = copy.deepcopy(predictions_in_windows[:, i])
+                # transform every probability to a list with the size of the SLP windows, with every entry 
+                # being the probability
+                pred_prob_expanded_to_windows = []
+                for pred_prob in this_slp_stage_pred_probability:
+                    pred_prob_expanded_to_windows.append([pred_prob for _ in range(int(common_window_reshape_parameters["window_duration_seconds"]*slp_frequency))])
+                # if we now pass this list to the reverse window reshape function, using the frequency of the
+                # SLP signal, we get the probability for this sleep stage in the same sampling frequency as 
+                # the SLP signal
                 temp_original_structure = reverse_signal_to_windows_reshape(
-                    signal_in_windows = predictions_in_windows[:, i],
+                    signal_in_windows = pred_prob_expanded_to_windows,
                     target_frequency = slp_frequency,
-                    original_signal_length = round(signal_length_seconds*slp_frequency),
+                    original_signal_length = original_signal_length,
                     number_windows = common_window_reshape_parameters["number_windows"],
                     window_duration_seconds = common_window_reshape_parameters["window_duration_seconds"],
                     overlap_seconds = common_window_reshape_parameters["overlap_seconds"],
@@ -968,7 +1034,7 @@ def main_model_predicting(
                     "Predicted_Probabilities": predictions_probability,
                     "Predicted": predictions_original_structure,
                     "Actual": actual_original_structure,
-                    "Predicted_in_windows": predictions_in_windows,
+                    "Predicted_in_windows": predictions_in_windows.argmax(1).flatten(),
                     "Actual_in_windows": slp
                 }
 
@@ -1022,14 +1088,61 @@ if __name__ == "__main__":
         "shuffle": True
     }
 
+    window_reshape_parameters = {
+    "nn_signal_duration_seconds": 36000,
+    "number_windows": 1197,
+    "window_duration_seconds": 120,
+    "overlap_seconds": 90,
+    "priority_order": [3, 2, 1, 0],
+    "pad_feature_with": 0,
+    "pad_target_with": 0
+}
+
+    # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
+    sleep_data_manager_parameters = {
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+        "signal_length_seconds": window_reshape_parameters["nn_signal_duration_seconds"],
+        "wanted_shift_length_seconds": 5400,
+        "absolute_shift_deviation_seconds": 1800,
+        "SLP_expected_predicted_frequency": 1/window_reshape_parameters["window_duration_seconds"],
+    }
+
+    dataset_class_transform_parameters = {
+        "transform": ToTensor(), 
+        "target_transform": None,
+    }
+
     original_shhs_data_path = "Raw_Data/SHHS_dataset.h5"
     original_gif_data_path = "Raw_Data/GIF_dataset.h5"
 
     processed_shhs_path = "Processed_Data/shhs_data.pkl"
     processed_gif_path = "Processed_Data/gif_data.pkl"
 
-    save_accuracy_values_path = "Model_Accuracy/SSM"
-    save_model_state_path = "Model_State/SSM"
+    model_directory_path = "Neural_Network/"
+
+    signal_processing_parameters_path = model_directory_path + "Signal_Processing_Parameters.pkl"
+    model_state_path = model_directory_path + "Model_State.pth"
+    loss_per_epoch_path = model_directory_path + "Loss_per_Epoch.pkl"
+    model_accuracy_path = model_directory_path + "Model_Accuracy.pkl"
+
+
+    """
+    ---------------------------------
+    Set Signal Processing Parameters
+    ---------------------------------
+    """
+
+    signal_processing_parameters = dict()
+    signal_processing_parameters.update(window_reshape_parameters)
+    signal_processing_parameters.update(sleep_data_manager_parameters)
+    signal_processing_parameters.update(dataset_class_transform_parameters)
+
+    if os.path.isfile(signal_processing_parameters_path):
+        os.remove(signal_processing_parameters_path)
+    save_to_pickle(signal_processing_parameters, signal_processing_parameters_path)
 
     """
     ------------------------
@@ -1037,13 +1150,21 @@ if __name__ == "__main__":
     ------------------------
     """
 
-    # Process_SHHS_Dataset(
-    #     computation_mode = computation_mode,
-    #     path_to_shhs_dataset = original_shhs_data_path, 
-    #     path_to_save_processed_data = processed_shhs_path,
-    #     change_data_parameters = {},
-    #     ** split_data_parameters
-    #     )
+    Process_SHHS_Dataset(
+        path_to_shhs_dataset = original_shhs_data_path,
+        path_to_save_processed_data = processed_shhs_path,
+        path_to_signal_processing_parameters: str,
+        train_size = 0.8, 
+        validation_size = 0.1, 
+        test_size = 0.1, 
+        random_state = None, 
+        shuffle = True,
+
+        path_to_shhs_dataset = original_shhs_data_path, 
+        path_to_save_processed_data = processed_shhs_path,
+        change_data_parameters = {},
+        ** split_data_parameters
+        )
     
     """
     ------------------------------

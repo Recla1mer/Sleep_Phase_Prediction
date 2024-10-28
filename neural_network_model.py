@@ -901,7 +901,7 @@ Looping Over The Dataset
 """
 
 # TRAINING LOOP
-def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size, collect_results = False):
+def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size):
     """
     Iterate over the training dataset and try to converge to optimal parameters.
 
@@ -936,8 +936,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         Current epoch number
     batch_size : int
         Number of samples in each batch
-    collect_results : bool
-        If True, predicted and actual results are collected
     """
 
     # get number of windows the signals are reshaped to
@@ -951,8 +949,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
     # variables to save accuracy progress
     train_loss, correct = 0, 0
-    predicted_results = np.empty((0, windows_per_signal))
-    actual_results = np.empty((0, windows_per_signal))
 
     # variables to track progress
     size = len(dataloader.dataset)
@@ -995,14 +991,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         correct += this_correct_predicted
         total_number_predictions += this_number_predictions
 
-        # collect results if requested
-        if collect_results:
-            this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-            this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-            
-            predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
-            actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
-
         # print progress bar
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
@@ -1014,11 +1002,11 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     train_loss /= num_batches
     correct /= total_number_predictions
     
-    return train_loss, correct, predicted_results, actual_results
+    return train_loss, correct
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = False):
+def test_loop(dataloader, model, device, loss_fn, batch_size):
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -1068,8 +1056,6 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = 
 
     # variables to save accuracy progress
     test_loss, correct = 0, 0
-    predicted_results = np.empty((0, windows_per_signal))
-    actual_results = np.empty((0, windows_per_signal))
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
@@ -1097,14 +1083,6 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = 
             correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
             total_number_predictions += slp.shape[0]
 
-            # collect results if requested
-            if collect_results:
-                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                
-                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
-                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
-
             # print progress bar
             datapoints_done = (batch+1) * batch_size
             if datapoints_done > size:
@@ -1115,7 +1093,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, collect_results = 
     correct /= total_number_predictions
     print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-    return test_loss, correct, predicted_results, actual_results
+    return test_loss, correct
 
 
 # Example usage
