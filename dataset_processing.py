@@ -3,9 +3,8 @@ Author: Johannes Peter Knoll
 
 This file contains functions we need to preprocess the data for the neural network.
 
-The most important part is the class 'SleepDataManager', which will help us to store the data from multiple
-sources in one place. It will make sure that the data is uniform and that we can access it in a 
-memory-efficient way.
+The most important part is the class 'SleepDataManager'. 
+It will make sure that the data is uniform and that we can access it in a memory-efficient way.
 
 All of this files functions and the class are thoroughly described and tested in 'Processing_Demo.ipynb'.
 
@@ -322,9 +321,12 @@ def calculate_optimal_shift_length(
     than the desired length, it will be split into multiple signals of the desired length. To create more data, 
     the signal will only be shifted by a certain amount. 
     
+    Because every signal has a different sampling frequency, the shift length must be chosen so, that
+    the factor of the shift length and every signal frequency is an integer number.
+
     This function calculates the optimal shift length. It tries to find the shift length that is closest to the
-    wanted shift length, but still within the allowed deviation. If a shift length within the deviation is an
-    integer, it will be preferred over a non-integer shift length.
+    wanted shift length, but still fulfills the condition above. If no shift length can be found within the
+    allowed deviation, the function raises an error.
 
     RETURNS:
     ------------------------------
@@ -1213,28 +1215,11 @@ def create_directories_along_path(file_path: str):
                 os.mkdir(path)
 
 
-def check_if_splitted_signals_align_with_data(
-        signal_to_split: list,
-        splitted_signals: list,
-    ):
-    """
-    Function was used to check something. Isn't implemented currently. Still leaving it here for now.
-    """
-
-    collect_indices = list()
-    multiplier = 1
-    if len(splitted_signals[0]) < 36000:
-        multiplier = 120
-    for splitted_signal in splitted_signals:
-        splitted_signal = np.array(splitted_signal) # type: ignore
-        fits_for_this_signal = list()
-        for j in range(0, len(signal_to_split)-len(splitted_signal)+1):
-            if np.array_equal(signal_to_split[j:j+len(splitted_signal)], splitted_signal):
-                fits_for_this_signal.append(j*multiplier)
-        collect_indices.append(fits_for_this_signal)
-    
-    return collect_indices
-
+"""
+================
+Signal Checking
+================
+"""
 
 def is_multiple(
         number: float, 
@@ -1740,6 +1725,10 @@ class SleepDataManager:
             If True, the ID will be expected to be unique and directly appended to the file.
             if False, current files will be checked to see if the ID already exists.
         """
+
+        # prevent running this function if signal split was reversed
+        if self.file_info["signal_split_reversed"]:
+            raise ValueError("This function can not be called after the signal split was reversed.")
 
         # prevent runnning this function from secondary files (train, validation, test)
         if self.file_path != self.file_info["main_file_path"]:
