@@ -1110,6 +1110,7 @@ if __name__ == "__main__":
     processed_gif_path = "Processed_Data/gif_data.pkl"
 
     model_directory_path = "Neural_Network/"
+    create_directories_along_path(model_directory_path)
 
     project_configuration_file = "Project_Configuration.pkl"
 
@@ -1226,6 +1227,7 @@ if __name__ == "__main__":
     """
 
     model_directory_path = "SSM_Original/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1270,6 +1272,7 @@ if __name__ == "__main__":
     """
     
     model_directory_path = "Yao_Original/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1325,6 +1328,7 @@ if __name__ == "__main__":
     """
 
     model_directory_path = "SSM_Artifect/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1369,6 +1373,7 @@ if __name__ == "__main__":
     """
     
     model_directory_path = "Yao_Artifect/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1423,6 +1428,7 @@ if __name__ == "__main__":
     """
 
     model_directory_path = "SSM_no_overlap/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1467,6 +1473,7 @@ if __name__ == "__main__":
     """
     
     model_directory_path = "Yao_Original/"
+    create_directories_along_path(model_directory_path)
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
