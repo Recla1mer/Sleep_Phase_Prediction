@@ -39,6 +39,7 @@ class CustomSleepDataset(Dataset):
             self, 
             path_to_data: str, 
             transform = None,
+            target_transform = None,
             pad_feature_with = 0,
             pad_target_with = 0,
             number_windows: int = 1197, 
@@ -71,6 +72,7 @@ class CustomSleepDataset(Dataset):
         """
 
         self.transform = transform
+        self.target_transform = target_transform
         
         self.data_manager = SleepDataManager(path_to_data)
         self.rri_frequency = self.data_manager.file_info["RRI_frequency"]
@@ -141,6 +143,9 @@ class CustomSleepDataset(Dataset):
                 mad_sample = self.transform(mad_sample)
             except:
                 pass
+            
+        if self.target_transform:
+            slp_labels = self.target_transform(slp_labels)
         
         return rri_sample, mad_sample, slp_labels
 
