@@ -213,12 +213,12 @@ def Process_SHHS_Dataset(
     
     # access parameters used for splitting the data
     split_data_params = {key: project_configuration[key] for key in split_data_parameters}
-    
-    # access data manager parameters
-    sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
-    shhs_data_manager.change_file_information(sdm_params)
 
     if not os.path.exists(shhs_training_data_path):
+
+        # access data manager parameters
+        sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
+        shhs_data_manager.change_file_information(sdm_params)
 
         # access the SHHS dataset
         shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
@@ -302,12 +302,12 @@ def Process_GIF_Dataset(
     
     # access parameters used for splitting the data
     split_data_params = {key: project_configuration[key] for key in split_data_parameters}
-    
-    # access data manager parameters
-    sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
-    gif_data_manager.change_file_information(sdm_params)
 
     if not os.path.exists(gif_training_data_path):
+
+        # access data manager parameters
+        sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
+        gif_data_manager.change_file_information(sdm_params)
 
         # access the GIF dataset
         gif_dataset = h5py.File(path_to_gif_dataset, 'r')
@@ -359,7 +359,7 @@ Training And Testing Neural Network Model
 
 
 def main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
         path_to_model_state = None,
@@ -437,6 +437,7 @@ def main_model_training(
     
     # access window_reshape_parameters
     CustomDatasetKeywords = {key: project_configuration[key] for key in window_reshape_parameters}
+    del CustomDatasetKeywords["nn_signal_duration_seconds"]
 
     # add transform parameters
     for key in dataset_class_transform_parameters:
@@ -755,7 +756,7 @@ Applying Trained Neural Network Model
 
 
 def main_model_predicting(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_model_state: str = "Model_State/Neural_Network.pth",
         path_to_processed_data = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
@@ -1163,7 +1164,7 @@ if __name__ == "__main__":
     """
 
     # main_model_training(
-    #     neural_network_model = SleepStageModel(),
+    #     neural_network_model = SleepStageModel,
     #     path_to_processed_data = processed_shhs_path,
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     path_to_model_state = None,
@@ -1190,7 +1191,7 @@ if __name__ == "__main__":
     """
 
     # main_model_training(
-    #     neural_network_model = SleepStageModel(),
+    #     neural_network_model = SleepStageModel,
     #     path_to_processed_data = processed_gif_path,
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1242,7 +1243,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1259,7 +1260,7 @@ if __name__ == "__main__":
     
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1280,7 +1281,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1290,7 +1291,7 @@ if __name__ == "__main__":
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1343,7 +1344,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1360,7 +1361,7 @@ if __name__ == "__main__":
     
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1381,7 +1382,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1391,7 +1392,7 @@ if __name__ == "__main__":
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1443,7 +1444,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1460,7 +1461,7 @@ if __name__ == "__main__":
     
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel(),
+        neural_network_model = SleepStageModel,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
@@ -1481,7 +1482,7 @@ if __name__ == "__main__":
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1491,7 +1492,7 @@ if __name__ == "__main__":
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel(), # type: ignore
+        neural_network_model = YaoModel, # type: ignore
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
