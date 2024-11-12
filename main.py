@@ -14,6 +14,28 @@ from neural_network_model import *
 
 
 """
+====================================
+Setting Global Paths and File Names
+====================================
+"""
+
+# paths to the data
+original_shhs_data_path = "Raw_Data/SHHS_dataset.h5"
+original_gif_data_path = "Raw_Data/GIF_dataset.h5"
+
+# file names
+project_configuration_file = "Project_Configuration.pkl"
+
+model_state_after_shhs_file = "Model_State_SHHS.pth"
+model_state_after_shhs_gif_file = "Model_State.pth"
+
+loss_per_epoch_shhs_file = "Loss_per_Epoch_SHHS.pkl"
+loss_per_epoch_gif_file = "Loss_per_Epoch_GIF.pkl"
+
+model_accuracy_file = "Model_Accuracy.pkl"
+
+
+"""
 ==============================
 Default Project Configuration
 ==============================
@@ -360,11 +382,11 @@ Training And Testing Neural Network Model
 
 def main_model_training(
         neural_network_model = SleepStageModel,
-        path_to_processed_data = "Processed_Data/shhs_data.pkl",
-        path_to_project_configuration: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
+        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
+        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
         path_to_model_state = None,
-        path_to_updated_model_state: str = "Model_State/Neural_Network.pth",
-        path_to_loss_per_epoch: str = "Model_Accuracy/Neural_Network.pkl",
+        path_to_updated_model_state: str = "Neural_Network/Model_State.pth",
+        path_to_loss_per_epoch: str = "Neural_Network/Loss_per_Epoch_SHHS.pkl",
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
@@ -374,8 +396,8 @@ def main_model_training(
     the data, this class reshapes the data into windows. Adjustments can be made using the 
     parameters this function accesses from "path_to_project_configuration".
 
-    Afterwards the neural network model is trained and tested. The accuracy results are saved in a pickle file
-    and the model state dictionary is saved in a .pth file.
+    Afterwards the neural network model is trained and tested. The accuracy and loss are saved in a pickle file
+    for every epoch. The final model state dictionary is saved in a .pth file.
 
     The accuracy values are saved in a dictionary with the following format:
     {
@@ -395,26 +417,20 @@ def main_model_training(
     ------------------------------
     neural_network_model
         the neural network model to use
-    
-    ### Parameters that set the paths to the data and the results ###
-        
-    path_to_model_state: str
-        the path to load the model state dictionary
-        if None, the model will be trained from scratch
     path_to_processed_data: str
         the path to the processed dataset 
         (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
         [after removing '.pkl'] accesses the training, validation, and test datasets)
-    save_accuracy_values_path: str
-        the path to save the accuracy values
-    save_model_state_path: str
-        the path to save the model state dictionary
-    
-    ### Parameters for CustomSleepDataset class in neural_network_model.py ###
-
     path_to_project_configuration: str
         the path to all signal processing parameters 
         (includes more parameters, but only the window_reshape_parameters are needed here)
+    path_to_model_state: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    path_to_updated_model_state: str
+        the path to save the model state dictionary
+    path_to_loss_per_epoch: str
+        the path to save the accuracy values
     """
     
     """
@@ -587,168 +603,6 @@ def main_model_training(
 
 
 """
-============================
-Retrieving Accuracy Results
-============================
-"""
-
-
-def print_model_accuracy(
-        paths_to_pkl_files: list,
-        prediction_result_key: str,
-        actual_result_keys: str,
-        display_labels: list = ["Wake", "LS", "DS", "REM"],
-        average = None,
-        number_of_decimals = 2
-    ):
-    """
-    This function calculates various accuracy parameters from the given pickle files (need to contain
-    actual and predicted values).
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    path_to_pkl_file: list
-        the paths to the pickle files containing the data
-    prediction_result_key: str
-        the key that accesses the predicted results in the data (for example: "test_predicted_results")
-    actual_result_keys: str
-        the key that accesses the actual results in the data (for example: "test_actual_results")
-    display_labels: list
-        the labels for the sleep stages
-    average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
-        average parameter of the sklearn functions: precision_score, recall_score, f1_score
-    number_of_decimals: int
-        the number of decimals to round the results to
-    
-        # collect results if requested
-            if collect_results:
-                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                
-                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
-                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
-    """
-
-    # variables to store results
-    all_predicted_results = np.empty(0)
-    all_actual_results = np.empty(0)
-
-    for file_path in paths_to_pkl_files:
-        # Load the data
-        data_generator = load_from_pickle(file_path)
-        data = next(data_generator)
-
-        # Get the predicted and actual results
-        predicted_results = data[prediction_result_key]
-        actual_results = data[actual_result_keys]
-
-        # Flatten the arrays
-        predicted_results = predicted_results.flatten()
-        actual_results = actual_results.flatten()
-
-        # Add the results to the arrays
-        all_predicted_results = np.append(all_predicted_results, predicted_results)
-        all_actual_results = np.append(all_actual_results, actual_results)
-    
-    # Calculate the accuracy values
-    accuracy = accuracy_score(all_actual_results, all_predicted_results)
-    kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
-
-    precision = precision_score(all_actual_results, all_predicted_results, average = average)
-    recall = recall_score(all_actual_results, all_predicted_results, average = average)
-    f1 = f1_score(all_actual_results, all_predicted_results, average = average)
-
-    # Define description of accuracy parameters
-    accuracy_description = "Accuracy"
-    kappa_description = "Cohen's Kappa"
-    precision_description = "Precision"
-    recall_description = "Recall"
-    f1_description = "f1"
-
-    # Print the results
-    if average is not None:
-        print()
-        print(accuracy_description, round(accuracy, number_of_decimals))
-        print(kappa_description, round(kappa, number_of_decimals))
-        print(precision_description, round(precision, number_of_decimals)) # type: ignore
-        print(recall_description, round(recall, number_of_decimals)) # type: ignore
-        print(f1_description, round(f1, number_of_decimals)) # type: ignore
-    else:
-        # check if the display_labels have the right length
-        unique_labels_actual = np.unique(all_actual_results)
-        unique_labels_predicted = np.unique(all_predicted_results)
-        unique_labels = np.unique(np.concatenate((unique_labels_actual, unique_labels_predicted)))
-        if len(display_labels) != len(precision): # type: ignore
-            display_labels = np.sort(unique_labels) # type: ignore
-            display_labels = np.array(display_labels, dtype = str) # type: ignore
-            print("\nGiven display labels do not match the number of labels in the data. Display labels are set to the unique labels in the data.")
-        else:
-            print("\nThe display labels correspond to the following labels in the data:")
-            for i in range(len(display_labels)):
-                print(f"{display_labels[i]}: {unique_labels[i]}")
-
-        # Round the results
-        precision = np.round(precision, number_of_decimals)
-        recall = np.round(recall, number_of_decimals)
-        f1 = np.round(f1, number_of_decimals)
-
-        # Calculate column width
-        longest_precision_value = max([len(str(value)) for value in precision])
-        longest_recall_value = max([len(str(value)) for value in recall])
-        longest_f1_value = max([len(str(value)) for value in f1])
-
-        column_width = max([len(label) for label in display_labels])
-        column_width = max([column_width, longest_precision_value, longest_recall_value, longest_f1_value])
-        column_width += 2
-
-        first_column_width = max([len(precision_description), len(recall_description), len(f1_description)]) + 1
-
-        # Print the results
-        print()
-        print(accuracy_description, round(accuracy, number_of_decimals))
-        print(kappa_description, round(kappa, number_of_decimals))
-        print()
-        
-        # Print the header
-        print(" "*first_column_width, end = "")
-        for label in display_labels:
-            print(f"|{label:^{column_width}}", end = "")
-        print()
-        print("-"*(first_column_width + len(display_labels)*(column_width + 1)))
-
-        # Print the results
-        print(f"{precision_description:<{first_column_width}}", end = "")
-        for value in precision:
-            print(f"|{value:^{column_width}}", end = "")
-        print()
-        print(f"{recall_description:<{first_column_width}}", end = "")
-        for value in recall:
-            print(f"|{value:^{column_width}}", end = "")
-        print()
-        print(f"{f1_description:<{first_column_width}}", end = "")
-        for value in f1:
-            print(f"|{value:^{column_width}}", end = "")
-        print()
-
-
-        
-# print_model_accuracy(
-#     paths_to_pkl_files = ["Model_Accuracy/NN_SHHS.pkl"],
-#     prediction_result_key = "test_predicted_results",
-#     actual_result_keys = "test_actual_results",
-#     display_labels = ["Wake", "LS", "DS", "REM"],
-#     average = None,
-#     number_of_decimals = 3
-# )
-
-        
-
-
-"""
 ======================================
 Applying Trained Neural Network Model
 ======================================
@@ -757,10 +611,10 @@ Applying Trained Neural Network Model
 
 def main_model_predicting(
         neural_network_model = SleepStageModel,
-        path_to_model_state: str = "Model_State/Neural_Network.pth",
-        path_to_processed_data = "Processed_Data/shhs_data.pkl",
-        path_to_project_configuration: str = "Signal_Processing_Parameters/signal_processing_parameters.pkl",
-        path_to_save_results: str = "Model_Accuracy/Neural_Network.pkl",
+        path_to_model_state: str = "Neural_Network/Model_State.pth",
+        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
+        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
+        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
     ):
     """
     Applies the trained neural network model to the processed data. The processed data is accessed using the
@@ -811,9 +665,6 @@ def main_model_predicting(
     ------------------------------
     neural_network_model
         the neural network model to use
-    
-    ### Parameters that set the paths to the data and the results ###
-        
     path_to_model_state: str
         the path to load the model state dictionary
         if None, the model will be trained from scratch
@@ -821,14 +672,11 @@ def main_model_predicting(
         the path to the processed dataset 
         (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
         [after removing '.pkl'] accesses the training, validation, and test datasets)
-    path_to_save_results: str
-        If actual results exist, predicted and actual results will be saved to this path
-    
-    ### Parameters for CustomSleepDataset class in neural_network_model.py ###
-
     path_to_project_configuration: str
         the path to all signal processing parameters 
         (includes more parameters, but only the window_reshape_parameters are needed here)
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
     """
     
     """
@@ -851,9 +699,9 @@ def main_model_predicting(
     mad_frequency = data_manager.file_info["MAD_frequency"]
     slp_frequency = data_manager.file_info["SLP_frequency"]
 
-    # determine if data contains sleep phases (split into training, validation, and test data)
+    # determine if data contains sleep phases
     actual_results_available = False
-    if data_manager.file_info["train_val_test_split_applied"]:
+    if "SLP" in data_manager.load(0): # type: ignore
         actual_results_available = True
 
     """
@@ -910,6 +758,7 @@ def main_model_predicting(
     Initializing Neural Network Model
     ----------------------------------
     """
+
     neural_network_model = neural_network_model(**nnm_params)
    
     neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
@@ -1088,15 +937,224 @@ def main_model_predicting(
     
     # Remove the old file and rename the working file
     if not actual_results_available:
-        try:
+        if os.path.isfile(path_to_processed_data):
             os.remove(path_to_processed_data)
-        except:
-            pass
             
         os.rename(working_file_path, path_to_processed_data)
 
 
+"""
+========================
+Evaluate Model Accuracy
+========================
+"""
+
+
+def predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state: str = "Neural_Network/Model_State.pth",
+        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
+        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
+        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
+    ):
+    """
+    Applies the trained neural network model to the processed data (training and validation datasets), for
+    the purpose of evaluating the model accuracy.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    neural_network_model
+        the neural network model to use
+    path_to_model_state: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    path_to_processed_data: str
+        the path to the processed dataset 
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    path_to_project_configuration: str
+        the path to all signal processing parameters 
+        (includes more parameters, but only the window_reshape_parameters are needed here)
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
+    """
+
+    # paths to access the training, validation, and test datasets
+    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
+    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
+    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
+
+    # make predictions for the relevant files
+    main_model_predicting(
+        neural_network_model = neural_network_model,
+        path_to_model_state = path_to_model_state,
+        path_to_processed_data = training_data_path,
+        path_to_project_configuration = path_to_project_configuration,
+        path_to_save_results = path_to_save_results[:-4] + "_Training_Pid.pkl",
+    )
+
+    main_model_predicting(
+        neural_network_model = neural_network_model,
+        path_to_model_state = path_to_model_state,
+        path_to_processed_data = validation_data_path,
+        path_to_project_configuration = path_to_project_configuration,
+        path_to_save_results = path_to_save_results[:-4] + "_Validation_Pid.pkl",
+    )
+
+
+def print_model_accuracy(
+        paths_to_pkl_files: list,
+        prediction_result_key: str,
+        actual_result_keys: str,
+        display_labels: list = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 2
+    ):
+    """
+    This function calculates various accuracy parameters from the given pickle files (need to contain
+    actual and predicted values).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_pkl_file: list
+        the paths to the pickle files containing the data
+    prediction_result_key: str
+        the key that accesses the predicted results in the data (for example: "test_predicted_results")
+    actual_result_keys: str
+        the key that accesses the actual results in the data (for example: "test_actual_results")
+    display_labels: list
+        the labels for the sleep stages
+    average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
+        average parameter of the sklearn functions: precision_score, recall_score, f1_score
+    number_of_decimals: int
+        the number of decimals to round the results to
+    
+        # collect results if requested
+            if collect_results:
+                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
+                
+                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
+                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
+    """
+
+    # variables to store results
+    all_predicted_results = np.empty(0)
+    all_actual_results = np.empty(0)
+
+    for file_path in paths_to_pkl_files:
+        # Load the data
+        data_generator = load_from_pickle(file_path)
+        data = next(data_generator)
+
+        # Get the predicted and actual results
+        predicted_results = data[prediction_result_key]
+        actual_results = data[actual_result_keys]
+
+        # Flatten the arrays
+        predicted_results = predicted_results.flatten()
+        actual_results = actual_results.flatten()
+
+        # Add the results to the arrays
+        all_predicted_results = np.append(all_predicted_results, predicted_results)
+        all_actual_results = np.append(all_actual_results, actual_results)
+    
+    # Calculate the accuracy values
+    accuracy = accuracy_score(all_actual_results, all_predicted_results)
+    kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
+
+    precision = precision_score(all_actual_results, all_predicted_results, average = average)
+    recall = recall_score(all_actual_results, all_predicted_results, average = average)
+    f1 = f1_score(all_actual_results, all_predicted_results, average = average)
+
+    # Define description of accuracy parameters
+    accuracy_description = "Accuracy"
+    kappa_description = "Cohen's Kappa"
+    precision_description = "Precision"
+    recall_description = "Recall"
+    f1_description = "f1"
+
+    # Print the results
+    if average is not None:
+        print()
+        print(accuracy_description, round(accuracy, number_of_decimals))
+        print(kappa_description, round(kappa, number_of_decimals))
+        print(precision_description, round(precision, number_of_decimals)) # type: ignore
+        print(recall_description, round(recall, number_of_decimals)) # type: ignore
+        print(f1_description, round(f1, number_of_decimals)) # type: ignore
+    else:
+        # check if the display_labels have the right length
+        unique_labels_actual = np.unique(all_actual_results)
+        unique_labels_predicted = np.unique(all_predicted_results)
+        unique_labels = np.unique(np.concatenate((unique_labels_actual, unique_labels_predicted)))
+        if len(display_labels) != len(precision): # type: ignore
+            display_labels = np.sort(unique_labels) # type: ignore
+            display_labels = np.array(display_labels, dtype = str) # type: ignore
+            print("\nGiven display labels do not match the number of labels in the data. Display labels are set to the unique labels in the data.")
+        else:
+            print("\nThe display labels correspond to the following labels in the data:")
+            for i in range(len(display_labels)):
+                print(f"{display_labels[i]}: {unique_labels[i]}")
+
+        # Round the results
+        precision = np.round(precision, number_of_decimals)
+        recall = np.round(recall, number_of_decimals)
+        f1 = np.round(f1, number_of_decimals)
+
+        # Calculate column width
+        longest_precision_value = max([len(str(value)) for value in precision])
+        longest_recall_value = max([len(str(value)) for value in recall])
+        longest_f1_value = max([len(str(value)) for value in f1])
+
+        column_width = max([len(label) for label in display_labels])
+        column_width = max([column_width, longest_precision_value, longest_recall_value, longest_f1_value])
+        column_width += 2
+
+        first_column_width = max([len(precision_description), len(recall_description), len(f1_description)]) + 1
+
+        # Print the results
+        print()
+        print(accuracy_description, round(accuracy, number_of_decimals))
+        print(kappa_description, round(kappa, number_of_decimals))
+        print()
+        
+        # Print the header
+        print(" "*first_column_width, end = "")
+        for label in display_labels:
+            print(f"|{label:^{column_width}}", end = "")
+        print()
+        print("-"*(first_column_width + len(display_labels)*(column_width + 1)))
+
+        # Print the results
+        print(f"{precision_description:<{first_column_width}}", end = "")
+        for value in precision:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+        print(f"{recall_description:<{first_column_width}}", end = "")
+        for value in recall:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+        print(f"{f1_description:<{first_column_width}}", end = "")
+        for value in f1:
+            print(f"|{value:^{column_width}}", end = "")
+        print()
+
+
 if __name__ == "__main__":
+
+    """
+    ==============================
+    Training Neural Network Model
+    ==============================
+    """
     
     """
     ---------------
@@ -1104,24 +1162,12 @@ if __name__ == "__main__":
     ---------------
     """
 
-    original_shhs_data_path = "Raw_Data/SHHS_dataset.h5"
-    original_gif_data_path = "Raw_Data/GIF_dataset.h5"
-
     processed_shhs_path = "Processed_Data/shhs_data.pkl"
     processed_gif_path = "Processed_Data/gif_data.pkl"
 
+    # Create directory to store configurations and results
     model_directory_path = "Neural_Network/"
     create_directories_along_path(model_directory_path)
-
-    project_configuration_file = "Project_Configuration.pkl"
-
-    model_state_after_shhs_file = "Model_State_SHHS.pth"
-    model_state_after_shhs_gif_file = "Model_State.pth"
-
-    loss_per_epoch_shhs_file = "Loss_per_Epoch_SHHS.pkl"
-    loss_per_epoch_gif_file = "Loss_per_Epoch_GIF.pkl"
-
-    model_accuracy_file = "Model_Accuracy.pkl"
 
 
     """
@@ -1200,304 +1246,43 @@ if __name__ == "__main__":
     #     )
 
     """
-    ---------------------------------------------------------------------
-    Testing Original Idea: Overlapping Windows and artifect = wake stage
-    ---------------------------------------------------------------------
+    ========================
+    Evaluate Model Accuracy
+    ========================
     """
 
-    # Set File Paths
-    processed_shhs_path = "Processed_Data/shhs_data_original.pkl"
-    processed_gif_path = "Processed_Data/gif_data_original.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-
-    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
-    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
-    project_configuration["number_sleep_stages"] = 5
-
-    check_project_configuration(project_configuration)
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Original/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Preprocess SHHS Data
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
-
-    # Training Network on SHHS Data
-    main_model_training(
+    predictions_for_model_accuracy_evaluation(
         neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-    
-    # Preprocess GIF Data
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
-    
-    # Training Network on GIF Data
-    main_model_training(
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    print_model_accuracy(
+        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_keys = "Actual_in_windows",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 3
+    )
+
+    print_model_accuracy(
+        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_keys = "Actual",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 3
+    )
+
+    predictions_for_model_accuracy_evaluation(
         neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-    
-    """
-    Using YaoModel
-    """
-    
-    model_directory_path = "Yao_Original/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-
-
-    """
-    -------------------------------------------------------------------
-    Testing with Overlapping windows but artifect being a unique stage
-    -------------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
-    processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-
-    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
-    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
-    project_configuration["number_sleep_stages"] = 5
-
-    check_project_configuration(project_configuration)
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Artifect/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-    
-    # Preprocess SHHS Data
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-    
-    # Preprocess GIF Data
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
-    
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-    
-    """
-    Using YaoModel
-    """
-    
-    model_directory_path = "Yao_Artifect/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-
-    """
-    ---------------------------------------------------------------
-    Testing with non-overlapping windows and artifect = wake stage
-    ---------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data/shhs_data_no_overlap.pkl"
-    processed_gif_path = "Processed_Data/gif_data_no_overlap.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-
-    project_configuration["overlap_seconds"] = 0
-    project_configuration["number_windows"] = 300
-    project_configuration["windows_per_signal"] = 300
-
-    check_project_configuration(project_configuration)
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_no_overlap/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Preprocess SHHS Data
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-    
-    # Preprocess GIF Data
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
-    
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-    
-    """
-    Using YaoModel
-    """
-    
-    model_directory_path = "Yao_Original/"
-    create_directories_along_path(model_directory_path)
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_model = YaoModel, # type: ignore
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
 
 # IDEAS: max conv channels for mad
