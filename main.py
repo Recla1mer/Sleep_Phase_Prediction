@@ -732,9 +732,6 @@ def main_model_predicting(
     feature_transform = project_configuration["transform"]
     target_transform = project_configuration["target_transform"]
 
-    # access number of sleep stages
-    number_sleep_stages = project_configuration["number_sleep_stages"]
-
     del project_configuration
 
     """
@@ -828,6 +825,7 @@ def main_model_predicting(
                 rri = rri.astype(np.float32)
             if feature_transform:
                 rri = feature_transform(rri)
+            rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
             rri = rri.to(device) # type: ignore
 
             try:
@@ -840,6 +838,7 @@ def main_model_predicting(
                     mad = mad.astype(np.float32)
                 if feature_transform:
                     mad = feature_transform(mad)
+                mad = mad.unsqueeze(0) # type: ignore # add batch dimension (= 1)
                 mad = mad.to(device) # type: ignore
             except:
                 mad = None
@@ -863,8 +862,6 @@ def main_model_predicting(
                     slp = slp.astype(np.int32)
                 if slp.dtype == np.float64:
                     slp = slp.astype(np.float32)
-                if target_transform:
-                    slp = target_transform(slp)
             else:
                 original_signal_length = int(np.ceil(signal_length_seconds * slp_frequency))
             
