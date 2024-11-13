@@ -988,7 +988,9 @@ def predictions_for_model_accuracy_evaluation(
     training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
     validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
 
-    ask_to_override_files([training_pid_results_path, validation_pid_results_path])
+    user_answer = ask_to_override_files([training_pid_results_path, validation_pid_results_path])
+    if user_answer == "n":
+        return
 
     # make predictions for the relevant files
     main_model_predicting(

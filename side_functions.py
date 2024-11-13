@@ -200,8 +200,8 @@ def ask_to_override_files(file_paths: list):
                 for file_path in file_paths:
                     if os.path.exists(file_path):
                         os.remove(file_path)
-                break
+                return "y"
             elif answer == "n":
-                break
+                return "n"
             else:
                 print("Please enter 'y' or 'n'.")
