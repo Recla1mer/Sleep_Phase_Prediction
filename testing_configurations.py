@@ -632,9 +632,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "SleepStageModel (directory: 'SSM_Original'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "SSM_Original/"
 
@@ -645,9 +646,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "YaoModel (directory: 'Yao_Original'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "Yao_Original/"
 
@@ -660,6 +662,7 @@ def accuracy_multiple_configurations():
     """
 
     message = "Overlapping windows but artifect being a unique stage:"
+    print("\n")
     print("="*len(message))
     print("="*len(message))
     print(message)
@@ -671,9 +674,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "SleepStageModel (directory: 'SSM_Artifect'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "SSM_Artifect/"
 
@@ -684,9 +688,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "YaoModel (directory: 'Yao_Artifect'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "Yao_Artifect/"
 
@@ -699,6 +704,7 @@ def accuracy_multiple_configurations():
     """
 
     message = "Non-Overlapping windows and artifect = wake stage:"
+    print("\n")
     print("="*len(message))
     print("="*len(message))
     print(message)
@@ -710,9 +716,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "SleepStageModel (directory: 'SSM_no_overlap'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "SSM_no_overlap/"
 
@@ -723,9 +730,10 @@ def accuracy_multiple_configurations():
     """
 
     message = "YaoModel (directory: 'Yao_no_overlap'):"
-    print("-"*len(message))
+    print()
+    print("="*len(message))
     print(message)
-    print("-"*len(message))
+    print("="*len(message))
 
     model_directory_path = "Yao_no_overlap/"
 
@@ -734,5 +742,5 @@ def accuracy_multiple_configurations():
 
 if __name__ == "__main__":
     # train_multiple_configurations()
-    # predict_multiple_configurations()
+    predict_multiple_configurations()
     accuracy_multiple_configurations()
