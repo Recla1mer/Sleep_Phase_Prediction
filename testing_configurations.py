@@ -313,8 +313,7 @@ def train_multiple_configurations():
         )
 
 
-def test_multiple_configurations():
-
+def predict_multiple_configurations():
     """
     ==============
     Model Testing
@@ -337,39 +336,21 @@ def test_multiple_configurations():
 
     model_directory_path = "SSM_Original/"
 
-    # predictions_for_model_accuracy_evaluation(
-    #     neural_network_model = SleepStageModel,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
-    # )
-
-    print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
-        number_of_decimals = 3
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
     )
 
-    print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
-        prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
-        number_of_decimals = 3
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
     )
-
-    # predictions_for_model_accuracy_evaluation(
-    #     neural_network_model = SleepStageModel,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
-    # )
 
     """
     Using YaoModel
@@ -502,6 +483,256 @@ def test_multiple_configurations():
     )
 
 
+def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wake", "LS", "DS", "REM"]):
+    """
+    Prinintg accuracy results for a specific model directory
+    """
+
+    """
+    SHHS Data
+    """
+
+    message = "Accuracy of SHHS Training and Validation Data in windows:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_keys = "Actual_in_windows",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of SHHS Training and Validation Data reshaped to original signal structure:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_keys = "Actual",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of SHHS Validation Data in windows:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_keys = "Actual_in_windows",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of SHHS Validation Data reshaped to original signal structure:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_keys = "Actual",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    """
+    GIF Data
+    """
+    
+    message = "Accuracy of GIF Training and Validation Data in windows:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_keys = "Actual_in_windows",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of GIF Training and Validation Data reshaped to original signal structure:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_keys = "Actual",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of GIF Validation Data in windows:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_keys = "Actual_in_windows",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+    message = "Accuracy of GIF Validation Data reshaped to original signal structure:"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    print_model_accuracy(
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_keys = "Actual",
+        display_labels = display_labels,
+        average = None,
+        number_of_decimals = 3
+    )
+
+
+def accuracy_multiple_configurations():
+    """
+    Printing accuracy results for different configurations
+    """
+
+    """
+    ---------------------------------------------------------------------
+    Testing Original Idea: Overlapping Windows and artifect = wake stage
+    ---------------------------------------------------------------------
+    """
+
+    message = "Original Idea: Overlapping Windows and artifect = wake stage:"
+    print("="*len(message))
+    print("="*len(message))
+    print(message)
+    print("="*len(message))
+    print("="*len(message))
+
+    """
+    Using SleepStageModel
+    """
+
+    message = "SleepStageModel (directory: 'SSM_Original'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "SSM_Original/"
+
+    extensive_accuracy_printing(model_directory_path)
+
+    """
+    Using YaoModel
+    """
+
+    message = "YaoModel (directory: 'Yao_Original'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "Yao_Original/"
+
+    extensive_accuracy_printing(model_directory_path)
+
+    """
+    -------------------------------------------------------------------
+    Testing with Overlapping windows but artifect being a unique stage
+    -------------------------------------------------------------------
+    """
+
+    message = "Overlapping windows but artifect being a unique stage:"
+    print("="*len(message))
+    print("="*len(message))
+    print(message)
+    print("="*len(message))
+    print("="*len(message))
+
+    """
+    Using SleepStageModel
+    """
+
+    message = "SleepStageModel (directory: 'SSM_Artifect'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "SSM_Artifect/"
+
+    extensive_accuracy_printing(model_directory_path, display_labels = ["Artifect", "Wake", "LS", "DS", "REM"])
+
+    """
+    Using YaoModel
+    """
+
+    message = "YaoModel (directory: 'Yao_Artifect'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "Yao_Artifect/"
+
+    extensive_accuracy_printing(model_directory_path, display_labels = ["Artifect", "Wake", "LS", "DS", "REM"])
+
+    """
+    ---------------------------------------------------------------
+    Testing with non-overlapping windows and artifect = wake stage
+    ---------------------------------------------------------------
+    """
+
+    message = "Non-Overlapping windows and artifect = wake stage:"
+    print("="*len(message))
+    print("="*len(message))
+    print(message)
+    print("="*len(message))
+    print("="*len(message))
+
+    """
+    Using SleepStageModel
+    """
+
+    message = "SleepStageModel (directory: 'SSM_no_overlap'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "SSM_no_overlap/"
+
+    extensive_accuracy_printing(model_directory_path)
+
+    """
+    Using YaoModel
+    """
+
+    message = "YaoModel (directory: 'Yao_no_overlap'):"
+    print("-"*len(message))
+    print(message)
+    print("-"*len(message))
+
+    model_directory_path = "Yao_no_overlap/"
+
+    extensive_accuracy_printing(model_directory_path)
+
+
 if __name__ == "__main__":
     # train_multiple_configurations()
-    test_multiple_configurations()
+    # predict_multiple_configurations()
+    accuracy_multiple_configurations()

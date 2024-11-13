@@ -7,6 +7,7 @@ In this file we provide functions that are used to keep the code a little bit cl
 # IMPORTS
 import time
 import numpy as np
+import os
 
 
 """
@@ -160,3 +161,47 @@ def progress_bar(index: int, total: int, batch_size: int, start_time: float, los
 
     if index >= total:
         print('   ✅')
+
+
+"""
+===============
+Override Files
+===============
+"""
+
+
+def ask_to_override_files(file_paths: list):
+    """
+    Asks the user if they want to override files.
+
+    ARGUMENTS:
+    ------------------------------
+    file_paths: list
+        list of file paths to ask for
+    
+    RETURNS:
+    ------------------------------
+    bool
+        True if the user wants to override the files, False otherwise
+    """
+
+    for file_path in file_paths:
+        file_exists = False
+        if os.path.exists(file_path):
+            file_exists = True
+            break
+    
+    if file_exists:
+        while True:
+            print("At least one of the following files already exists:")
+            print(file_paths)
+            answer = input("\nDo you want to override all of them? (y/n): ")
+            if answer == "y":
+                for file_path in file_paths:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                break
+            elif answer == "n":
+                break
+            else:
+                print("Please enter 'y' or 'n'.")

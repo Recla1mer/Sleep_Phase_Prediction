@@ -986,9 +986,9 @@ def predictions_for_model_accuracy_evaluation(
     test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
 
     training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
+    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
 
-    if os.path.exists(training_pid_results_path):
-        os.remove(training_pid_results_path)
+    ask_to_override_files([training_pid_results_path, validation_pid_results_path])
 
     # make predictions for the relevant files
     main_model_predicting(
@@ -998,11 +998,6 @@ def predictions_for_model_accuracy_evaluation(
         path_to_project_configuration = path_to_project_configuration,
         path_to_save_results = training_pid_results_path,
     )
-
-    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
-
-    if os.path.exists(validation_pid_results_path):
-        os.remove(validation_pid_results_path)
 
     main_model_predicting(
         neural_network_model = neural_network_model,
