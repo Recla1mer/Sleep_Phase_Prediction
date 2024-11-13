@@ -337,16 +337,16 @@ def test_multiple_configurations():
 
     model_directory_path = "SSM_Original/"
 
-    predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
-    )
+    # predictions_for_model_accuracy_evaluation(
+    #     neural_network_model = SleepStageModel,
+    #     path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+    #     path_to_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    # )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
         actual_result_keys = "Actual_in_windows",
         display_labels = ["Wake", "LS", "DS", "REM"],
@@ -355,7 +355,7 @@ def test_multiple_configurations():
     )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
         actual_result_keys = "Actual",
         display_labels = ["Wake", "LS", "DS", "REM"],
@@ -370,6 +370,136 @@ def test_multiple_configurations():
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
     # )
+
+    """
+    Using YaoModel
+    """
+
+    model_directory_path = "Yao_Original/"
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
+
+    """
+    -------------------------------------------------------------------
+    Testing with Overlapping windows but artifect being a unique stage
+    -------------------------------------------------------------------
+    """
+
+    # Set File Paths
+    processed_shhs_path = "Processed_Data/shhs_data_artifect.pkl"
+    processed_gif_path = "Processed_Data/gif_data_artifect.pkl"
+
+    """
+    Using SleepStageModel
+    """
+
+    model_directory_path = "SSM_Artifect/"
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
+
+    """
+    Using YaoModel
+    """
+
+    model_directory_path = "Yao_Artifect/"
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
+
+    """
+    ---------------------------------------------------------------
+    Testing with non-overlapping windows and artifect = wake stage
+    ---------------------------------------------------------------
+    """
+
+    # Set File Paths
+    processed_shhs_path = "Processed_Data/shhs_data_no_overlap.pkl"
+    processed_gif_path = "Processed_Data/gif_data_no_overlap.pkl"
+
+    """
+    Using SleepStageModel
+    """
+
+    model_directory_path = "SSM_no_overlap/"
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
+
+    """
+    Using YaoModel
+    """
+
+    model_directory_path = "Yao_no_overlap/"
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+    )
+
+    predictions_for_model_accuracy_evaluation(
+        neural_network_model = YaoModel, # type: ignore
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+    )
 
 
 if __name__ == "__main__":

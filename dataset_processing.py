@@ -977,8 +977,14 @@ def reverse_signal_to_windows_reshape(
 
     assert len(signal_in_windows) == number_windows, "Number of windows does not match signal length."
 
-    datapoints_per_window = window_duration_seconds * target_frequency
-    overlapping_datapoints = overlap_seconds * target_frequency
+    datapoints_per_window = int(window_duration_seconds * target_frequency)
+    if window_duration_seconds * target_frequency != datapoints_per_window:
+        raise ValueError("Datapoints per window must be an integer. Choose 'window_duration_seconds' and 'target_frequency' accordingly.")
+    
+    overlapping_datapoints = int(overlap_seconds * target_frequency)
+    if overlap_seconds * target_frequency != overlapping_datapoints:
+        raise ValueError("Overlap must be an integer. Choose 'overlap_seconds' and 'target_frequency' accordingly.")
+    
     new_datapoints_per_window = datapoints_per_window - overlapping_datapoints
 
     count_overlaps = [0 for _ in range(new_datapoints_per_window*(number_windows-1)+datapoints_per_window)]
@@ -998,7 +1004,7 @@ def reverse_signal_to_windows_reshape(
 
 def slp_label_transformation(
         current_labels: dict,
-        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1},
+        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
     ) -> dict:
     """
     Create transformation dictionary to alter the labels that classify the sleep stage.

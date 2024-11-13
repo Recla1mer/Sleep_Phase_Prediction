@@ -985,21 +985,31 @@ def predictions_for_model_accuracy_evaluation(
     validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
     test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
 
+    training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
+
+    if os.path.exists(training_pid_results_path):
+        os.remove(training_pid_results_path)
+
     # make predictions for the relevant files
     main_model_predicting(
         neural_network_model = neural_network_model,
         path_to_model_state = path_to_model_state,
         path_to_processed_data = training_data_path,
         path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = path_to_save_results[:-4] + "_Training_Pid.pkl",
+        path_to_save_results = training_pid_results_path,
     )
+
+    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
+
+    if os.path.exists(validation_pid_results_path):
+        os.remove(validation_pid_results_path)
 
     main_model_predicting(
         neural_network_model = neural_network_model,
         path_to_model_state = path_to_model_state,
         path_to_processed_data = validation_data_path,
         path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = path_to_save_results[:-4] + "_Validation_Pid.pkl",
+        path_to_save_results = validation_pid_results_path,
     )
 
 
