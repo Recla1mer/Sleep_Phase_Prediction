@@ -493,6 +493,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     """
 
     message = "Accuracy of SHHS Training and Validation Data in windows:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -507,6 +508,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of SHHS Training and Validation Data reshaped to original signal structure:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -521,6 +523,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of SHHS Validation Data in windows:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -535,6 +538,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of SHHS Validation Data reshaped to original signal structure:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -553,6 +557,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     """
     
     message = "Accuracy of GIF Training and Validation Data in windows:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -567,6 +572,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of GIF Training and Validation Data reshaped to original signal structure:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -581,6 +587,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of GIF Validation Data in windows:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -595,6 +602,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     )
 
     message = "Accuracy of GIF Validation Data reshaped to original signal structure:"
+    print()
     print("-"*len(message))
     print(message)
     print("-"*len(message))
@@ -742,5 +750,5 @@ def accuracy_multiple_configurations():
 
 if __name__ == "__main__":
     # train_multiple_configurations()
-    predict_multiple_configurations()
+    # predict_multiple_configurations()
     accuracy_multiple_configurations()
