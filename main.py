@@ -1013,7 +1013,7 @@ def predictions_for_model_accuracy_evaluation(
 def print_model_accuracy(
         paths_to_pkl_files: list,
         prediction_result_key: str,
-        actual_result_keys: str,
+        actual_result_key: str,
         display_labels: list = ["Wake", "LS", "DS", "REM"],
         average = None,
         number_of_decimals = 2
@@ -1032,7 +1032,7 @@ def print_model_accuracy(
         the paths to the pickle files containing the data
     prediction_result_key: str
         the key that accesses the predicted results in the data (for example: "test_predicted_results")
-    actual_result_keys: str
+    actual_result_key: str
         the key that accesses the actual results in the data (for example: "test_actual_results")
     display_labels: list
         the labels for the sleep stages
@@ -1057,19 +1057,20 @@ def print_model_accuracy(
     for file_path in paths_to_pkl_files:
         # Load the data
         data_generator = load_from_pickle(file_path)
-        data = next(data_generator)
 
-        # Get the predicted and actual results
-        predicted_results = data[prediction_result_key]
-        actual_results = data[actual_result_keys]
+        for data in data_generator:
+            
+            # Get the predicted and actual results
+            predicted_results = data[prediction_result_key]
+            actual_results = data[actual_result_key]
 
-        # Flatten the arrays
-        predicted_results = predicted_results.flatten()
-        actual_results = actual_results.flatten()
+            # Flatten the arrays
+            predicted_results = predicted_results.flatten()
+            actual_results = actual_results.flatten()
 
-        # Add the results to the arrays
-        all_predicted_results = np.append(all_predicted_results, predicted_results)
-        all_actual_results = np.append(all_actual_results, actual_results)
+            # Add the results to the arrays
+            all_predicted_results = np.append(all_predicted_results, predicted_results)
+            all_actual_results = np.append(all_actual_results, actual_results)
     
     # Calculate the accuracy values
     accuracy = accuracy_score(all_actual_results, all_predicted_results)
@@ -1266,7 +1267,7 @@ if __name__ == "__main__":
     print_model_accuracy(
         paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
+        actual_result_key = "Actual_in_windows",
         display_labels = ["Wake", "LS", "DS", "REM"],
         average = None,
         number_of_decimals = 3
@@ -1275,7 +1276,7 @@ if __name__ == "__main__":
     print_model_accuracy(
         paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
+        actual_result_key = "Actual",
         display_labels = ["Wake", "LS", "DS", "REM"],
         average = None,
         number_of_decimals = 3

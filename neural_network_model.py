@@ -707,7 +707,7 @@ class SleepStageModel(nn.Module):
                 out_channels = number_window_learning_features, 
                 kernel_size = window_branch_convolutional_kernel_size, 
                 dilation = dilation,
-                padding='same'
+                padding ='same'
                 ))
             window_feature_learning_layers.append(nn.Dropout(dropout_probability))
         
@@ -768,7 +768,6 @@ class SleepStageModel(nn.Module):
 
         # Process RRI Signal
         rri_features = self.rri_signal_learning(rri_signal)
-        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
 
         # Process MAD Signal or create 0 tensor if MAD signal is not provided
         if mad_signal is None:
@@ -1236,6 +1235,7 @@ if __name__ == "__main__":
     """
     Yaopeng-like network:
     """
+    
     print("\nYao:")
 
     # Define the Neural Network

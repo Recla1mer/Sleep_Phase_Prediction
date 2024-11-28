@@ -179,20 +179,16 @@ def plot_accuracy_per_epoch(
 
 def plot_distribution_of_score(
         paths_to_pkl_files: list,
-        prediction_result_keys: list,
-        actual_result_keys: list,
+        prediction_result_key: str,
+        actual_result_key: str,
         score_function: callable, # type: ignore
-        additional_function_args: dict = {},
+        additional_score_function_args: dict = {},
+        combine_file_predictions: bool = False,
         **kwargs
         ):
     """
     Calculate the score values using score_function(predicted_results, actual_results) and plot the
     distribution of the scores for the given keys and files.
-
-    ATTENTION:  Assume that you have: paths_to_pkl_files = ["file1.pkl", "file2.pkl"] and 
-                prediction_result_keys/actual_results_keys = ["key1", "key2"].
-                To assign the labels correctly to the data, the order must be as follows:
-                label = ["file1_key1", "file1_key2", "file2_key1", "file2_key2"]
     
     RETURNS:
     ------------------------------
@@ -202,14 +198,16 @@ def plot_distribution_of_score(
     ------------------------------
     paths_to_pkl_files: list
         the paths to the pickle files containing the data
-    prediction_result_keys: list
-        the keys that access predicted results in the data (for example: "train_predicted_results", "test_predicted_results")
+    prediction_result_key: str
+        the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
     actual_result_keys: list
-        the keys that access actual results in the data (for example: "train_actual_results", "test_actual_results")
+        the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
     score_function: callable
         the function that calculates the score (must take two arguments: predicted_results, actual_results)
     additional_function_args: dict
         additional arguments for the score function
+    combine_file_predictions: bool
+        whether to combine the predictions of all files into one distribution
     
     KEYWORD ARGUMENTS:
     ------------------------------
@@ -279,26 +277,36 @@ def plot_distribution_of_score(
     # Variables to store the score values
     score_values = []
 
-    # iterate over files
-    for path_index in range(len(paths_to_pkl_files)):
-        # Load the data
-        data_generator = load_from_pickle(paths_to_pkl_files[path_index])
-        data = next(data_generator)
+    for file_path in paths_to_pkl_files:
+        # Variables to store this files score values
+        this_score_values = []
 
-        # iterate over keys
-        for key_index in range(len(prediction_result_keys)):
-            this_keys_score_values = []
-            predicted_results = data[prediction_result_keys[key_index]]
-            actual_results = data[actual_result_keys[key_index]]
+        # Load the data
+        data_generator = load_from_pickle(file_path)
+        
+        for data in data_generator:
+
+            # Get the predicted and actual results
+            predicted_results = data[prediction_result_key]
+            actual_results = data[actual_result_key]
+
+            # Flatten the arrays
+            predicted_results = predicted_results.flatten()
+            actual_results = actual_results.flatten()
 
             # Calculate the score
-            for i in range(len(predicted_results)):
-                this_keys_score_values.append(score_function(actual_results[i], predicted_results[i], **additional_function_args))
-            
-            score_values.append(this_keys_score_values)
+            this_score_values.append(score_function(actual_results, predicted_results, **additional_score_function_args))
+        
+        score_values.append(this_score_values)
+    
+    # Combine the score values if wanted
+    if combine_file_predictions:
+        final_score_values = np.empty(0)
+        for file_score_values in score_values:
+            final_score_values = np.append(final_score_values, file_score_values)
     
     # Create a dataframe
-    dataframe = pd.DataFrame(score_values).T
+    dataframe = pd.DataFrame(final_score_values).T
     if len(kwargs["label"]) > 0:
         dataframe.columns = kwargs["label"]
     else:
@@ -324,7 +332,7 @@ def plot_distribution_of_score(
 def plot_confusion_matrix(
         path_to_pkl_file: str,
         prediction_result_key: str,
-        actual_result_keys: str,
+        actual_result_key: str,
         display_labels: list = ["Wake", "LS", "DS", "REM"],
         all_known_labels = None,
         **kwargs
@@ -341,9 +349,9 @@ def plot_confusion_matrix(
     path_to_pkl_file: str
         the path to the pickle file containing the data
     prediction_result_key: str
-        the key that accesses the predicted results in the data (for example: "test_predicted_results")
-    actual_result_keys: str
-        the key that accesses the actual results in the data (for example: "test_actual_results")
+        the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
+    actual_result_key: str
+        the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
     display_labels: list
         the labels for the confusion matrix
     all_known_labels: list
@@ -387,7 +395,7 @@ def plot_confusion_matrix(
 
     # Get the predicted and actual results
     predicted_results = data[prediction_result_key]
-    actual_results = data[actual_result_keys]
+    actual_results = data[actual_result_key]
 
     # Flatten the arrays
     predicted_results = predicted_results.flatten()
@@ -428,6 +436,154 @@ def plot_confusion_matrix(
     plt.show()
 
 
+def plot_actual_predicted(
+        path_to_pkl_file: str,
+        prediction_result_key: str,
+        actual_result_key: str,
+        display_labels: list = ["Wake", "LS", "DS", "REM"],
+        data_position = None,
+        **kwargs
+    ):
+    """
+    Plot the actual and predicted results for some datapoint in the file.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_pkl_file: str
+        the path to the pickle file containing the data
+    prediction_result_key: str
+        the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
+    actual_result_key: str
+        the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
+    display_labels: list
+        the labels used to display the sleep stages
+    data_position: int or None
+        the position of the data in the file (if None, a random position is chosen)
+
+    KEYWORD ARGUMENTS:
+    ------------------------------
+    figsize: list
+        the size of the figure
+    title: str
+        the title of the plot
+    xlabel: str
+        the label of the x-axis
+    ylabel: str
+        the label of the y-axis
+    label: list
+        the labels of the data
+    loc: str
+        the location of the legend
+    grid: bool
+        whether to show the grid
+    linewidth: float
+        the width of the lines
+    linestyle: str
+        the style of the lines
+    ylim: list 
+        the limits of the y-axis
+    xlim: list
+        the limits of the x-axis
+    """
+
+    # Default values
+    kwargs.setdefault("figsize", [3.4, 2.7])
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "")
+    kwargs.setdefault("ylabel", "count")
+    kwargs.setdefault("label", ["Actual", "Predicted"])
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 2)
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("linestyle", "-") # or "--", "-.", ":"
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+    kwargs.setdefault("markeredgewidth", 1)
+    kwargs.setdefault("markeredgecolor", "black")
+
+    plot_args = dict(
+        linewidth = kwargs["linewidth"],
+        # alpha = kwargs["alpha"],
+        linestyle = kwargs["linestyle"],
+        # marker = kwargs["marker"],
+        # markersize = kwargs["markersize"],
+        # markeredgewidth = kwargs["markeredgewidth"],
+        # markeredgecolor = kwargs["markeredgecolor"],
+    )
+
+    # count entries in the file
+    data_generator = load_from_pickle(path_to_pkl_file)
+    number_entries = 0
+    for data in data_generator:
+        number_entries += 1
+    
+    # check if data_position is out of range
+    if data_position is not None:
+        if data_position >= number_entries:
+            print(f"Data position {data_position} is not in the range of the data. Choosing position at random.")
+            data_position = None
+    
+    # choose random data position if not given
+    if data_position is None:
+        data_position = np.random.randint(0, number_entries)
+
+    # load the data at the given position
+    data_generator = load_from_pickle(path_to_pkl_file)
+    for i in range(data_position + 1):
+        data = next(data_generator)
+    
+    predicted_results = data[prediction_result_key]
+    actual_results = data[actual_result_key]
+
+    # Calculate the accuracy values
+    accuracy = metrics.accuracy_score(actual_results, predicted_results)
+    kappa = metrics.cohen_kappa_score(actual_results, predicted_results)
+    print(f"Accuracy: {accuracy}, Kappa: {kappa}")
+
+    # Retrieve the unique classification results
+    unique_predicted_results = np.unique(predicted_results)
+    unique_actual_results = np.unique(actual_results)
+    unique_results = np.unique(np.concatenate((unique_predicted_results, unique_actual_results)))
+
+    # Check if the number of labels in the results matches the number of display labels
+    if len(unique_results) != len(display_labels):
+        print(f"The number of labels in the results: {len(unique_results)} does not match the number of display labels: {len(display_labels)}.")
+        return
+    
+    # Create a dictionary to map the unique results to the display labels
+    data[prediction_result_key] = [display_labels[int(i)] for i in predicted_results]
+    data[actual_result_key] = [display_labels[int(i)] for i in actual_results]
+
+    # Plot the actual and predicted results
+    fig, ax = plt.subplots(figsize=kwargs["figsize"])
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+
+    keys = [actual_result_key, prediction_result_key]
+    for key_pos in range(len(keys)):
+        ax.plot(
+            keys[key_pos],
+            data = data,
+            label = kwargs["label"],
+            **plot_args
+        )
+    
+    ax.legend(loc=kwargs["loc"])
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    plt.show()
+
+
 if __name__ == "__main__":
 
     """
@@ -454,8 +610,8 @@ if __name__ == "__main__":
     # plot_distribution_of_score(
     #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
     #     score_function = metrics.accuracy_score,
-    #     prediction_result_keys = ["train_predicted_results", "test_predicted_results"],
-    #     actual_result_keys = ["train_actual_results", "test_actual_results"],
+    #     prediction_result_key = "train_predicted_results",
+    #     actual_result_key = "train_actual_results",
     #     title = "Distribution of Accuracy",
     #     xlabel = "Accuracy",
     #     label = ["Train", "Test"],
@@ -500,10 +656,21 @@ if __name__ == "__main__":
     ======================
     """
 
-    plot_confusion_matrix(
-        path_to_pkl_file = "Model_Accuracy/Yao_SHHS_GIF.pkl",
-        prediction_result_key = "test_predicted_results",
-        actual_result_keys = "test_actual_results",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        title = "Confusion Matrix of Neural Network",
-    )
+    # plot_confusion_matrix(
+    #     path_to_pkl_file = "Model_Accuracy/Yao_SHHS_GIF.pkl",
+    #     prediction_result_key = "test_predicted_results",
+    #     actual_result_keys = "test_actual_results",
+    #     display_labels = ["Wake", "LS", "DS", "REM"],
+    #     title = "Confusion Matrix of Neural Network",
+    # )
+
+    fig, ax = plt.subplots()
+    for i in range(0, 15):
+        x = np.arange(0, 100)
+        y = x * i
+        ax.plot(
+            x,
+            y,
+            linewidth = 5,
+        )
+    plt.show()
