@@ -1290,4 +1290,22 @@ if __name__ == "__main__":
         path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
     )
 
+    print_model_accuracy(
+        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted_in_windows",
+        actual_result_key = "Actual_in_windows",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 3
+    )
+
+    print_model_accuracy(
+        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        average = None,
+        number_of_decimals = 3
+    )
+
 # IDEAS: max conv channels for mad

@@ -501,7 +501,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
+        actual_result_key = "Actual_in_windows",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -516,7 +516,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
+        actual_result_key = "Actual",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -531,7 +531,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
+        actual_result_key = "Actual_in_windows",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -546,7 +546,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
+        actual_result_key = "Actual",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -565,7 +565,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
+        actual_result_key = "Actual_in_windows",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -580,7 +580,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
+        actual_result_key = "Actual",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -595,7 +595,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
         prediction_result_key = "Predicted_in_windows",
-        actual_result_keys = "Actual_in_windows",
+        actual_result_key = "Actual_in_windows",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3
@@ -610,7 +610,7 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print_model_accuracy(
         paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
         prediction_result_key = "Predicted",
-        actual_result_keys = "Actual",
+        actual_result_key = "Actual",
         display_labels = display_labels,
         average = None,
         number_of_decimals = 3

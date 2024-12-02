@@ -189,6 +189,9 @@ def plot_distribution_of_score(
     """
     Calculate the score values using score_function(predicted_results, actual_results) and plot the
     distribution of the scores for the given keys and files.
+
+    If the score_function returns multiple values for each sleep stage, the resulting plot will show the 
+    distribution of the sleep stages and not the files. In this case, you can only provide one file.
     
     RETURNS:
     ------------------------------
@@ -274,6 +277,11 @@ def plot_distribution_of_score(
         alpha = kwargs["alpha"]
     )
 
+    # Interrupt if user wants to overkill the plot
+    if "average" in additional_score_function_args:
+        if additional_score_function_args["average"] is None and len(paths_to_pkl_files) > 1:
+            raise ValueError("Your current setting would lead to number_sleep_stages * number_files different scores. This is overkill. Either change 'average' in the 'additional_score_function_args' parameter to None or use only one file.")
+
     # Variables to store the score values
     score_values = []
 
@@ -299,11 +307,18 @@ def plot_distribution_of_score(
         
         score_values.append(this_score_values)
     
+    if "average" in additional_score_function_args:
+        if additional_score_function_args["average"] is None:
+            combine_file_predictions = False
+            score_values = score_values[0]
+    
     # Combine the score values if wanted
     if combine_file_predictions:
         final_score_values = np.empty(0)
         for file_score_values in score_values:
             final_score_values = np.append(final_score_values, file_score_values)
+    else:
+        final_score_values = score_values
     
     # Create a dataframe
     dataframe = pd.DataFrame(final_score_values).T
@@ -593,12 +608,12 @@ if __name__ == "__main__":
     """
 
     # plot_accuracy_per_epoch(
-    #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
-    #     result_keys = ["train_accuracy", "test_accuracy"],
-    #     # label = ["train_accuracy", "test_accuracy"],
+    #     paths_to_pkl_files = ["Neural_Network/Loss_per_Epoch_GIF.pkl", "Neural_Network/Loss_per_Epoch_SHHS.pkl"],
+    #     result_keys = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
+    #     label = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
     #     title = "Accuracy of Neural Network",
     #     xlabel = "Epoch",
-    #     ylabel = "Accuracy",
+    #     ylabel = "Accuracy / Loss",
     # )
 
     """
@@ -608,10 +623,11 @@ if __name__ == "__main__":
     """
 
     # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
+    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
     #     score_function = metrics.accuracy_score,
-    #     prediction_result_key = "train_predicted_results",
-    #     actual_result_key = "train_actual_results",
+    #     combine_file_predictions = False,
     #     title = "Distribution of Accuracy",
     #     xlabel = "Accuracy",
     #     label = ["Train", "Test"],
@@ -619,32 +635,35 @@ if __name__ == "__main__":
     # )
 
     # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
+    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
     #     score_function = metrics.cohen_kappa_score,
-    #     prediction_result_keys = ["train_predicted_results", "test_predicted_results"],
-    #     actual_result_keys = ["train_actual_results", "test_actual_results"],
+    #     combine_file_predictions = False,
     #     title = "Distribution of Kappa Score",
     #     xlabel = r"$\kappa$ Score",
     #     label = ["Train", "Test"],
     # )
 
     # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
+    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
     #     score_function = metrics.f1_score,
-    #     additional_function_args={"average": "macro"}, # or: None, 'micro', 'macro', 'weighted'
-    #     prediction_result_keys = ["train_predicted_results", "test_predicted_results"],
-    #     actual_result_keys = ["train_actual_results", "test_actual_results"],
+    #     additional_function_args = {"average": "macro"}, # or: None, 'micro', 'macro', 'weighted'
+    #     combine_file_predictions = False,
     #     title = "Distribution of f1 Score",
     #     xlabel = "f1 Score",
     #     label = ["Train", "Test"],
     # )
 
     # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Model_Accuracy/Neural_Network.pkl"],
+    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
     #     score_function = metrics.precision_score,
-    #     additional_function_args={"average": "micro"}, # or: None, 'micro', 'macro', 'weighted' ('binary', 'samples')
-    #     prediction_result_keys = ["train_predicted_results", "test_predicted_results"],
-    #     actual_result_keys = ["train_actual_results", "test_actual_results"],
+    #     additional_function_args = {"average": "micro"}, # or: None, 'micro', 'macro', 'weighted' ('binary', 'samples')
+    #     combine_file_predictions = False,
     #     title = "Distribution of Precision",
     #     xlabel = "Precision",
     #     label = ["Train", "Test"],
@@ -664,13 +683,19 @@ if __name__ == "__main__":
     #     title = "Confusion Matrix of Neural Network",
     # )
 
-    fig, ax = plt.subplots()
-    for i in range(0, 15):
-        x = np.arange(0, 100)
-        y = x * i
-        ax.plot(
-            x,
-            y,
-            linewidth = 5,
-        )
-    plt.show()
+    """
+    ========
+    Testing
+    ========
+    """
+
+    # fig, ax = plt.subplots()
+    # for i in range(0, 15):
+    #     x = np.arange(0, 100)
+    #     y = x * i
+    #     ax.plot(
+    #         x,
+    #         y,
+    #         linewidth = 5,
+    #     )
+    # plt.show()
