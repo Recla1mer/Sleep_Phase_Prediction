@@ -28,6 +28,69 @@ Operating On Signals
 """
 
 
+def unity_based_normalization(
+        signal: list,
+        normalization_max: float = 1,
+        normalization_min: float = 0,
+        normalize_mode = "whole_array" # "whole_array" or "array_wise"
+    ) -> np.ndarray: # type: ignore
+    """
+    Normalize the signal into range: (normalization_min, normalization_max) using the unity based normalization method.
+
+    RETURNS:
+    ------------------------------
+    normalized_signal: np.ndarray
+        The normalized signal.
+    
+    ARGUMENTS:
+    ------------------------------
+    signal: np.ndarray
+        The signal to be normalized.
+    normalization_max: float
+        The new maximum value.
+    normalization_min: float
+        The new minimum value.
+    normalize_mode: str
+        The normalization mode.
+        if "whole_array", the signal will be normalized as a whole.
+        if "array_wise", each individual array in the signal will be normalized on its own.
+    """
+
+    if normalization_max <= normalization_min:
+        raise ValueError("'new_max' must be larger than 'new_min'.")
+
+    signal = np.array(signal, dtype=float) # type: ignore
+
+    dimension = signal.ndim # type: ignore
+
+    if dimension == 1 or normalize_mode == "whole_array":
+        old_max = np.max(signal)
+        old_min = np.min(signal)
+
+        if old_max == old_min:
+            return np.array(signal)
+
+        return (signal - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
+
+    elif dimension == 2 and normalize_mode == "array_wise":
+        for i in range(len(signal)):
+            old_max = np.max(signal[i])
+            old_min = np.min(signal[i])
+
+            if old_max == old_min:
+                continue
+            
+            signal[i] = (signal[i] - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
+
+        return np.array(signal)
+    
+    elif dimension > 2 and normalize_mode == "array_wise":
+        for i in range(len(signal)):
+            signal[i] = unity_based_normalization(signal[i], normalization_max, normalization_min, normalize_mode)
+
+        return np.array(signal)
+
+
 def calculate_overlap(signal_length: int, number_windows: int, datapoints_per_window: int) -> float:
     """
     Calculate the overlap between windows of length 'datapoints_per_window' in a signal of

@@ -46,6 +46,11 @@ class CustomSleepDataset(Dataset):
             window_duration_seconds: int = 120, 
             overlap_seconds: int = 90,
             priority_order: list = [3, 2, 1, 0],
+            normalize_rri: bool = False,
+            normalize_mad: bool = False,
+            normalization_max: float = 1,
+            normalization_min: float = 0,
+            normalize_mode = "whole_array"
         ):
         """
         ARGUMENTS:
@@ -54,6 +59,8 @@ class CustomSleepDataset(Dataset):
             Path to the data file
         transform : callable
             Optional transform to be applied on a sample, by default None
+        target_transform : callable
+            Optional transform to be applied on a target, by default None
         
         ### Parameters for reshape_signal_to_overlapping_windows function in dataset_processing.py ###
 
@@ -69,6 +76,17 @@ class CustomSleepDataset(Dataset):
             The overlap between windows in seconds.
         priority_order: list
             The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
+        
+        ### Parameters for unity_based_normalization function in dataset_processing.py ###
+
+        normalization_max: float
+            The new maximum value.
+        normalization_min: float
+            The new minimum value.
+        normalize_mode: str
+            The normalization mode.
+            if "whole_array", the signal will be normalized as a whole.
+            if "array_wise", each individual array in the signal will be normalized on its own.
         """
 
         self.transform = transform
@@ -89,6 +107,15 @@ class CustomSleepDataset(Dataset):
             "overlap_seconds": overlap_seconds,
             "priority_order": priority_order
         }
+
+        self.normalize_rri = normalize_rri
+        self.normalize_mad = normalize_mad
+
+        self.unity_based_normalization_parameters = {
+            "normalization_max": normalization_max,
+            "normalization_min": normalization_min,
+            "normalize_mode": normalize_mode
+        }
         
 
     def __len__(self):
@@ -102,22 +129,38 @@ class CustomSleepDataset(Dataset):
         self.window_reshape_parameters["signal_type"] = "feature"
         self.window_reshape_parameters["pad_with"] = self.pad_feature_with
 
-        # extract feature (RRI) from dictionary:
+        # extract feature (RRI) from dictionary and reshape it into windows:
         rri_sample = reshape_signal_to_overlapping_windows(
             signal = data_sample["RRI"], # type: ignore
             target_frequency = self.rri_frequency,
             **self.window_reshape_parameters
         )
+
+        # normalize RRI signal if requested:
+        if self.normalize_rri:
+            rri_sample = unity_based_normalization(
+                signal = copy.deepcopy(rri_sample), # type: ignore
+                **self.unity_based_normalization_parameters
+            )
+
         if rri_sample.dtype == np.float64:
             rri_sample = rri_sample.astype(np.float32)
 
-        # extract feature (MAD) from dictionary:
         try:
+            # extract feature (MAD) from dictionary and reshape it into windows:
             mad_sample = reshape_signal_to_overlapping_windows(
                 signal = data_sample["MAD"], # type: ignore
                 target_frequency = self.mad_frequency,
                 **self.window_reshape_parameters
             )
+
+            # normalize MAD signal if requested:
+            if self.normalize_mad:
+                mad_sample = unity_based_normalization(
+                    signal = copy.deepcopy(mad_sample), # type: ignore
+                    **self.unity_based_normalization_parameters
+                )
+
             if mad_sample.dtype == np.float64:
                 mad_sample = mad_sample.astype(np.float32)
         except:

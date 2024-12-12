@@ -205,12 +205,3 @@ def ask_to_override_files(file_paths: list):
                 return "n"
             else:
                 print("Please enter 'y' or 'n'.")
-
-a = np.empty(0)
-a = np.append(a, [1, 2, 3])
-a = np.append(a, [4, 5, 6])
-a = [[1, 2, 3], [4, 5, 6, 7]]
-new_a = np.empty(0)
-for i in a:
-    new_a = np.append(new_a, i)
-print(new_a)

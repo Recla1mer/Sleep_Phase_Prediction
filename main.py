@@ -53,6 +53,15 @@ window_reshape_parameters = {
     "pad_target_with": 0
 }
 
+# parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
+signal_normalization_parameters = {
+    "normalize_rri": False,
+    "normalize_mad": False,
+    "normalization_max": 1,
+    "normalization_min": 0,
+    "normalize_mode": "whole_array" # "array_wise" for normalizing each window individually
+}
+
 # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
 sleep_data_manager_parameters = {
     "RRI_frequency": 4,
@@ -423,7 +432,7 @@ def main_model_training(
         [after removing '.pkl'] accesses the training, validation, and test datasets)
     path_to_project_configuration: str
         the path to all signal processing parameters 
-        (includes more parameters, but only the window_reshape_parameters are needed here)
+        (not all are needed here)
     path_to_model_state: str
         the path to load the model state dictionary
         if None, the model will be trained from scratch
@@ -455,9 +464,11 @@ def main_model_training(
     CustomDatasetKeywords = {key: project_configuration[key] for key in window_reshape_parameters}
     del CustomDatasetKeywords["nn_signal_duration_seconds"]
 
+    # add signal_normalization_parameters
+    CustomDatasetKeywords.update({key: project_configuration[key] for key in signal_normalization_parameters})
+
     # add transform parameters
-    for key in dataset_class_transform_parameters:
-        CustomDatasetKeywords[key] = project_configuration[key]
+    CustomDatasetKeywords.update({key: project_configuration[key] for key in dataset_class_transform_parameters})
 
     training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
     validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
@@ -674,7 +685,7 @@ def main_model_predicting(
         [after removing '.pkl'] accesses the training, validation, and test datasets)
     path_to_project_configuration: str
         the path to all signal processing parameters 
-        (includes more parameters, but only the window_reshape_parameters are needed here)
+        (not all are needed here)
     path_to_save_results: str
         If actual results exist, predicted and actual results will be saved to this path
     """
@@ -727,6 +738,15 @@ def main_model_predicting(
     # access pad_with values
     pad_feature_with = project_configuration["pad_feature_with"]
     pad_target_with = project_configuration["pad_target_with"]
+
+    # access signal_normalization_parameters
+    common_signal_normalization_parameters = {key: project_configuration[key] for key in signal_normalization_parameters}
+
+    del common_signal_normalization_parameters["normalize_rri"]
+    del common_signal_normalization_parameters["normalize_mad"]
+
+    normalize_rri = project_configuration["normalize_rri"]
+    normalize_mad = project_configuration["normalize_mad"]
 
     # access feature and target transformations
     feature_transform = project_configuration["transform"]
@@ -811,16 +831,24 @@ def main_model_predicting(
             common_window_reshape_params["pad_with"] = pad_feature_with
             common_window_reshape_params["signal_type"] = "feature"
 
-            # access processed features, reshape to overlapping windows and apply transformations
+            # access processed features and reshape to overlapping windows
             rri = reshape_signal_to_overlapping_windows(
                 signal = copy.deepcopy(data_dict["RRI"]),
                 target_frequency = rri_frequency,
                 **common_window_reshape_params
             )
 
+            # normalize RRI signal if requested:
+            if normalize_rri:
+                rri = unity_based_normalization(
+                    signal = copy.deepcopy(rri), # type: ignore
+                    **common_signal_normalization_parameters
+                )
+
             # retrieve signal length in seconds
             signal_length_seconds = len(data_dict["RRI"]) / rri_frequency
 
+            # apply transformations
             if rri.dtype == np.float64:
                 rri = rri.astype(np.float32)
             if feature_transform:
@@ -828,12 +856,18 @@ def main_model_predicting(
             rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
             rri = rri.to(device) # type: ignore
 
+            # MAD preparation analogously to RRI
             try:
                 mad = reshape_signal_to_overlapping_windows(
-                    signal = data_dict["MAD"],
+                    signal = copy.deepcopy(data_dict["MAD"]),
                     target_frequency = mad_frequency,
                     **common_window_reshape_params
                 )
+                if normalize_mad:
+                    mad = unity_based_normalization(
+                        signal = copy.deepcopy(mad), # type: ignore
+                        **common_signal_normalization_parameters
+                    )
                 if mad.dtype == np.float64:
                     mad = mad.astype(np.float32)
                 if feature_transform:
@@ -975,7 +1009,7 @@ def predictions_for_model_accuracy_evaluation(
         [after removing '.pkl'] accesses the training, validation, and test datasets)
     path_to_project_configuration: str
         the path to all signal processing parameters 
-        (includes more parameters, but only the window_reshape_parameters are needed here)
+        (not all are needed here)
     path_to_save_results: str
         If actual results exist, predicted and actual results will be saved to this path
     """
@@ -1184,6 +1218,7 @@ if __name__ == "__main__":
     project_configuration = dict()
     project_configuration.update(sleep_data_manager_parameters)
     project_configuration.update(window_reshape_parameters)
+    project_configuration.update(signal_normalization_parameters)
     project_configuration.update(split_data_parameters)
     project_configuration.update(dataset_class_transform_parameters)
     project_configuration.update(neural_network_model_parameters)
