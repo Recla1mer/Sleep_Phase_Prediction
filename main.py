@@ -59,7 +59,7 @@ signal_normalization_parameters = {
     "normalize_mad": False,
     "normalization_max": 1,
     "normalization_min": 0,
-    "normalize_mode": "whole_array" # "array_wise" for normalizing each window individually
+    "normalization_mode": "global"
 }
 
 # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 

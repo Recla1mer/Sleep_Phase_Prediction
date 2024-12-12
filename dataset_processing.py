@@ -32,7 +32,7 @@ def unity_based_normalization(
         signal: list,
         normalization_max: float = 1,
         normalization_min: float = 0,
-        normalize_mode = "whole_array" # "whole_array" or "array_wise"
+        normalization_mode: str = "global" # "global" or "local"
     ) -> np.ndarray: # type: ignore
     """
     Normalize the signal into range: (normalization_min, normalization_max) using the unity based normalization method.
@@ -50,10 +50,12 @@ def unity_based_normalization(
         The new maximum value.
     normalization_min: float
         The new minimum value.
-    normalize_mode: str
+    normalization_mode: str
         The normalization mode.
-        if "whole_array", the signal will be normalized as a whole.
-        if "array_wise", each individual array in the signal will be normalized on its own.
+        if "global":    Scales all elements in the entire multi-dimensional array relative to the global
+                        maximum and minimum values across all arrays.
+        if "local":     Normalizes each sub-array independently, scaling the elements within relative to its
+                        own maximum and minimum values.
     """
 
     if normalization_max <= normalization_min:
@@ -63,7 +65,7 @@ def unity_based_normalization(
 
     dimension = signal.ndim # type: ignore
 
-    if dimension == 1 or normalize_mode == "whole_array":
+    if dimension == 1 or normalization_mode == "global":
         old_max = np.max(signal)
         old_min = np.min(signal)
 
@@ -72,7 +74,7 @@ def unity_based_normalization(
 
         return (signal - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
 
-    elif dimension == 2 and normalize_mode == "array_wise":
+    elif dimension == 2 and normalization_mode == "local":
         for i in range(len(signal)):
             old_max = np.max(signal[i])
             old_min = np.min(signal[i])
@@ -84,9 +86,9 @@ def unity_based_normalization(
 
         return np.array(signal)
     
-    elif dimension > 2 and normalize_mode == "array_wise":
+    elif dimension > 2 and normalization_mode == "local":
         for i in range(len(signal)):
-            signal[i] = unity_based_normalization(signal[i], normalization_max, normalization_min, normalize_mode)
+            signal[i] = unity_based_normalization(signal[i], normalization_max, normalization_min, normalization_mode)
 
         return np.array(signal)
 

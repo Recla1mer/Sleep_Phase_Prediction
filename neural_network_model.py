@@ -50,7 +50,7 @@ class CustomSleepDataset(Dataset):
             normalize_mad: bool = False,
             normalization_max: float = 1,
             normalization_min: float = 0,
-            normalize_mode = "whole_array"
+            normalization_mode = "global"
         ):
         """
         ARGUMENTS:
@@ -83,10 +83,12 @@ class CustomSleepDataset(Dataset):
             The new maximum value.
         normalization_min: float
             The new minimum value.
-        normalize_mode: str
+        normalization_mode: str
             The normalization mode.
-            if "whole_array", the signal will be normalized as a whole.
-            if "array_wise", each individual array in the signal will be normalized on its own.
+            if "global":    Scales all elements in the entire multi-dimensional array relative to the global
+                            maximum and minimum values across all arrays.
+            if "local":     Normalizes each sub-array independently, scaling the elements within relative to its
+                            own maximum and minimum values.
         """
 
         self.transform = transform
@@ -114,7 +116,7 @@ class CustomSleepDataset(Dataset):
         self.unity_based_normalization_parameters = {
             "normalization_max": normalization_max,
             "normalization_min": normalization_min,
-            "normalize_mode": normalize_mode
+            "normalization_mode": normalization_mode
         }
         
 
