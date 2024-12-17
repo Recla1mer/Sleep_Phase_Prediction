@@ -6,6 +6,7 @@ neural network models.
 """
 
 from main import *
+from plot_helper import *
 
 """
 ===============
@@ -751,4 +752,128 @@ def accuracy_multiple_configurations():
 if __name__ == "__main__":
     # train_multiple_configurations()
     # predict_multiple_configurations()
-    accuracy_multiple_configurations()
+    # accuracy_multiple_configurations()
+
+    """
+    =============================
+    Plot Accuracy/Loss per Epoch
+    =============================
+    """
+
+    # plot_accuracy_per_epoch(
+    #     paths_to_pkl_files = ["Yao_no_overlap/Loss_per_Epoch_SHHS.pkl"],
+    #     result_keys = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
+    #     label = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
+    #     title = "Training YaoModel on SHHS Data",
+    #     xlabel = "Epoch",
+    #     ylabel = "Accuracy / Loss",
+    # )
+
+    # plot_accuracy_per_epoch(
+    #     paths_to_pkl_files = ["Yao_no_Overlap/Loss_per_Epoch_GIF.pkl", "Yao_no_overlap/Loss_per_Epoch_SHHS.pkl"],
+    #     result_keys = ["test_accuracy"],
+    #     label = ["GIF", "SHHS"],
+    #     title = "History of YaoModel",
+    #     xlabel = "Epoch",
+    #     ylabel = "Test Accuracy",
+    # )
+
+    """
+    ================================================
+    Plot Distribution for different Score Functions
+    ================================================
+    """
+
+    # plot_distribution_of_score(
+    #     paths_to_pkl_files = ["Yao_no_overlap/Model_Accuracy_GIF_Training_Pid.pkl", "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     score_function = metrics.accuracy_score, # metrics.cohen_kappa_score
+    #     combine_file_predictions = False,
+    #     title = "Distribution of Accuracy",
+    #     xlabel = "Accuracy",
+    #     label = ["Training Data", "Validation Data"],
+    #     binrange = (0, 1),
+    #     binwidth = 0.05,
+    #     xlim = (0.6, 1.01),
+    # )
+
+    # plot_distribution_of_score(
+    #     paths_to_pkl_files = ["Yao_no_overlap/Model_Accuracy_GIF_Training_Pid.pkl", "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     score_function = metrics.accuracy_score, # metrics.cohen_kappa_score
+    #     combine_file_predictions = True,
+    #     title = "Combined Training and Validation Accuracy Distribution",
+    #     xlabel = "Accuracy",
+    #     binrange = (0, 1),
+    #     binwidth = 0.05,
+    #     xlim = (0.6, 1.01),
+    # )
+
+    # plot_distribution_of_score(
+    #     paths_to_pkl_files = ["Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     score_function = metrics.precision_score, # metrics.f1_score
+    #     additional_score_function_args = {"average": None, "labels": [0,1,2,3], "zero_division": np.nan}, # or: None, 'micro', 'macro', 'weighted' ('binary', 'samples')
+    #     title = "Distribution of Precision for GIF Validation Data",
+    #     xlabel = "Precision",
+    #     label = ["Wake", "LS", "DS", "REM"],
+    #     binrange = (0, 1),
+    #     binwidth = 0.05,
+    #     xlim = (0.0, 1.01),
+    # )
+
+    # plot_distribution_of_score(
+    #     paths_to_pkl_files = ["Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl"],
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     score_function =  metrics.recall_score, # metrics.f1_score
+    #     additional_score_function_args = {"average": 'weighted', "labels": [0,1,2,3], "zero_division": np.nan}, # or: None, 'micro', 'macro', 'weighted' ('binary', 'samples')
+    #     title = "Distribution of Recall for GIF Validation Data",
+    #     xlabel = "Weighted Recall",
+    #     binrange = (0, 1),
+    #     binwidth = 0.05,
+    #     xlim = (0.5, 1.01),
+    # )
+
+    """
+    ======================
+    Plot Confusion Matrix
+    ======================
+    """
+
+    # plot_confusion_matrix(
+    #     path_to_pkl_file = "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl",
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     display_labels = ["Wake", "LS", "DS", "REM"],
+    #     title = "Confusion Matrix of Neural Network",
+    #     xlabel = "predicted stage",
+    #     ylabel = "actual stage",
+    #     normalize = None, # 'true', 'pred', 'all'
+    #     values_format = None, # 'd', 'f', '.1%'
+    # )
+
+    """
+    ==========================
+    Plot Actual vs. Predicted
+    ==========================
+    """
+
+    with open("Yao_no_overlap/Project_Configuration.pkl", "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    reciprocal_slp_frequency = round(1 / project_configuration['SLP_frequency'])
+
+    plot_actual_predicted(
+        path_to_pkl_file = "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl",
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        display_labels = ["Wake", "LS", "DS", "REM"],
+        data_position = None,
+        title = "Sleep Stages",
+        xlabel = r"Time $\left(\text{in } %i \text{s}\right)$" % reciprocal_slp_frequency,
+        ylabel = "Sleep Stage",
+    )

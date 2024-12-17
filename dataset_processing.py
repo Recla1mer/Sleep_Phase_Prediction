@@ -1235,7 +1235,7 @@ def load_from_pickle(file_name: str):
         while True:
             try:
                 yield pickle.load(f)
-            except EOFError:
+            except:
                 break
 
 

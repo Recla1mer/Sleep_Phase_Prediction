@@ -69,9 +69,7 @@ def plot_accuracy_per_epoch(
     """
     Plot the accuracy/loss per epoch for the given keys and files.
 
-    ATTENTION:  Assume that you have: paths_to_pkl_files = ["file1.pkl", "file2.pkl"] and
-                result_keys = ["key1", "key2"]. To assign the labels correctly to the data,
-                the order must be as follows: label = ["file1_key1", "file1_key2", "file2_key1", "file2_key2"]
+    ATTENTION:  You can either provide multiple files and one result key or one file and multiple result keys.
     
     RETURNS:
     ------------------------------
@@ -119,6 +117,10 @@ def plot_accuracy_per_epoch(
     xlim: list
         the limits of the x-axis
     """
+
+    # check if user wants to overkill the plot
+    if len(paths_to_pkl_files) > 1 and len(result_keys) > 1:
+        raise ValueError("You can either provide multiple files and one result key or one file and multiple result keys.")
     
     # Default values
     kwargs.setdefault("figsize", [3.4, 2.7])
@@ -147,18 +149,30 @@ def plot_accuracy_per_epoch(
         # markeredgecolor = kwargs["markeredgecolor"],
     )
 
-    fig, ax = plt.subplots(figsize=kwargs["figsize"])
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
     ax.grid(kwargs["grid"])
 
     labels = kwargs["label"]
-    if len(kwargs["label"]) == 0:
+    if len(kwargs["label"]) != len(paths_to_pkl_files) * len(result_keys):
+        print("The number of labels does not match the number of data. Using empty labels.")
         labels = ["" for _ in range(len(paths_to_pkl_files) * len(result_keys))]
+        kwargs["label"] = []
 
-    for i, path in enumerate(paths_to_pkl_files):
-        data_generator = load_from_pickle(path)
+    if len(paths_to_pkl_files) > 1:
+        for i, path in enumerate(paths_to_pkl_files):
+            data_generator = load_from_pickle(path)
+            data = next(data_generator)
+            ax.plot(
+                result_keys[0],
+                data = data,
+                label = labels[i],
+                **plot_args
+            )
+    elif len(result_keys) > 1:
+        data_generator = load_from_pickle(paths_to_pkl_files[0])
         data = next(data_generator)
-        for key in result_keys:
+        for i, key in enumerate(result_keys):
             ax.plot(
                 key,
                 data = data,
@@ -307,27 +321,43 @@ def plot_distribution_of_score(
         
         score_values.append(this_score_values)
     
-    if "average" in additional_score_function_args:
-        if additional_score_function_args["average"] is None:
-            combine_file_predictions = False
-            score_values = score_values[0]
-    
-    # Combine the score values if wanted
-    if combine_file_predictions:
-        final_score_values = np.empty(0)
-        for file_score_values in score_values:
-            final_score_values = np.append(final_score_values, file_score_values)
+    if len(paths_to_pkl_files) > 1:
+        # Combine the score values from multiple paths into one, if wanted
+        if combine_file_predictions:
+            final_score_values = np.empty(0)
+            for file_score_values in score_values:
+                final_score_values = np.append(final_score_values, file_score_values)
+            final_score_values = np.array([final_score_values])
+        else:
+            final_score_values = score_values
+
+        # Create a dataframe
+        dataframe = pd.DataFrame(final_score_values).T
     else:
-        final_score_values = score_values
-    
-    # Create a dataframe
-    dataframe = pd.DataFrame(final_score_values).T
-    if len(kwargs["label"]) > 0:
+        final_score_values = score_values[0]
+
+        # Create a dataframe
+        dataframe = pd.DataFrame(final_score_values)
+
+    # Try using provided labels, if length mismatches, generate labels
+    if len(kwargs["label"]) == len(dataframe.columns):
         dataframe.columns = kwargs["label"]
     else:
-        hist_args["legend"] = False
+        if len(kwargs["label"]) > 0:
+            print("The number of labels does not match the number of different \'signals\'. Using empty labels.")
+            
+        if len(dataframe.columns) == 1:
+            hist_args["legend"] = False
+            kwargs["label"] = []
+        else:
+            if len(paths_to_pkl_files) > 1:
+                kwargs["label"] = [f"File {i}" for i in range(len(dataframe.columns))]
+            else:
+                kwargs["label"] = [f"Class {i}" for i in range(len(dataframe.columns))]
+            dataframe.columns = kwargs["label"]
 
-    fig, ax = plt.subplots(figsize=kwargs["figsize"])
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
     ax.grid(kwargs["grid"])
     if len(kwargs["label"]) > 0:
@@ -400,9 +430,9 @@ def plot_confusion_matrix(
     kwargs.setdefault("ylabel", "real stage")
 
     kwargs.setdefault("cmap", "Blues")
-    kwargs.setdefault("values_format", ".1%")
+    kwargs.setdefault("values_format", ".1%") # or None, 'd', '.2g'
     kwargs.setdefault("colorbar", False)
-    kwargs.setdefault("normalize", "true")
+    kwargs.setdefault("normalize", "true") # or "pred", "all", None
 
     # Load the data
     data_generator = load_from_pickle(path_to_pkl_file)
@@ -417,7 +447,7 @@ def plot_confusion_matrix(
     actual_results = actual_results.flatten()
 
     # Plot the confusion matrix
-    fig, ax = plt.subplots(figsize=kwargs["figsize"])
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
 
     try:
         metrics.ConfusionMatrixDisplay.from_predictions(
@@ -509,7 +539,7 @@ def plot_actual_predicted(
     kwargs.setdefault("figsize", [3.4, 2.7])
     kwargs.setdefault("title", "")
     kwargs.setdefault("xlabel", "")
-    kwargs.setdefault("ylabel", "count")
+    kwargs.setdefault("ylabel", "")
     kwargs.setdefault("label", ["Actual", "Predicted"])
     kwargs.setdefault("loc", "best")
     kwargs.setdefault("grid", False)
@@ -547,6 +577,7 @@ def plot_actual_predicted(
     # choose random data position if not given
     if data_position is None:
         data_position = np.random.randint(0, number_entries)
+        print(f"Choosing random data position: {data_position}")
 
     # load the data at the given position
     data_generator = load_from_pickle(path_to_pkl_file)
@@ -576,7 +607,7 @@ def plot_actual_predicted(
     data[actual_result_key] = [display_labels[int(i)] for i in actual_results]
 
     # Plot the actual and predicted results
-    fig, ax = plt.subplots(figsize=kwargs["figsize"])
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
     ax.grid(kwargs["grid"])
 
@@ -585,7 +616,7 @@ def plot_actual_predicted(
         ax.plot(
             keys[key_pos],
             data = data,
-            label = kwargs["label"],
+            label = kwargs["label"][key_pos],
             **plot_args
         )
     

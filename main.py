@@ -1344,3 +1344,6 @@ if __name__ == "__main__":
     )
 
 # IDEAS: max conv channels for mad
+
+# compare different predictions for same time point depending on input signal (after splitting because of length)
+# retrieve sleep stages from project configuration file
