@@ -101,6 +101,29 @@ neural_network_model_parameters = {
     "window_learning_dilations": [2, 4, 8, 16, 32],
 }
 
+# neural network hyperparameters
+neural_network_hyperparameters_shhs = {
+    "batch_size": 8,
+    "number_epochs": 40,
+    "lr_scheduler_parameters": {
+        "number_updates_to_max_lr": 10,
+        "start_learning_rate": 2.5 * 1e-5,
+        "max_learning_rate": 1 * 1e-4,
+        "end_learning_rate": 5 * 1e-5
+    }
+}
+
+neural_network_hyperparameters_gif = {
+    "batch_size": 8,
+    "number_epochs": 100,
+    "lr_scheduler_parameters": {
+        "number_updates_to_max_lr": 25,
+        "start_learning_rate": 2.5 * 1e-5,
+        "max_learning_rate": 1 * 1e-4,
+        "end_learning_rate": 1 * 1e-5
+    }
+}
+
 
 def check_project_configuration(parameters: dict):
     """
@@ -391,6 +414,7 @@ Training And Testing Neural Network Model
 
 def main_model_training(
         neural_network_model = SleepStageModel,
+        neural_network_hyperparameters: dict = neural_network_hyperparameters_shhs,
         path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
         path_to_model_state = None,
@@ -426,6 +450,9 @@ def main_model_training(
     ------------------------------
     neural_network_model
         the neural network model to use
+    neural_network_hyperparameters: dict
+        the hyperparameters for the neural network model training
+        (batch_size, number_epochs, lr_scheduler_parameters)
     path_to_processed_data: str
         the path to the processed dataset 
         (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
@@ -482,15 +509,12 @@ def main_model_training(
     ----------------
     """
 
-    batch_size = 8
-    number_epochs = 40
+    batch_size = neural_network_hyperparameters["batch_size"]
+    number_epochs = neural_network_hyperparameters["number_epochs"]
 
     learning_rate_scheduler = CosineScheduler(
         number_updates_total = number_epochs,
-        number_updates_to_max_lr = 10,
-        start_learning_rate = 2.5 * 1e-5,
-        max_learning_rate = 1 * 1e-4,
-        end_learning_rate = 5 * 1e-5
+        **neural_network_hyperparameters["lr_scheduler_parameters"]
     )
 
     """
@@ -1265,6 +1289,7 @@ if __name__ == "__main__":
 
     main_model_training(
         neural_network_model = SleepStageModel,
+        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
@@ -1292,6 +1317,7 @@ if __name__ == "__main__":
 
     main_model_training(
         neural_network_model = SleepStageModel,
+        neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
