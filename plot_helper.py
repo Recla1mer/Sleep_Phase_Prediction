@@ -8,6 +8,7 @@ Collection of functions for plotting the results of the project.
 import copy
 import numpy as np
 import pandas as pd
+import pickle
 
 from sklearn import metrics
 
@@ -376,10 +377,9 @@ def plot_distribution_of_score(
 
 def plot_confusion_matrix(
         path_to_pkl_file: str,
+        path_to_project_configuration: str,
         prediction_result_key: str,
         actual_result_key: str,
-        display_labels: list = ["Wake", "LS", "DS", "REM"],
-        all_known_labels = None,
         **kwargs
     ):
     """
@@ -393,15 +393,12 @@ def plot_confusion_matrix(
     ------------------------------
     path_to_pkl_file: str
         the path to the pickle file containing the data
+    path_to_project_configuration: str
+        the path to all signal processing parameters
     prediction_result_key: str
         the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
     actual_result_key: str
         the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
-    display_labels: list
-        the labels for the confusion matrix
-    all_known_labels: list
-        all known labels (if not all labels occur in the data)
-        if None, labels are guessed from display_labels
     
     KEYWORD ARGUMENTS:
     ------------------------------
@@ -434,6 +431,26 @@ def plot_confusion_matrix(
     kwargs.setdefault("colorbar", False)
     kwargs.setdefault("normalize", "true") # or "pred", "all", None
 
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # access dictionary that maps sleep stages (display labels) to integers
+    sleep_stage_to_label = project_configuration["sleep_stage_label"]
+
+    # Create a list of the integer labels, sorted
+    integer_labels = np.array([value for value in sleep_stage_to_label.values()])
+    integer_labels = np.unique(integer_labels)
+    integer_labels.sort()
+
+    # Create a list of the display labels
+    display_labels = []
+    for integer_label in integer_labels:
+        for key, value in sleep_stage_to_label.items():
+            if value == integer_label:
+                display_labels.append(key)
+                break
+
     # Load the data
     data_generator = load_from_pickle(path_to_pkl_file)
     data = next(data_generator)
@@ -449,32 +466,17 @@ def plot_confusion_matrix(
     # Plot the confusion matrix
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
 
-    try:
-        metrics.ConfusionMatrixDisplay.from_predictions(
-            y_true = actual_results,
-            y_pred = predicted_results,
-            ax = ax,
-            display_labels = display_labels,
-            cmap = kwargs["cmap"],
-            values_format = kwargs["values_format"],
-            colorbar = kwargs["colorbar"],
-            normalize = kwargs["normalize"]
-            )
-    except:
-        # If not all labels occur in the data:
-        if all_known_labels is None:
-            all_known_labels = [i for i in range(len(display_labels))]
-        metrics.ConfusionMatrixDisplay.from_predictions(
-            y_true = actual_results,
-            y_pred = predicted_results,
-            ax = ax,
-            display_labels = display_labels,
-            labels = [i for i in range(len(display_labels))],
-            cmap = kwargs["cmap"],
-            values_format = kwargs["values_format"],
-            colorbar = kwargs["colorbar"],
-            normalize = kwargs["normalize"]
-            )
+    metrics.ConfusionMatrixDisplay.from_predictions(
+        y_true = actual_results,
+        y_pred = predicted_results,
+        ax = ax,
+        display_labels = display_labels,
+        labels = integer_labels,
+        cmap = kwargs["cmap"],
+        values_format = kwargs["values_format"],
+        colorbar = kwargs["colorbar"],
+        normalize = kwargs["normalize"]
+        )
     
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
 
@@ -483,9 +485,9 @@ def plot_confusion_matrix(
 
 def plot_actual_predicted(
         path_to_pkl_file: str,
+        path_to_project_configuration: str,
         prediction_result_key: str,
         actual_result_key: str,
-        display_labels: list = ["Wake", "LS", "DS", "REM"],
         data_position = None,
         **kwargs
     ):
@@ -500,12 +502,12 @@ def plot_actual_predicted(
     ------------------------------
     path_to_pkl_file: str
         the path to the pickle file containing the data
+    path_to_project_configuration: str
+        the path to all signal processing parameters
     prediction_result_key: str
         the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
     actual_result_key: str
         the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
-    display_labels: list
-        the labels used to display the sleep stages
     data_position: int or None
         the position of the data in the file (if None, a random position is chosen)
 
@@ -562,6 +564,18 @@ def plot_actual_predicted(
         # markeredgecolor = kwargs["markeredgecolor"],
     )
 
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # create dictionary to map labels to sleep stages
+    sleep_stage_to_label = project_configuration["sleep_stage_label"]
+    label_to_sleep_stage = {}
+    for key, value in sleep_stage_to_label.items():
+        value = str(value)
+        if value not in label_to_sleep_stage:
+            label_to_sleep_stage[value] = key
+
     # count entries in the file
     data_generator = load_from_pickle(path_to_pkl_file)
     number_entries = 0
@@ -593,18 +607,13 @@ def plot_actual_predicted(
     print(f"Accuracy: {accuracy}, Kappa: {kappa}")
 
     # Retrieve the unique classification results
-    unique_predicted_results = np.unique(predicted_results)
-    unique_actual_results = np.unique(actual_results)
-    unique_results = np.unique(np.concatenate((unique_predicted_results, unique_actual_results)))
-
-    # Check if the number of labels in the results matches the number of display labels
-    if len(unique_results) != len(display_labels):
-        print(f"The number of labels in the results: {len(unique_results)} does not match the number of display labels: {len(display_labels)}.")
-        return
+    # unique_predicted_results = np.unique(predicted_results)
+    # unique_actual_results = np.unique(actual_results)
+    # unique_results = np.unique(np.concatenate((unique_predicted_results, unique_actual_results)))
     
     # Create a dictionary to map the unique results to the display labels
-    data[prediction_result_key] = [display_labels[int(i)] for i in predicted_results]
-    data[actual_result_key] = [display_labels[int(i)] for i in actual_results]
+    data[prediction_result_key] = [label_to_sleep_stage[str(i)] for i in predicted_results]
+    data[actual_result_key] = [label_to_sleep_stage[str(i)] for i in actual_results]
 
     # Plot the actual and predicted results
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
@@ -730,3 +739,6 @@ if __name__ == "__main__":
     #         linewidth = 5,
     #     )
     # plt.show()
+
+    print(metrics.precision_score(["ls", "ls", "ds", "rem", "ls", "rem"], ["wake", "ls", "ds", "rem", "rem", "rem"], average = None))
+    print(metrics.precision_score([3, 3, 1, 1, 2, 2, 3, 3], [3, 1, 3, 1, 2, 2, 3, 3], average = None, labels = [0, 1, 2, 3]))

@@ -484,7 +484,7 @@ def predict_multiple_configurations():
     )
 
 
-def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wake", "LS", "DS", "REM"]):
+def extensive_accuracy_printing(model_directory_path: str):
     """
     Prinintg accuracy results for a specific model directory
     """
@@ -492,6 +492,10 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     """
     SHHS Data
     """
+    
+    path_to_save_shhs_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl"
+    shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
+    shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
 
     message = "Accuracy of SHHS Training and Validation Data in windows:"
     print()
@@ -500,11 +504,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -515,11 +519,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Training_Pid.pkl", model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -530,11 +534,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -545,17 +549,21 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
     """
     GIF Data
     """
+
+    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
+    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
     
     message = "Accuracy of GIF Training and Validation Data in windows:"
     print()
@@ -564,11 +572,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -579,11 +587,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Training_Pid.pkl", model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -594,11 +602,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -609,11 +617,11 @@ def extensive_accuracy_printing(model_directory_path: str, display_labels = ["Wa
     print("-"*len(message))
 
     print_model_accuracy(
-        paths_to_pkl_files = [model_directory_path + "Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = display_labels,
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -690,7 +698,7 @@ def accuracy_multiple_configurations():
 
     model_directory_path = "SSM_Artifect/"
 
-    extensive_accuracy_printing(model_directory_path, display_labels = ["Artifect", "Wake", "LS", "DS", "REM"])
+    extensive_accuracy_printing(model_directory_path)
 
     """
     Using YaoModel
@@ -704,7 +712,7 @@ def accuracy_multiple_configurations():
 
     model_directory_path = "Yao_Artifect/"
 
-    extensive_accuracy_printing(model_directory_path, display_labels = ["Artifect", "Wake", "LS", "DS", "REM"])
+    extensive_accuracy_printing(model_directory_path)
 
     """
     ---------------------------------------------------------------
@@ -846,9 +854,9 @@ if __name__ == "__main__":
 
     # plot_confusion_matrix(
     #     path_to_pkl_file = "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl",
+    #     path_to_project_configuration = "Yao_no_overlap/Project_Configuration.pkl",
     #     prediction_result_key = "Predicted",
     #     actual_result_key = "Actual",
-    #     display_labels = ["Wake", "LS", "DS", "REM"],
     #     title = "Confusion Matrix of Neural Network",
     #     xlabel = "predicted stage",
     #     ylabel = "actual stage",
@@ -867,13 +875,13 @@ if __name__ == "__main__":
     
     reciprocal_slp_frequency = round(1 / project_configuration['SLP_frequency'])
 
-    plot_actual_predicted(
-        path_to_pkl_file = "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl",
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        data_position = None,
-        title = "Sleep Stages",
-        xlabel = r"Time $\left(\text{in } %i \text{s}\right)$" % reciprocal_slp_frequency,
-        ylabel = "Sleep Stage",
-    )
+    # plot_actual_predicted(
+    #     path_to_pkl_file = "Yao_no_overlap/Model_Accuracy_GIF_Validation_Pid.pkl",
+    #     path_to_project_configuration = "Yao_no_overlap/Project_Configuration.pkl",
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     data_position = None,
+    #     title = "Sleep Stages",
+    #     xlabel = r"Time $\left(\text{in } %i \text{s}\right)$" % reciprocal_slp_frequency,
+    #     ylabel = "Sleep Stage",
+    # )

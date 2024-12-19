@@ -1046,10 +1046,10 @@ def predictions_for_model_accuracy_evaluation(
 
 def print_model_accuracy(
         paths_to_pkl_files: list,
+        path_to_project_configuration: str,
         prediction_result_key: str,
         actual_result_key: str,
-        display_labels: list = ["Wake", "LS", "DS", "REM"],
-        average = None,
+        additional_score_function_args: dict = {"average": None, "zero_division": np.nan},
         number_of_decimals = 2
     ):
     """
@@ -1064,14 +1064,18 @@ def print_model_accuracy(
     ------------------------------
     path_to_pkl_file: list
         the paths to the pickle files containing the data
+    path_to_project_configuration: str
+        the path to all signal processing parameters
     prediction_result_key: str
         the key that accesses the predicted results in the data (for example: "test_predicted_results")
     actual_result_key: str
         the key that accesses the actual results in the data (for example: "test_actual_results")
-    display_labels: list
-        the labels for the sleep stages
-    average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
-        average parameter of the sklearn functions: precision_score, recall_score, f1_score
+    additional_function_args: dict
+        additional arguments for some of the score functions (precision_score, recall_score, f1_score), e.g.:
+            - average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
+                average parameter
+            - zero_division: {"warn", 0.0, 1.0, np.nan}
+                zero division parameter
     number_of_decimals: int
         the number of decimals to round the results to
     
@@ -1083,6 +1087,29 @@ def print_model_accuracy(
                 predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
                 actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
     """
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # access dictionary that maps sleep stages (display labels) to integers
+    sleep_stage_to_label = project_configuration["sleep_stage_label"]
+
+    # Create a list of the integer labels, sorted
+    integer_labels = np.array([value for value in sleep_stage_to_label.values()])
+    integer_labels = np.unique(integer_labels)
+    integer_labels.sort()
+
+    # Create a list of the display labels
+    display_labels = []
+    for integer_label in integer_labels:
+        for key, value in sleep_stage_to_label.items():
+            if value == integer_label:
+                display_labels.append(key)
+                break
+    
+    # append labels to additional_score_function_args
+    additional_score_function_args["labels"] = integer_labels
 
     # variables to store results
     all_predicted_results = np.empty(0)
@@ -1110,9 +1137,9 @@ def print_model_accuracy(
     accuracy = accuracy_score(all_actual_results, all_predicted_results)
     kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
 
-    precision = precision_score(all_actual_results, all_predicted_results, average = average)
-    recall = recall_score(all_actual_results, all_predicted_results, average = average)
-    f1 = f1_score(all_actual_results, all_predicted_results, average = average)
+    precision = precision_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+    recall = recall_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+    f1 = f1_score(all_actual_results, all_predicted_results, **additional_score_function_args)
 
     # Define description of accuracy parameters
     accuracy_description = "Accuracy"
@@ -1122,7 +1149,7 @@ def print_model_accuracy(
     f1_description = "f1"
 
     # Print the results
-    if average is not None:
+    if additional_score_function_args["average"] is not None:
         print()
         print(accuracy_description, round(accuracy, number_of_decimals))
         print(kappa_description, round(kappa, number_of_decimals))
@@ -1130,19 +1157,6 @@ def print_model_accuracy(
         print(recall_description, round(recall, number_of_decimals)) # type: ignore
         print(f1_description, round(f1, number_of_decimals)) # type: ignore
     else:
-        # check if the display_labels have the right length
-        unique_labels_actual = np.unique(all_actual_results)
-        unique_labels_predicted = np.unique(all_predicted_results)
-        unique_labels = np.unique(np.concatenate((unique_labels_actual, unique_labels_predicted)))
-        if len(display_labels) != len(precision): # type: ignore
-            display_labels = np.sort(unique_labels) # type: ignore
-            display_labels = np.array(display_labels, dtype = str) # type: ignore
-            print("\nGiven display labels do not match the number of labels in the data. Display labels are set to the unique labels in the data.")
-        else:
-            print("\nThe display labels correspond to the following labels in the data:")
-            for i in range(len(display_labels)):
-                print(f"{display_labels[i]}: {unique_labels[i]}")
-
         # Round the results
         precision = np.round(precision, number_of_decimals)
         recall = np.round(recall, number_of_decimals)
@@ -1237,11 +1251,11 @@ if __name__ == "__main__":
     ------------------------
     """
 
-    # Process_SHHS_Dataset(
-    #     path_to_shhs_dataset = original_shhs_data_path,
-    #     path_to_save_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     )
+    Process_SHHS_Dataset(
+        path_to_shhs_dataset = original_shhs_data_path,
+        path_to_save_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        )
     
     """
     ------------------------------
@@ -1249,14 +1263,14 @@ if __name__ == "__main__":
     ------------------------------
     """
 
-    # main_model_training(
-    #     neural_network_model = SleepStageModel,
-    #     path_to_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = None,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-    #     )
+    main_model_training(
+        neural_network_model = SleepStageModel,
+        path_to_processed_data = processed_shhs_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_model_state = None,
+        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
+        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
+        )
     
     """
     -----------------------
@@ -1264,11 +1278,11 @@ if __name__ == "__main__":
     -----------------------
     """
 
-    # Process_GIF_Dataset(
-    #     path_to_gif_dataset = original_gif_data_path,
-    #     path_to_save_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file
-    #     )
+    Process_GIF_Dataset(
+        path_to_gif_dataset = original_gif_data_path,
+        path_to_save_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file
+        )
 
     """
     -----------------------------
@@ -1276,14 +1290,14 @@ if __name__ == "__main__":
     -----------------------------
     """
 
-    # main_model_training(
-    #     neural_network_model = SleepStageModel,
-    #     path_to_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-    #     )
+    main_model_training(
+        neural_network_model = SleepStageModel,
+        path_to_processed_data = processed_gif_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_model_state = model_directory_path + model_state_after_shhs_file,
+        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
+        )
 
     """
     ========================
@@ -1291,59 +1305,79 @@ if __name__ == "__main__":
     ========================
     """
 
+    """
+    ----------
+    SHHS Data
+    ----------
+    """
+
+    path_to_save_shhs_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl"
+    shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
+    shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
+
     predictions_for_model_accuracy_evaluation(
         neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = path_to_save_shhs_results,
     )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_SHHS_Training_Pid.pkl", "Neural_Network/Model_Accuracy_SHHS_Validation_Pid.pkl"],
+        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
+
+    """
+    ---------
+    GIF Data
+    ---------
+    """
+
+    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
+    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
 
     predictions_for_model_accuracy_evaluation(
         neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = path_to_save_gif_results,
     )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
         actual_result_key = "Actual_in_windows",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
     print_model_accuracy(
-        paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        display_labels = ["Wake", "LS", "DS", "REM"],
-        average = None,
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
 # IDEAS: max conv channels for mad
 
 # compare different predictions for same time point depending on input signal (after splitting because of length)
-# retrieve sleep stages from project configuration file
+# set epochs
