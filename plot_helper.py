@@ -20,6 +20,7 @@ import seaborn as sns
 
 # LOCAL IMPORTS
 from dataset_processing import load_from_pickle
+from main import loss_per_epoch_shhs_file, loss_per_epoch_gif_file, project_configuration_file, model_accuracy_file
 
 """
 ----------------------
@@ -194,13 +195,14 @@ def plot_accuracy_per_epoch(
 
 def plot_distribution_of_score(
         paths_to_pkl_files: list,
+        path_to_project_configuration: str,
         prediction_result_key: str,
         actual_result_key: str,
         score_function: callable, # type: ignore
         additional_score_function_args: dict = {},
         combine_file_predictions: bool = False,
         **kwargs
-        ):
+    ):
     """
     Calculate the score values using score_function(predicted_results, actual_results) and plot the
     distribution of the scores for the given keys and files.
@@ -216,14 +218,20 @@ def plot_distribution_of_score(
     ------------------------------
     paths_to_pkl_files: list
         the paths to the pickle files containing the data
+    path_to_project_configuration: str
+        the path to all signal processing parameters
     prediction_result_key: str
         the key that accesses the predicted results in the data (for example: "Predicted" or "Predicted_in_windows")
-    actual_result_keys: list
+    actual_result_key: str
         the key that accesses the actual results in the data (for example: "Actual" or "Actual_in_windows")
     score_function: callable
         the function that calculates the score (must take two arguments: predicted_results, actual_results)
-    additional_function_args: dict
-        additional arguments for the score function
+    additional_score_function_args: dict
+        additional arguments for some of the score functions (precision_score, recall_score, f1_score), e.g.:
+            - average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
+                average parameter
+            - zero_division: {"warn", 0.0, 1.0, np.nan}
+                zero division parameter
     combine_file_predictions: bool
         whether to combine the predictions of all files into one distribution
     
@@ -296,6 +304,32 @@ def plot_distribution_of_score(
     if "average" in additional_score_function_args:
         if additional_score_function_args["average"] is None and len(paths_to_pkl_files) > 1:
             raise ValueError("Your current setting would lead to number_sleep_stages * number_files different scores. This is overkill. Either change 'average' in the 'additional_score_function_args' parameter to None or use only one file.")
+        
+        # load signal processing parameters
+        with open(path_to_project_configuration, "rb") as f:
+            project_configuration = pickle.load(f)
+        
+        # access dictionary that maps sleep stages (display labels) to integers
+        sleep_stage_to_label = project_configuration["sleep_stage_label"]
+
+        # Create a list of the integer labels, sorted
+        integer_labels = np.array([value for value in sleep_stage_to_label.values()])
+        integer_labels = np.unique(integer_labels)
+        integer_labels.sort()
+
+        # Create a list of the display labels
+        display_labels = []
+        for integer_label in integer_labels:
+            for key, value in sleep_stage_to_label.items():
+                if value == integer_label:
+                    display_labels.append(key)
+                    break
+        
+        # append labels to additional_score_function_args
+        additional_score_function_args["labels"] = integer_labels
+
+        if additional_score_function_args["average"] is None:
+            kwargs["label"] = display_labels
 
     # Variables to store the score values
     score_values = []
@@ -641,20 +675,32 @@ def plot_actual_predicted(
 
 if __name__ == "__main__":
 
+    model_directory_path = "Neural_Network/"
+    # model_directory_path = "Yao_no_overlap/"
+
     """
     =============================
     Plot Accuracy/Loss per Epoch
     =============================
     """
 
-    # plot_accuracy_per_epoch(
-    #     paths_to_pkl_files = ["Neural_Network/Loss_per_Epoch_GIF.pkl", "Neural_Network/Loss_per_Epoch_SHHS.pkl"],
-    #     result_keys = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
-    #     label = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
-    #     title = "Accuracy of Neural Network",
-    #     xlabel = "Epoch",
-    #     ylabel = "Accuracy / Loss",
-    # )
+    plot_accuracy_per_epoch(
+        paths_to_pkl_files = [model_directory_path + loss_per_epoch_shhs_file],
+        result_keys = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
+        label = ["train_accuracy", "train_avg_loss", "test_accuracy", "test_avg_loss"],
+        title = "Training Neural Network on SHHS Data",
+        xlabel = "Epoch",
+        ylabel = "Accuracy / Loss",
+    )
+
+    plot_accuracy_per_epoch(
+        paths_to_pkl_files = [model_directory_path + loss_per_epoch_shhs_file, model_directory_path + loss_per_epoch_gif_file],
+        result_keys = ["test_accuracy"],
+        label = ["GIF", "SHHS"],
+        title = "History of Neural Network Accuracy",
+        xlabel = "Epoch",
+        ylabel = "Validation Accuracy",
+    )
 
     """
     ================================================
@@ -662,52 +708,67 @@ if __name__ == "__main__":
     ================================================
     """
 
-    # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     score_function = metrics.accuracy_score,
-    #     combine_file_predictions = False,
-    #     title = "Distribution of Accuracy",
-    #     xlabel = "Accuracy",
-    #     label = ["Train", "Test"],
-    #     binrange = (0, 1)
-    # )
+    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
+    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
 
-    # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     score_function = metrics.cohen_kappa_score,
-    #     combine_file_predictions = False,
-    #     title = "Distribution of Kappa Score",
-    #     xlabel = r"$\kappa$ Score",
-    #     label = ["Train", "Test"],
-    # )
+    plot_distribution_of_score(
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        score_function = metrics.accuracy_score, # metrics.cohen_kappa_score
+        combine_file_predictions = False,
+        title = "Distribution of Accuracy",
+        xlabel = "Accuracy",
+        label = ["Training Data", "Validation Data"],
+        binrange = (0, 1),
+        binwidth = 0.05,
+        xlim = (0.6, 1.01),
+    )
 
-    # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     score_function = metrics.f1_score,
-    #     additional_function_args = {"average": "macro"}, # or: None, 'micro', 'macro', 'weighted'
-    #     combine_file_predictions = False,
-    #     title = "Distribution of f1 Score",
-    #     xlabel = "f1 Score",
-    #     label = ["Train", "Test"],
-    # )
+    plot_distribution_of_score(
+        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        score_function = metrics.accuracy_score, # metrics.cohen_kappa_score
+        combine_file_predictions = True,
+        title = "Combined Training and Validation Accuracy Distribution",
+        xlabel = "Accuracy",
+        binrange = (0, 1),
+        binwidth = 0.05,
+        xlim = (0.6, 1.01),
+    )
 
-    # plot_distribution_of_score(
-    #     paths_to_pkl_files = ["Neural_Network/Model_Accuracy_GIF_Training_Pid.pkl", "Neural_Network/Model_Accuracy_GIF_Validation_Pid.pkl"],
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     score_function = metrics.precision_score,
-    #     additional_function_args = {"average": "micro"}, # or: None, 'micro', 'macro', 'weighted' ('binary', 'samples')
-    #     combine_file_predictions = False,
-    #     title = "Distribution of Precision",
-    #     xlabel = "Precision",
-    #     label = ["Train", "Test"],
-    # )
+    plot_distribution_of_score(
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        score_function = metrics.precision_score, # metrics.f1_score
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        title = "Distribution of Precision for GIF Validation Data",
+        xlabel = "Precision",
+        label = ["Wake", "LS", "DS", "REM"],
+        binrange = (0, 1),
+        binwidth = 0.05,
+        xlim = (0.0, 1.01),
+    )
+
+    plot_distribution_of_score(
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        score_function =  metrics.recall_score, # metrics.f1_score
+        additional_score_function_args = {"average": 'weighted', "zero_division": np.nan},
+        title = "Distribution of Recall for GIF Validation Data",
+        xlabel = "Weighted Recall",
+        binrange = (0, 1),
+        binwidth = 0.05,
+        xlim = (0.5, 1.01),
+    )
 
     """
     ======================
@@ -715,30 +776,36 @@ if __name__ == "__main__":
     ======================
     """
 
-    # plot_confusion_matrix(
-    #     path_to_pkl_file = "Model_Accuracy/Yao_SHHS_GIF.pkl",
-    #     prediction_result_key = "test_predicted_results",
-    #     actual_result_keys = "test_actual_results",
-    #     display_labels = ["Wake", "LS", "DS", "REM"],
-    #     title = "Confusion Matrix of Neural Network",
-    # )
+    plot_confusion_matrix(
+        path_to_pkl_file = gif_validation_pid_results_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        title = "Confusion Matrix of Neural Network",
+        xlabel = "predicted stage",
+        ylabel = "actual stage",
+        normalize = None, # 'true', 'pred', 'all'
+        values_format = None, # 'd', 'f', '.1%'
+    )
 
     """
-    ========
-    Testing
-    ========
+    ==========================
+    Plot Actual vs. Predicted
+    ==========================
     """
 
-    # fig, ax = plt.subplots()
-    # for i in range(0, 15):
-    #     x = np.arange(0, 100)
-    #     y = x * i
-    #     ax.plot(
-    #         x,
-    #         y,
-    #         linewidth = 5,
-    #     )
-    # plt.show()
+    with open("Yao_no_overlap/Project_Configuration.pkl", "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    reciprocal_slp_frequency = round(1 / project_configuration['SLP_frequency'])
 
-    print(metrics.precision_score(["ls", "ls", "ds", "rem", "ls", "rem"], ["wake", "ls", "ds", "rem", "rem", "rem"], average = None))
-    print(metrics.precision_score([3, 3, 1, 1, 2, 2, 3, 3], [3, 1, 3, 1, 2, 2, 3, 3], average = None, labels = [0, 1, 2, 3]))
+    plot_actual_predicted(
+        path_to_pkl_file = gif_validation_pid_results_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        data_position = None,
+        title = "Sleep Stages",
+        xlabel = r"Time $\left(\text{in } %i \text{s}\right)$" % reciprocal_slp_frequency,
+        ylabel = "Sleep Stage",
+    )

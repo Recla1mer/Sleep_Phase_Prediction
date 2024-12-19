@@ -1070,7 +1070,7 @@ def print_model_accuracy(
         the key that accesses the predicted results in the data (for example: "test_predicted_results")
     actual_result_key: str
         the key that accesses the actual results in the data (for example: "test_actual_results")
-    additional_function_args: dict
+    additional_score_function_args: dict
         additional arguments for some of the score functions (precision_score, recall_score, f1_score), e.g.:
             - average: {'micro', 'macro', 'samples', 'weighted', 'binary'} or None
                 average parameter
