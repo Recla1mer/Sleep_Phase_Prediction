@@ -1303,6 +1303,36 @@ def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
     return f"{path_without_file_type}_{i}.{file_type}"
 
 
+def ask_to_create_directory(directory_path: str):
+    """
+    Ask the user if a directory should be created if it does not exist yet.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    directory_path: str
+        path to the directory
+    """
+
+    if not os.path.exists(directory_path):
+        false_input = False
+        while True:
+            if not false_input:
+                user_input = input(f"In order to operate correctly, the program wants to create the directory: \'{directory_path}\'. Do you approve? (y/n)")
+                false_input = True
+            else:
+                user_input = input("Please enter \'y\' or \'n\'.")
+
+            if user_input == "y":
+                os.mkdir(directory_path)
+                break
+            elif user_input == "n":
+                raise ValueError(f"Directory '{directory_path}' does not exist.")
+
+
 def create_directories_along_path(file_path: str):
     """
     Create all directories along a given path that do not exist yet.
@@ -1318,11 +1348,14 @@ def create_directories_along_path(file_path: str):
     """
 
     if "/" in file_path:
-        path_parts = file_path.split("/")
+        if "/" == file_path[0]:
+            path_parts = file_path[1:].split("/")
+            path_parts[0] = "/" + path_parts[0]
+        else:
+            path_parts = file_path.split("/")
         for i in range(1, len(path_parts)):
             path = "/".join(path_parts[:i])
-            if not os.path.exists(path):
-                os.mkdir(path)
+            ask_to_create_directory(path)
 
 
 """

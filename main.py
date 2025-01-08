@@ -460,9 +460,6 @@ def Process_NAKO_Dataset(
     Others: See 'Process_SHHS_Dataset' function
     """
 
-    print(path_to_save_processed_data)
-    return
-
     # initializing the database
     nako_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
 
@@ -1334,6 +1331,13 @@ def print_model_accuracy(
 
 
 if __name__ == "__main__":
+
+    Process_NAKO_Dataset(
+        path_to_nako_dataset = "/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl",
+        path_to_save_processed_data = "/Volumes/NaKo-UniHalle/RRI_and_MAD/test.pkl",
+        path_to_project_configuration = "SSM_no_overlap/Project_Configuration.pkl"
+    )
+    raise SystemExit()
 
     """
     ==============================
