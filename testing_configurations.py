@@ -768,13 +768,13 @@ def accuracy_multiple_configurations(
 
 
 if __name__ == "__main__":
-    train_multiple_configurations()
-    predict_multiple_configurations()
+    # train_multiple_configurations()
+    # predict_multiple_configurations()
     # accuracy_multiple_configurations()
 
     name_addition = "_norm_global"
     project_configuration_change = {
-        "normalize_rri": False,
+        "normalize_rri": True,
         "normalize_mad": False,
         "normalization_mode": "global",
     }
@@ -784,7 +784,7 @@ if __name__ == "__main__":
 
     name_addition = "_norm_local"
     project_configuration_change = {
-        "normalize_rri": False,
+        "normalize_rri": True,
         "normalize_mad": False,
         "normalization_mode": "local",
     }

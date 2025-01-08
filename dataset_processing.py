@@ -28,11 +28,50 @@ Operating On Signals
 """
 
 
+def remove_outliers(
+        signal: list, 
+        inlier_interval: list = [None, None]
+    ) -> np.ndarray:
+    """
+    Remove outliers from a signal. Outliers are defined as values that are smaller than lower_bound (replaced 
+    by lower_bound) or larger than upper_bound (replaced by upper_bound).
+
+    lower_bound = inlier_interval[0], upper_bound = inlier_interval[1]
+
+    RETURNS:
+    ------------------------------
+    cleaned_signal: np.ndarray
+        The signal with outliers removed.
+    
+    ARGUMENTS:
+    ------------------------------
+    signal: np.ndarray
+        The signal to be cleaned.
+    inlier_interval: list
+        The interval in which inliers are expected. Outliers will be set to the closest value in this interval.
+        If interval value is None, no lower and/or upper bound will be applied.
+    """
+
+    signal = np.array(signal) # type: ignore
+
+    cleaned_signal = np.copy(signal)
+
+    lower_bound = inlier_interval[0]
+    if lower_bound is not None:
+        cleaned_signal[cleaned_signal < lower_bound] = lower_bound
+    
+    upper_bound = inlier_interval[1]
+    if upper_bound is not None:
+        cleaned_signal[cleaned_signal > upper_bound] = upper_bound
+
+    return cleaned_signal
+
+
 def unity_based_normalization(
         signal: list,
         normalization_max: float = 1,
         normalization_min: float = 0,
-        normalization_mode: str = "global" # "global" or "local"
+        normalization_mode: str = "global", # "global" or "local"
     ) -> np.ndarray: # type: ignore
     """
     Normalize the signal into range: (normalization_min, normalization_max) using the unity based normalization method.
@@ -1380,6 +1419,8 @@ class SleepDataManager:
     file_info["MAD_frequency"] = 1
     file_info["SLP_frequency"] = 1/30
 
+    file_info["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
+    file_info["MAD_inlier_interval"] = [None, None] # No MAD values are altered
     file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
 
     file_info["signal_length_seconds"] = 36000
@@ -1584,10 +1625,14 @@ class SleepDataManager:
         # make sure ID is a string
         new_data["ID"] = str(new_data["ID"])
 
-        # transform signals to np.ndarray
+        # transform signals to np.ndarray and remove outliers
         for signal_key in self.signal_keys:
             if signal_key in new_data:
                 new_data[signal_key] = np.array(new_data[signal_key])
+                if signal_key == "RRI":
+                    new_data[signal_key] = remove_outliers(new_data[signal_key], self.file_info["RRI_inlier_interval"])
+                elif signal_key == "MAD":
+                    new_data[signal_key] = remove_outliers(new_data[signal_key], self.file_info["MAD_inlier_interval"])
         
         for pred_signal_key in self.predicted_signal_keys:
             if pred_signal_key in new_data:

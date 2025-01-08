@@ -67,6 +67,8 @@ sleep_data_manager_parameters = {
     "RRI_frequency": 4,
     "MAD_frequency": 1,
     "SLP_frequency": 1/30,
+    "RRI_inlier_interval": [0.3, 2],
+    "MAD_inlier_interval": [None, None],
     "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
     "signal_length_seconds": window_reshape_parameters["nn_signal_duration_seconds"],
     "wanted_shift_length_seconds": 5400,
@@ -292,7 +294,7 @@ def Process_SHHS_Dataset(
         print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
         progress_bar(0, total_data_points, 1, start_time, None, None)
 
-        # saving all data from SHHS dataset to the shhs_data.pkl file
+        # saving all data from SHHS dataset to the pickle file
         for patient_index in range(total_data_points):
             patient_id = patients[patient_index]
             new_datapoint = {
@@ -381,7 +383,7 @@ def Process_GIF_Dataset(
         print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
         progress_bar(0, total_data_points, 1, start_time, None, None)
 
-        # saving all data from GIF dataset to the gif_data.pkl file
+        # saving all data from GIF dataset to the pickle file
         for patient_index in range(total_data_points):
             patient_id = patients[patient_index]
             new_datapoint = {
@@ -403,6 +405,112 @@ def Process_GIF_Dataset(
     
     # Train-, Validation- and Test-Split
     gif_data_manager.separate_train_test_validation(**split_data_params)
+
+
+def Process_NAKO_Dataset(
+        path_to_nako_dataset: str,
+        path_to_save_processed_data: str,
+        path_to_project_configuration: str
+    ):
+    """
+    If you processed the NAKO dataset using my other project: 'EDF_Processing', then the results of every .edf
+    file should be saved as dictionaries to a pickle file, in the following format:
+
+    {
+        "ID":     
+                Variation of the (.edf) file name the results were calculated for, 
+                (number appended if multiple valid ecgregions)
+        
+        "time_period":
+                List of the start and end time points (in seconds) of the time period in seconds
+        
+        "RRI":
+                List of RR-intervals calculated from the r-peak locations within this time period.
+        
+        "RRI_frequency":
+                Sampling frequency of the RR-intervals.
+        
+        "MAD":
+                List of Mean Amplitude Deviation values calculated from the wrist acceleration data within 
+                this time period.
+        
+        "MAD_frequency":
+                Sampling frequency of the MAD values. Corresponds to 1 / parameters["mad_time_period_seconds"].
+    }
+
+    This function processes our NAKO dataset. It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the NAKO dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_nako_dataset: str
+        the path to the NAKO dataset
+    
+    Others: See 'Process_SHHS_Dataset' function
+    """
+
+    print(path_to_save_processed_data)
+    return
+
+    # initializing the database
+    nako_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+
+    # access data manager parameters
+    sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
+    nako_data_manager.change_file_information(sdm_params)
+
+    # access the NAKO dataset
+    nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
+
+    # count total data points in dataset
+    collect_ids = []
+    total_data_points = 0
+    for generator_entry in nako_dataset_generator:
+        collect_ids.append(generator_entry["ID"])
+        total_data_points += 1
+    
+    # check if all ids are unique:
+    nako_data_manager.check_if_ids_are_unique(collect_ids)
+    del collect_ids
+    
+    # reaccess the NAKO dataset
+    del nako_dataset_generator
+    nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
+
+    # showing progress bar
+    start_time = time.time()
+    count_progress = 0
+    print("\nPreproccessing datapoints from NAKO dataset (ensuring uniformity):")
+    progress_bar(count_progress, total_data_points, 1, start_time, None, None)
+
+    # saving all data from NAKO dataset to the pickle file
+    for generator_entry in nako_dataset_generator:
+        new_datapoint = {
+            "ID": generator_entry["ID"],
+            "RRI": generator_entry["RRI"],
+            "MAD": generator_entry["MAD"],
+            "RRI_frequency": generator_entry["RRI_frequency"],
+            "MAD_frequency": generator_entry["MAD_frequency"],
+        }
+
+        nako_data_manager.save(new_datapoint, unique_id=True)
+        count_progress += 1
+        progress_bar(count_progress, total_data_points, 1, start_time, None, None)
 
 
 """
@@ -1406,4 +1514,4 @@ if __name__ == "__main__":
 # IDEAS: max conv channels for mad
 
 # compare different predictions for same time point depending on input signal (after splitting because of length)
-# set epochs
+# > 2s, < 1/3s rauswerfen
