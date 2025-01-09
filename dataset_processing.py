@@ -2396,7 +2396,7 @@ class SleepDataManager:
         total_number_datapoints = len(self)
         current_index = 0
         print("\nReshaping all signals (RRI, MAD, SLP) in database:")
-        progress_bar(current_index, total_number_datapoints, 1, start_time)
+        previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
         
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2441,7 +2441,7 @@ class SleepDataManager:
 
             # print progress
             current_index += 1
-            progress_bar(current_index, total_number_datapoints, 1, start_time)
+            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
         
         # Remove the old file and rename the working file
         try:
@@ -2794,7 +2794,7 @@ class SleepDataManager:
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:")
-            progress_bar(current_index, total_number_datapoints, 1, start_time)
+            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2813,7 +2813,7 @@ class SleepDataManager:
                 
                 # print progress
                 current_index += 1
-                progress_bar(current_index, total_number_datapoints, 1, start_time)
+                previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
         
         else:
             """
@@ -2852,7 +2852,7 @@ class SleepDataManager:
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:")
-            progress_bar(current_index, total_number_datapoints, 1, start_time)
+            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2873,7 +2873,7 @@ class SleepDataManager:
                 
                 # print progress
                 current_index += 1
-                progress_bar(current_index, total_number_datapoints, 1, start_time)
+                previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
         
         # Remove the old file and rename the working file
         try:

@@ -1005,7 +1005,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     total_number_predictions = 0
     start_time = time.time()
     print("\nTraining Neural Network Model:")
-    progress_bar(0, size, batch_size, start_time, None, None)
+    previous_terminal_length = progress_bar(0, size, start_time, 0, batch_size)
 
     # Iterate over the training dataset
     for batch, (rri, mad, slp) in enumerate(dataloader):
@@ -1044,7 +1044,14 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         datapoints_done = (batch+1) * batch_size
         if datapoints_done > size:
             datapoints_done = size
-        progress_bar(datapoints_done, size, batch_size, start_time, loss.item(), this_correct_predicted / this_number_predictions)
+        previous_terminal_length = progress_bar(
+            index = datapoints_done, 
+            total = size, 
+            start_time = start_time, 
+            previous_length = previous_terminal_length, # type: ignore
+            batch_size = batch_size, 
+            additional_info = f'Loss: {print_smart_float(loss.item(), 3)} | Acc: {round(this_correct_predicted / this_number_predictions*100, 2)}%',
+            )
 
         del this_correct_predicted
     
@@ -1101,7 +1108,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
     total_number_predictions = 0
     start_time = time.time()
     print("\nCalculating Prediction Accuracy on Test Data:")
-    progress_bar(0, size, 1, start_time, None, None)
+    previous_terminal_length = progress_bar(0, size, start_time)
 
     # variables to save accuracy progress
     test_loss, correct = 0, 0
@@ -1136,7 +1143,14 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             datapoints_done = (batch+1) * batch_size
             if datapoints_done > size:
                 datapoints_done = size
-            progress_bar(datapoints_done, size, batch_size, start_time, None, None)
+
+            previous_terminal_length = progress_bar(
+                index = datapoints_done, 
+                total = size, 
+                start_time = start_time, 
+                previous_length = previous_terminal_length, # type: ignore
+                batch_size = batch_size, 
+            )
 
     test_loss /= num_batches
     correct /= total_number_predictions

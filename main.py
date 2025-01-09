@@ -292,7 +292,7 @@ def Process_SHHS_Dataset(
         start_time = time.time()
         total_data_points = len(patients)
         print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
-        progress_bar(0, total_data_points, 1, start_time, None, None)
+        previous_terminal_length = progress_bar(0, total_data_points, start_time)
 
         # saving all data from SHHS dataset to the pickle file
         for patient_index in range(total_data_points):
@@ -307,7 +307,7 @@ def Process_SHHS_Dataset(
             }
 
             shhs_data_manager.save(new_datapoint, unique_id=True)
-            progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
+            previous_terminal_length = progress_bar(patient_index+1, total_data_points, start_time)
     
     else:
         print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -381,7 +381,7 @@ def Process_GIF_Dataset(
         start_time = time.time()
         total_data_points = len(patients)
         print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
-        progress_bar(0, total_data_points, 1, start_time, None, None)
+        previous_terminal_length = progress_bar(0, total_data_points, start_time)
 
         # saving all data from GIF dataset to the pickle file
         for patient_index in range(total_data_points):
@@ -398,7 +398,7 @@ def Process_GIF_Dataset(
             }
 
             gif_data_manager.save(new_datapoint, unique_id=True)
-            progress_bar(patient_index+1, total_data_points, 1, start_time, None, None)
+            previous_terminal_length = progress_bar(patient_index+1, total_data_points, start_time)
 
     else:
         print("\nATTENTION: GIF dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -493,7 +493,7 @@ def Process_NAKO_Dataset(
     start_time = time.time()
     count_progress = 0
     print("\nPreproccessing datapoints from NAKO dataset (ensuring uniformity):")
-    progress_bar(count_progress, total_data_points, 1, start_time, None, None)
+    previous_terminal_length = progress_bar(count_progress, total_data_points, start_time)
 
     # saving all data from NAKO dataset to the pickle file
     for generator_entry in nako_dataset_generator:
@@ -507,7 +507,7 @@ def Process_NAKO_Dataset(
 
         nako_data_manager.save(new_datapoint, unique_id=True)
         count_progress += 1
-        progress_bar(count_progress, total_data_points, 1, start_time, None, None)
+        previous_terminal_length = progress_bar(count_progress, total_data_points, start_time)
 
 
 """
@@ -945,7 +945,7 @@ def main_model_predicting(
     progress = 0
     start_time = time.time()
     print("\nPredicting Sleep Stages:")
-    progress_bar(progress, size, 1, start_time, None, None)
+    previous_terminal_length = progress_bar(progress, size, start_time)
 
 
     with torch.no_grad():
@@ -1092,7 +1092,7 @@ def main_model_predicting(
             
             # update progress
             progress += 1
-            progress_bar(progress, size, 1, start_time, None, None)
+            previous_terminal_length = progress_bar(progress, size, start_time)
 
     
     # Remove the old file and rename the working file
@@ -1334,10 +1334,11 @@ if __name__ == "__main__":
 
     Process_NAKO_Dataset(
         path_to_nako_dataset = "/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl",
-        path_to_save_processed_data = "/Volumes/NaKo-UniHalle/RRI_and_MAD/test.pkl",
+        path_to_save_processed_data = "Processed_NAKO/NAKO-33a.pkl",
         path_to_project_configuration = "SSM_no_overlap/Project_Configuration.pkl"
     )
-    raise SystemExit()
+
+    raise SystemExit
 
     """
     ==============================
