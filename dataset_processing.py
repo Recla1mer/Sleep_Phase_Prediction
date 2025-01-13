@@ -2392,11 +2392,10 @@ class SleepDataManager:
             self.remove_reshaped_signals()
 
         # variables to track progress
-        start_time = time.time()
         total_number_datapoints = len(self)
         current_index = 0
         print("\nReshaping all signals (RRI, MAD, SLP) in database:")
-        previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
+        progress_bar = DynamicProgressBar(total = total_number_datapoints)
         
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2441,7 +2440,7 @@ class SleepDataManager:
 
             # print progress
             current_index += 1
-            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
+            progress_bar.update(current_index = current_index)
         
         # Remove the old file and rename the working file
         try:
@@ -2789,12 +2788,11 @@ class SleepDataManager:
                 save_to_pickle(data = self.file_info, file_name = file_path)
             
             # variables to track progress
-            start_time = time.time()
             current_index = 0
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:")
-            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
+            progress_bar = DynamicProgressBar(total = total_number_datapoints)
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2813,7 +2811,7 @@ class SleepDataManager:
                 
                 # print progress
                 current_index += 1
-                previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
+                progress_bar.update(current_index = current_index)
         
         else:
             """
@@ -2847,12 +2845,11 @@ class SleepDataManager:
                 save_to_pickle(data = self.file_info, file_name = file_path)
             
             # variables to track progress
-            start_time = time.time()
             current_index = 0
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:")
-            previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time)
+            progress_bar = DynamicProgressBar(total = total_number_datapoints)
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2873,7 +2870,7 @@ class SleepDataManager:
                 
                 # print progress
                 current_index += 1
-                previous_terminal_length = progress_bar(current_index, total_number_datapoints, start_time, previous_terminal_length) # type: ignore
+                progress_bar.update(current_index = current_index)
         
         # Remove the old file and rename the working file
         try:

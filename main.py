@@ -289,10 +289,9 @@ def Process_SHHS_Dataset(
         shhs_data_manager.check_if_ids_are_unique(patients)
 
         # showing progress bar
-        start_time = time.time()
         total_data_points = len(patients)
         print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
-        previous_terminal_length = progress_bar(0, total_data_points, start_time)
+        progress_bar = DynamicProgressBar(total = total_data_points)
 
         # saving all data from SHHS dataset to the pickle file
         for patient_index in range(total_data_points):
@@ -307,7 +306,7 @@ def Process_SHHS_Dataset(
             }
 
             shhs_data_manager.save(new_datapoint, unique_id=True)
-            previous_terminal_length = progress_bar(patient_index+1, total_data_points, start_time)
+            progress_bar.update(current_index = patient_index+1)
     
     else:
         print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -378,10 +377,9 @@ def Process_GIF_Dataset(
         gif_data_manager.check_if_ids_are_unique(patients)
 
         # showing progress bar
-        start_time = time.time()
         total_data_points = len(patients)
         print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
-        previous_terminal_length = progress_bar(0, total_data_points, start_time)
+        progress_bar = DynamicProgressBar(total = total_data_points)
 
         # saving all data from GIF dataset to the pickle file
         for patient_index in range(total_data_points):
@@ -398,7 +396,7 @@ def Process_GIF_Dataset(
             }
 
             gif_data_manager.save(new_datapoint, unique_id=True)
-            previous_terminal_length = progress_bar(patient_index+1, total_data_points, start_time)
+            progress_bar.update(current_index = patient_index+1)
 
     else:
         print("\nATTENTION: GIF dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
@@ -490,10 +488,9 @@ def Process_NAKO_Dataset(
     nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
 
     # showing progress bar
-    start_time = time.time()
     count_progress = 0
     print("\nPreproccessing datapoints from NAKO dataset (ensuring uniformity):")
-    previous_terminal_length = progress_bar(count_progress, total_data_points, start_time)
+    progress_bar = DynamicProgressBar(total = total_data_points)
 
     # saving all data from NAKO dataset to the pickle file
     for generator_entry in nako_dataset_generator:
@@ -507,7 +504,7 @@ def Process_NAKO_Dataset(
 
         nako_data_manager.save(new_datapoint, unique_id=True)
         count_progress += 1
-        previous_terminal_length = progress_bar(count_progress, total_data_points, start_time)
+        progress_bar.update(current_index = count_progress)
 
 
 """
@@ -943,9 +940,8 @@ def main_model_predicting(
     # variables to track progress
     size = len(data_manager)
     progress = 0
-    start_time = time.time()
     print("\nPredicting Sleep Stages:")
-    previous_terminal_length = progress_bar(progress, size, start_time)
+    progress_bar = DynamicProgressBar(total = size)
 
 
     with torch.no_grad():
@@ -1092,7 +1088,7 @@ def main_model_predicting(
             
             # update progress
             progress += 1
-            previous_terminal_length = progress_bar(progress, size, start_time)
+            progress_bar.update(current_index = progress)
 
     
     # Remove the old file and rename the working file
@@ -1331,14 +1327,6 @@ def print_model_accuracy(
 
 
 if __name__ == "__main__":
-
-    Process_NAKO_Dataset(
-        path_to_nako_dataset = "/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl",
-        path_to_save_processed_data = "Processed_NAKO/NAKO-33a.pkl",
-        path_to_project_configuration = "SSM_no_overlap/Project_Configuration.pkl"
-    )
-
-    raise SystemExit
 
     """
     ==============================
