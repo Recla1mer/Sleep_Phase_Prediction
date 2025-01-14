@@ -41,28 +41,7 @@ Default Project Configuration
 ==============================
 """
 
-# parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
-# function in dataset_processing.py
-window_reshape_parameters = {
-    "nn_signal_duration_seconds": 36000,
-    "number_windows": 1197,
-    "window_duration_seconds": 120,
-    "overlap_seconds": 90,
-    "priority_order": [3, 2, 1, 0],
-    "pad_feature_with": 0,
-    "pad_target_with": 0
-}
-
-# parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
-signal_normalization_parameters = {
-    "normalize_rri": False,
-    "normalize_mad": False,
-    "normalization_max": 1,
-    "normalization_min": 0,
-    "normalization_mode": "global"
-}
-
-# parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py 
+# parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
 sleep_data_manager_parameters = {
     "RRI_frequency": 4,
     "MAD_frequency": 1,
@@ -70,16 +49,9 @@ sleep_data_manager_parameters = {
     "RRI_inlier_interval": [0.3, 2],
     "MAD_inlier_interval": [None, None],
     "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
-    "signal_length_seconds": window_reshape_parameters["nn_signal_duration_seconds"],
+    "signal_length_seconds": 36000,
     "wanted_shift_length_seconds": 5400,
     "absolute_shift_deviation_seconds": 1800,
-    "SLP_expected_predicted_frequency": 1/window_reshape_parameters["window_duration_seconds"],
-}
-
-# transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
-dataset_class_transform_parameters = {
-    "transform": ToTensor(), 
-    "target_transform": None,
 }
 
 # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
@@ -91,7 +63,35 @@ split_data_parameters = {
     "shuffle": True
 }
 
-# neural network model parameters
+# transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
+dataset_class_transform_parameters = {
+    "transform": ToTensor(), 
+    "target_transform": None,
+}
+
+# parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
+# function in dataset_processing.py
+window_reshape_parameters = {
+    "nn_signal_duration_seconds": sleep_data_manager_parameters["signal_length_seconds"],
+    "number_windows": 1197,
+    "window_duration_seconds": 120,
+    "overlap_seconds": 90,
+    "priority_order": [3, 2, 1, 0],
+    "pad_feature_with": 0,
+    "pad_target_with": 0
+}
+sleep_data_manager_parameters["SLP_expected_predicted_frequency"] = 1/window_reshape_parameters["window_duration_seconds"]
+
+# parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
+signal_normalization_parameters = {
+    "normalize_rri": False,
+    "normalize_mad": False,
+    "normalization_max": 1,
+    "normalization_min": 0,
+    "normalization_mode": "global"
+}
+
+# neural network model parameters, see SleepStageModel class in neural_network_model.py
 neural_network_model_parameters = {
     "number_sleep_stages": 4,
     "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
@@ -103,7 +103,7 @@ neural_network_model_parameters = {
     "window_learning_dilations": [2, 4, 8, 16, 32],
 }
 
-# neural network hyperparameters
+# neural network hyperparameters, see main_model_training function in this file
 neural_network_hyperparameters_shhs = {
     "batch_size": 8,
     "number_epochs": 40,
