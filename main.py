@@ -32,7 +32,7 @@ model_state_after_shhs_gif_file = "Model_State.pth"
 loss_per_epoch_shhs_file = "Loss_per_Epoch_SHHS.pkl"
 loss_per_epoch_gif_file = "Loss_per_Epoch_GIF.pkl"
 
-model_accuracy_file = "Model_Accuracy.pkl"
+model_performance_file = "Model_Performance.pkl"
 
 
 """
@@ -764,19 +764,19 @@ def main_model_predicting(
     These dictionaries have the following format:
     {
         "Predicted_Probabilities": 
-            - shape: (patients, number_sleep_stages) 
+            - shape: (number datapoints, number_sleep_stages) 
             - probabilities for each sleep stage,
         "Predicted": 
-            - shape: (patients) 
+            - shape: (number datapoints) 
             - predicted sleep stage with highest probability,
         "Actual": 
-            - shape: (patients) 
+            - shape: (number datapoints) 
             - actual sleep stages,
         "Predicted_in_windows": 
-            - shape: (patients, windows_per_signal) 
+            - shape: (number datapoints, windows_per_signal) 
             - predicted sleep stages with highest probability, signal still as overlapping windows (output of neural network), 
         "Actual_in_windows":
-            - shape: (patients, windows_per_signal) 
+            - shape: (number datapoints, windows_per_signal) 
             - actual sleep stages, signal still as overlapping windows (used by the neural network),
     }
 
@@ -1438,7 +1438,7 @@ if __name__ == "__main__":
     ----------
     """
 
-    path_to_save_shhs_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl"
+    path_to_save_shhs_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl"
     shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
     shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
 
@@ -1474,7 +1474,7 @@ if __name__ == "__main__":
     ---------
     """
 
-    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
     gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
 

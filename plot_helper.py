@@ -20,7 +20,7 @@ import seaborn as sns
 
 # LOCAL IMPORTS
 from dataset_processing import load_from_pickle
-from main import loss_per_epoch_shhs_file, loss_per_epoch_gif_file, project_configuration_file, model_accuracy_file
+from main import loss_per_epoch_shhs_file, loss_per_epoch_gif_file, project_configuration_file, model_performance_file
 
 """
 ----------------------
@@ -696,7 +696,7 @@ if __name__ == "__main__":
     plot_accuracy_per_epoch(
         paths_to_pkl_files = [model_directory_path + loss_per_epoch_shhs_file, model_directory_path + loss_per_epoch_gif_file],
         result_keys = ["test_accuracy"],
-        label = ["GIF", "SHHS"],
+        label = ["SHHS", "GIF"],
         title = "History of Neural Network Accuracy",
         xlabel = "Epoch",
         ylabel = "Validation Accuracy",
@@ -708,7 +708,7 @@ if __name__ == "__main__":
     ================================================
     """
 
-    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
     gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
 
@@ -761,7 +761,7 @@ if __name__ == "__main__":
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        score_function =  metrics.recall_score, # metrics.f1_score
+        score_function = metrics.recall_score, # metrics.f1_score
         additional_score_function_args = {"average": 'weighted', "zero_division": np.nan},
         title = "Distribution of Recall for GIF Validation Data",
         xlabel = "Weighted Recall",
