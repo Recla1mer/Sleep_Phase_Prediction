@@ -1201,6 +1201,62 @@ def alter_slp_labels(
     return altered_labels
 
 
+def summarize_predicted_signal(predicted_signal: list, mode: str):
+    """
+    As result of predicting the sleep stages for unknown data, we will create the following signals:
+    - "SLP_predicted_probability": Holds the probability of each sleep stage for each time point.
+    - "SLP_predicted": Lists the sleep stages with highest probability for each time point.
+
+    Afterwards we need to reverse the signal split, causing multiple prediction results for some time points.
+    -   In "SLP_predicted_probability", the mean probability is calculated for each sleep stage across 
+        the overlapping predictions.
+    -   For "SLP_predicted", all overlapping predictions for each time point are gathered into an 
+        array. Naturally, the number of data points per time point will vary.
+    
+    Now, we might want to summarize the signal, so that we have a single prediction for each time point.
+    Both signals are 2D arrays, but need to be summarized differently, declared by the parameter "mode".
+
+    RETURNS:
+    ------------------------------
+    summarized_signal: list
+        The summarized signal.
+    
+    ARGUMENTS:
+    ------------------------------
+    predicted_signal: list
+        The predicted signal.
+    mode: str
+        The mode to summarize the signal. Can be "probability" or "majority".
+        If "probability":   The function assumes that the signal lists for every time point (iteration) 
+                            a list of probabilities for each sleep stage. The function will return the 
+                            sleep stage with the highest probability.
+        If "majority":      The function assumes that the signal lists for every time point (iteration)
+                            a list of sleep stages. The function will return the sleep stage that appears
+                            the most.
+    """
+
+    if mode == "probability":
+        return np.argmax(predicted_signal, axis=1)
+    
+    elif mode == "majority":
+        summarized_signal = np.empty(len(predicted_signal), dtype = np.int32)
+        for time_point_index in range(len(predicted_signal)):
+            # collect unique labels and their counts
+            different_labels, label_counts = np.unique(predicted_signal[time_point_index], return_counts=True)
+
+            # remove labels that did not appear the most
+            max_count = max(label_counts)
+            most_common_labels = different_labels[label_counts == max_count]
+
+            # prioritize labels with higher index
+            summarized_signal = np.append(summarized_signal, max(most_common_labels))
+        
+        return summarized_signal
+    
+    else:
+        raise ValueError("\"mode\" parameter not recognized.")
+
+
 """
 ================================
 Handling Pickle Files And Paths
@@ -2169,7 +2225,7 @@ class SleepDataManager:
 
         # prevent runnning this function if data was split into training, validation, and test files
         if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
+            raise ValueError("This function should not be called for data you want to use for training and validating the neural network.")
 
         # signal in windows not needed anymore (saves storage space)
         self.remove_reshaped_signals()
