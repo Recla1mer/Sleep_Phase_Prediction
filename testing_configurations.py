@@ -8,6 +8,70 @@ neural network models.
 from main import *
 from plot_helper import *
 
+
+def predictions_for_model_accuracy_evaluation(
+        neural_network_model = SleepStageModel,
+        path_to_model_state: str = "Neural_Network/Model_State.pth",
+        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
+        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
+        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
+    ):
+    """
+    Applies the trained neural network model to the processed data (training and validation datasets), for
+    the purpose of evaluating the model accuracy.
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    neural_network_model
+        the neural network model to use
+    path_to_model_state: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    path_to_processed_data: str
+        the path to the processed dataset 
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    path_to_project_configuration: str
+        the path to all signal processing parameters 
+        (not all are needed here)
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
+    """
+
+    # paths to access the training, validation, and test datasets
+    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
+    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
+    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
+
+    training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
+    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
+
+    user_answer = ask_to_override_files([training_pid_results_path, validation_pid_results_path])
+    if user_answer == "n":
+        return
+
+    # make predictions for the relevant files
+    main_model_predicting(
+        neural_network_model = neural_network_model,
+        path_to_model_state = path_to_model_state,
+        path_to_processed_data = training_data_path,
+        path_to_project_configuration = path_to_project_configuration,
+        path_to_save_results = training_pid_results_path,
+    )
+
+    main_model_predicting(
+        neural_network_model = neural_network_model,
+        path_to_model_state = path_to_model_state,
+        path_to_processed_data = validation_data_path,
+        path_to_project_configuration = path_to_project_configuration,
+        path_to_save_results = validation_pid_results_path,
+    )
+
+
 """
 ===============
 Model Training
@@ -350,7 +414,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -358,7 +422,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
     """
@@ -372,7 +436,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -380,7 +444,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
     """
@@ -404,7 +468,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -412,7 +476,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
     """
@@ -426,7 +490,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -434,7 +498,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
     """
@@ -458,7 +522,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -466,7 +530,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
     """
@@ -480,7 +544,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
     )
 
     predictions_for_model_accuracy_evaluation(
@@ -488,7 +552,7 @@ def predict_multiple_configurations(
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl",
+        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
 
 
@@ -501,7 +565,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     SHHS Data
     """
     
-    path_to_save_shhs_results = model_directory_path + model_accuracy_file[:-4] + "_SHHS.pkl"
+    path_to_save_shhs_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl"
     shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
     shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
 
@@ -511,7 +575,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
@@ -526,7 +590,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
@@ -541,7 +605,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [shhs_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
@@ -556,7 +620,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [shhs_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
@@ -569,7 +633,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     GIF Data
     """
 
-    path_to_save_gif_results = model_directory_path + model_accuracy_file[:-4] + "_GIF.pkl"
+    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
     gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
     
@@ -579,7 +643,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
@@ -594,7 +658,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
@@ -609,7 +673,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [gif_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows",
@@ -624,7 +688,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     print(message)
     print("-"*len(message))
 
-    print_model_accuracy(
+    print_model_performance(
         paths_to_pkl_files = [gif_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",

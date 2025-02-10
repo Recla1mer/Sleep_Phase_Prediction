@@ -21,6 +21,32 @@ from IPython.display import clear_output
 
 
 """
+========================
+Printing Console Output
+========================
+"""
+
+def print_headline(headline: str, symbol_sequence: str = "="):
+    """
+    Print a headline highlighted with a symbol.
+
+    ARGUMENTS:
+    ------------------------------
+    headline: str
+        the headline to print
+    symbol_sequence: str
+        the symbol or symbol sequence to box the headline with
+    """
+
+    width = len(headline)
+    repeat_symbol = int(np.ceil(width / len(symbol_sequence)))
+
+    print("\n" + symbol_sequence*repeat_symbol)
+    print(headline)
+    print(symbol_sequence*repeat_symbol)
+
+
+"""
 =============
 Progress Bar
 =============
@@ -383,8 +409,8 @@ def ask_to_override_files(file_paths: list):
     
     RETURNS:
     ------------------------------
-    bool
-        True if the user wants to override the files, False otherwise
+    str
+        "y" if the user wants to override the files, "n" otherwise
     """
 
     for file_path in file_paths:

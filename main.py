@@ -792,6 +792,9 @@ def main_model_predicting(
             - predicted sleep stage with highest probability,
     }
 
+    Note:   The algorithm already crops the sleep stages to the correct length of the original signal. This is
+            important as the original signal might has been padded to fit the requirements of the neural network.
+
 
     RETURNS:
     ------------------------------
@@ -1106,70 +1109,7 @@ Evaluate Model Accuracy
 """
 
 
-def predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
-        path_to_model_state: str = "Neural_Network/Model_State.pth",
-        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
-        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
-        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
-    ):
-    """
-    Applies the trained neural network model to the processed data (training and validation datasets), for
-    the purpose of evaluating the model accuracy.
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    neural_network_model
-        the neural network model to use
-    path_to_model_state: str
-        the path to load the model state dictionary
-        if None, the model will be trained from scratch
-    path_to_processed_data: str
-        the path to the processed dataset 
-        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
-        [after removing '.pkl'] accesses the training, validation, and test datasets)
-    path_to_project_configuration: str
-        the path to all signal processing parameters 
-        (not all are needed here)
-    path_to_save_results: str
-        If actual results exist, predicted and actual results will be saved to this path
-    """
-
-    # paths to access the training, validation, and test datasets
-    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
-    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
-    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
-
-    training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
-    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
-
-    user_answer = ask_to_override_files([training_pid_results_path, validation_pid_results_path])
-    if user_answer == "n":
-        return
-
-    # make predictions for the relevant files
-    main_model_predicting(
-        neural_network_model = neural_network_model,
-        path_to_model_state = path_to_model_state,
-        path_to_processed_data = training_data_path,
-        path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = training_pid_results_path,
-    )
-
-    main_model_predicting(
-        neural_network_model = neural_network_model,
-        path_to_model_state = path_to_model_state,
-        path_to_processed_data = validation_data_path,
-        path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = validation_pid_results_path,
-    )
-
-
-def print_model_accuracy(
+def print_model_performance(
         paths_to_pkl_files: list,
         path_to_project_configuration: str,
         prediction_result_key: str,
@@ -1178,7 +1118,7 @@ def print_model_accuracy(
         number_of_decimals = 2
     ):
     """
-    This function calculates various accuracy parameters from the given pickle files (need to contain
+    This function calculates various performance parameters from the given pickle files (need to contain
     actual and predicted values).
 
     RETURNS:
@@ -1442,28 +1382,27 @@ if __name__ == "__main__":
     shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
     shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
 
-    predictions_for_model_accuracy_evaluation(
+    # paths to access the training, validation, and test pids
+    shhs_validation_data_path = processed_shhs_path[:-4] + "_validation_pid.pkl"
+    # shhs_training_data_path = processed_shhs_path[:-4] + "_training_pid.pkl"
+    # shhs_test_data_path = processed_shhs_path[:-4] + "_test_pid.pkl"
+
+    # make predictions for the relevant files
+    main_model_predicting(
         neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
+        path_to_processed_data = shhs_validation_data_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = path_to_save_shhs_results,
+        path_to_save_results = shhs_validation_pid_results_path,
     )
 
-    print_model_accuracy(
-        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    print_headline("Performance on SHHS Data:", symbol_sequence="-=-")
 
-    print_model_accuracy(
-        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+    print_model_performance(
+        paths_to_pkl_files = [shhs_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
+        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
+        actual_result_key = "Actual_in_windows", # or: "Actual"
         additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
@@ -1478,33 +1417,35 @@ if __name__ == "__main__":
     gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
 
-    predictions_for_model_accuracy_evaluation(
+    # paths to access the training, validation, and test pids
+    gif_validation_data_path = processed_gif_path[:-4] + "_validation_pid.pkl"
+    # gif_training_data_path = processed_gif_path[:-4] + "_training_pid.pkl"
+    # gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
+
+    # make predictions for the relevant files
+    main_model_predicting(
         neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
+        path_to_processed_data = gif_validation_data_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = path_to_save_gif_results,
+        path_to_save_results = gif_validation_pid_results_path,
     )
 
-    print_model_accuracy(
-        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+    print_headline("Performance on GIF Data:", symbol_sequence="-=-")
+
+    print_model_performance(
+        paths_to_pkl_files = [gif_validation_pid_results_path],
         path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
+        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
+        actual_result_key = "Actual_in_windows", # or: "Actual"
         additional_score_function_args = {"average": None, "zero_division": np.nan},
         number_of_decimals = 3
     )
 
-    print_model_accuracy(
-        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
 
 # IDEAS: max conv channels for mad
 
 # compare different predictions for same time point depending on input signal (after splitting because of length)
 # > 2s, < 1/3s rauswerfen
+
+# remove class function to turn signal into wi dows in sleepdatamanager class
