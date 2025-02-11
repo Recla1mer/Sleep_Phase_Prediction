@@ -237,8 +237,6 @@ def Process_SHHS_Dataset(
     parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
     class to split the data into training, validation, and test pids (individual files).
 
-    If already processed, the function will only shuffle the data in the pids again.
-
     RETURNS:
     ------------------------------
     None
@@ -257,8 +255,9 @@ def Process_SHHS_Dataset(
         (includes more parameters, but only the sleep_data_manager_parameters are needed here)
     """
 
-    # following path will be created at the end of this function, if it exists, skip the processing part
-    shhs_training_data_path = path_to_save_processed_data[:-4] + "_training_pid.pkl"
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
 
     # initializing the database
     shhs_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
@@ -270,47 +269,42 @@ def Process_SHHS_Dataset(
     # access parameters used for splitting the data
     split_data_params = {key: project_configuration[key] for key in split_data_parameters}
 
-    if not os.path.exists(shhs_training_data_path):
+    # access data manager parameters
+    sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
+    shhs_data_manager.change_file_information(sdm_params)
 
-        # access data manager parameters
-        sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
-        shhs_data_manager.change_file_information(sdm_params)
-
-        # access the SHHS dataset
-        shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
-        
-        # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-        shhs_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
-
-        # accessing patient ids:
-        patients = list(shhs_dataset['slp'].keys()) # type: ignore
-
-        # check if patient ids are unique:
-        shhs_data_manager.check_if_ids_are_unique(patients)
-
-        # showing progress bar
-        total_data_points = len(patients)
-        print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
-        progress_bar = DynamicProgressBar(total = total_data_points)
-
-        # saving all data from SHHS dataset to the pickle file
-        for patient_index in range(total_data_points):
-            patient_id = patients[patient_index]
-            new_datapoint = {
-                "ID": patient_id,
-                "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
-                "SLP": shhs_dataset["slp"][patient_id][:], # type: ignore
-                "RRI_frequency": shhs_dataset["rri"].attrs["freq"], # type: ignore
-                "SLP_frequency": shhs_dataset["slp"].attrs["freq"], # type: ignore
-                "sleep_stage_label": copy.deepcopy(shhs_sleep_stage_label)
-            }
-
-            shhs_data_manager.save(new_datapoint, unique_id=True)
-            progress_bar.update(current_index = patient_index+1)
+    # access the SHHS dataset
+    shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
     
-    else:
-        print("\nATTENTION: SHHS dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
-    
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    shhs_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+
+    # accessing patient ids:
+    patients = list(shhs_dataset['slp'].keys()) # type: ignore
+
+    # check if patient ids are unique:
+    shhs_data_manager.check_if_ids_are_unique(patients)
+
+    # showing progress bar
+    total_data_points = len(patients)
+    print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
+    progress_bar = DynamicProgressBar(total = total_data_points)
+
+    # saving all data from SHHS dataset to the pickle file
+    for patient_index in range(total_data_points):
+        patient_id = patients[patient_index]
+        new_datapoint = {
+            "ID": patient_id,
+            "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
+            "SLP": shhs_dataset["slp"][patient_id][:], # type: ignore
+            "RRI_frequency": shhs_dataset["rri"].attrs["freq"], # type: ignore
+            "SLP_frequency": shhs_dataset["slp"].attrs["freq"], # type: ignore
+            "sleep_stage_label": copy.deepcopy(shhs_sleep_stage_label)
+        }
+
+        shhs_data_manager.save(new_datapoint, unique_id=True)
+        progress_bar.update(current_index = patient_index+1)
+
     # Train-, Validation- and Test-Split
     shhs_data_manager.separate_train_test_validation(**split_data_params)
 
@@ -331,8 +325,6 @@ def Process_GIF_Dataset(
     parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
     class to split the data into training, validation, and test pids (individual files).
 
-    If already processed, the function will only shuffle the data in the pids again.
-
     RETURNS:
     ------------------------------
     None
@@ -345,8 +337,9 @@ def Process_GIF_Dataset(
     Others: See 'Process_SHHS_Dataset' function
     """
 
-    # following path will be created at the end of this function, if it exists, skip the processing part
-    gif_training_data_path = path_to_save_processed_data[:-4] + "_training_pid.pkl"
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
 
     # initializing the database
     gif_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
@@ -358,49 +351,44 @@ def Process_GIF_Dataset(
     # access parameters used for splitting the data
     split_data_params = {key: project_configuration[key] for key in split_data_parameters}
 
-    if not os.path.exists(gif_training_data_path):
+    # access data manager parameters
+    sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
+    gif_data_manager.change_file_information(sdm_params)
 
-        # access data manager parameters
-        sdm_params = {key: project_configuration[key] for key in sleep_data_manager_parameters}
-        gif_data_manager.change_file_information(sdm_params)
+    # access the GIF dataset
+    gif_dataset = h5py.File(path_to_gif_dataset, 'r')
 
-        # access the GIF dataset
-        gif_dataset = h5py.File(path_to_gif_dataset, 'r')
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
 
-        # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-        gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+    # accessing patient ids:
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
 
-        # accessing patient ids:
-        patients = list(gif_dataset['stage'].keys()) # type: ignore
+    # check if patient ids are unique:
+    gif_data_manager.check_if_ids_are_unique(patients)
 
-        # check if patient ids are unique:
-        gif_data_manager.check_if_ids_are_unique(patients)
+    # showing progress bar
+    total_data_points = len(patients)
+    print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
+    progress_bar = DynamicProgressBar(total = total_data_points)
 
-        # showing progress bar
-        total_data_points = len(patients)
-        print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
-        progress_bar = DynamicProgressBar(total = total_data_points)
+    # saving all data from GIF dataset to the pickle file
+    for patient_index in range(total_data_points):
+        patient_id = patients[patient_index]
+        new_datapoint = {
+            "ID": patient_id,
+            "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
+            "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
+            "SLP": np.array(gif_dataset["stage"][patient_id][:]).astype(int), # type: ignore
+            "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
+            "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
+            "SLP_frequency": 1/30, # type: ignore
+            "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
+        }
 
-        # saving all data from GIF dataset to the pickle file
-        for patient_index in range(total_data_points):
-            patient_id = patients[patient_index]
-            new_datapoint = {
-                "ID": patient_id,
-                "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
-                "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
-                "SLP": np.array(gif_dataset["stage"][patient_id][:]).astype(int), # type: ignore
-                "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
-                "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
-                "SLP_frequency": 1/30, # type: ignore
-                "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
-            }
+        gif_data_manager.save(new_datapoint, unique_id=True)
+        progress_bar.update(current_index = patient_index+1)
 
-            gif_data_manager.save(new_datapoint, unique_id=True)
-            progress_bar.update(current_index = patient_index+1)
-
-    else:
-        print("\nATTENTION: GIF dataset seems to be processed already. Skipping processing. Only the datapoints in the training-, validation, and test pid will be randomly distributed again.")
-    
     # Train-, Validation- and Test-Split
     gif_data_manager.separate_train_test_validation(**split_data_params)
 
@@ -458,6 +446,10 @@ def Process_NAKO_Dataset(
     Others: See 'Process_SHHS_Dataset' function
     """
 
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
+
     # initializing the database
     nako_data_manager = SleepDataManager(file_path = path_to_save_processed_data)
 
@@ -508,9 +500,9 @@ def Process_NAKO_Dataset(
 
 
 """
-==========================================
-Training And Testing Neural Network Model
-==========================================
+===========================================
+Training And Applying Neural Network Model
+===========================================
 """
 
 
@@ -1103,9 +1095,9 @@ def main_model_predicting(
 
 
 """
-========================
-Evaluate Model Accuracy
-========================
+===========================
+Evaluate Model Performance
+===========================
 """
 
 
@@ -1266,13 +1258,177 @@ def print_model_performance(
         print()
 
 
-if __name__ == "__main__":
+"""
+=======================
+Run Main Functionality
+=======================
+
+This file/project provides three main functionalities using the functions implemented above:
+    1. Processing datasets and training the neural network model
+    2. Evaluating the neural network model's performance
+    3. Applying the trained neural network model to new data
+
+Each functionality requires specific functions to be called in the correct order. The necessary sequence of 
+operations is executed within the following functions.
+"""
+
+
+def run_model_training(
+        path_to_model_directory: str,
+        path_to_processed_shhs: str,
+        path_to_processed_gif: str,
+    ):
+    """
+    Corresponds to the 1st main functionality: Processing datasets and training the neural network model.
+
+    Before executing each step, the system checks whether data or model states already exist in the specified 
+    paths. To prevent accidental loss of results and due to the potentially long computation time for each 
+    step, the user will be prompted to confirm whether they want to overwrite the existing data or model 
+    states.
+
+    Most of the parameters are hardcoded in the functions called below. This ensures that the results of
+    training different models or training with different configurations are stored analogously. 
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_model_directory: str
+        the path to the directory where all results are stored
+    path_to_processed_shhs: str
+        the path to the file where the processed SHHS data is stored
+    path_to_processed_gif: str
+        the path to the file where the processed GIF data is stored
+    """
 
     """
-    ==============================
-    Training Neural Network Model
-    ==============================
+    ------------------------
+    Preprocessing SHHS Data
+    ------------------------
     """
+
+    # check if processed data already exists
+    user_response = "y"
+    if os.path.exists(path_to_processed_shhs):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are attempting to process and save SHHS data to an existing path. " +
+                "The existing data may have been used to train and validate a model. " +
+                "Overwriting it may prevent accurate assessment of the model's performance, " + 
+                "as the validation pid will change. Do you want to overwrite? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([path_to_processed_shhs, path_to_processed_shhs[:-4] + "_training_pid.pkl", path_to_processed_shhs[:-4] + "_validation_pid.pkl", path_to_processed_shhs[:-4] + "_test_pid.pkl"])
+
+    # process SHHS data
+    if user_response == "y":
+        Process_SHHS_Dataset(
+            path_to_shhs_dataset = original_shhs_data_path,
+            path_to_save_processed_data = path_to_processed_shhs,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            )
+    
+    """
+    ------------------------------
+    Training Network on SHHS Data
+    ------------------------------
+    """
+
+    # check if model state already exists
+    user_response = "y"
+    if os.path.exists(path_to_model_directory + model_state_after_shhs_file):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are attempting to train the neural network on SHHS data and save its " +
+                "final model state to an existing path. The existing model may have been used for further " +
+                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
+                "from it. Do you want to overwrite? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file])
+
+    # train neural network on SHHS data
+    if user_response == "y":
+        main_model_training(
+            neural_network_model = SleepStageModel,
+            neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+            path_to_processed_data = path_to_processed_shhs,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = None,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
+            )
+    
+    """
+    -----------------------
+    Preprocessing GIF Data
+    -----------------------
+    """
+
+    # check if processed data already exists
+    user_response = "y"
+    if os.path.exists(path_to_processed_gif):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are attempting to process and save GIF data to an existing path. " +
+                "The existing data may have been used to train and validate a model. " +
+                "Overwriting it may prevent accurate assessment of the model's performance, " + 
+                "as the validation pid will change. Do you want to overwrite? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([path_to_processed_gif, path_to_processed_gif[:-4] + "_training_pid.pkl", path_to_processed_gif[:-4] + "_validation_pid.pkl", path_to_processed_gif[:-4] + "_test_pid.pkl"])
+
+    # process GIF data
+    if user_response == "y":
+        Process_GIF_Dataset(
+            path_to_gif_dataset = original_gif_data_path,
+            path_to_save_processed_data = path_to_processed_gif,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file
+            )
+
+    """
+    -----------------------------
+    Training Network on GIF Data
+    -----------------------------
+    """
+
+    # check if model state already exists
+    user_response = "y"
+    if os.path.exists(path_to_model_directory + model_state_after_shhs_gif_file):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are attempting to train the neural network on GIF data and save its " +
+                "final model state to an existing path. The existing model may have been used for further " +
+                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
+                "from it. Do you want to overwrite? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file, model_state_after_shhs_file])
+
+    # train neural network on GIF data
+    if user_response == "y":
+        main_model_training(
+            neural_network_model = SleepStageModel,
+            neural_network_hyperparameters = neural_network_hyperparameters_gif,
+            path_to_processed_data = path_to_processed_gif,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
+            )
+
+
+if __name__ == "__main__":
     
     """
     ---------------
@@ -1311,60 +1467,16 @@ if __name__ == "__main__":
     del project_configuration
 
     """
-    ------------------------
-    Preprocessing SHHS Data
-    ------------------------
+    ==============================
+    Training Neural Network Model
+    ==============================
     """
 
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
-    
-    """
-    ------------------------------
-    Training Network on SHHS Data
-    ------------------------------
-    """
-
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-    
-    """
-    -----------------------
-    Preprocessing GIF Data
-    -----------------------
-    """
-
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
-
-    """
-    -----------------------------
-    Training Network on GIF Data
-    -----------------------------
-    """
-
-    main_model_training(
-        neural_network_model = SleepStageModel,
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
+    run_model_training(
+        path_to_model_directory = model_directory_path,
+        path_to_processed_shhs = processed_shhs_path,
+        path_to_processed_gif = processed_gif_path,
+    )
 
     """
     ========================

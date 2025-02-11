@@ -398,41 +398,73 @@ Override Files
 """
 
 
-def ask_to_override_files(file_paths: list):
+def retrieve_user_response(message: str, allowed_responses: list):
     """
-    Asks the user if they want to override files.
+    Prints message to console and retrieves user response.
 
     ARGUMENTS:
     ------------------------------
-    file_paths: list
-        list of file paths to ask for
+    message: str
+        message to print
+    allowed_responses: list
+        list of allowed answers
     
     RETURNS:
     ------------------------------
     str
-        "y" if the user wants to override the files, "n" otherwise
+        user response
+    """
+
+    while True:
+        answer = input("\n" + message)
+        
+        if answer in allowed_responses:
+            return answer
+        else:
+            print(f"\nPlease enter one of the following: {allowed_responses}")
+
+
+def delete_files(file_paths: list):
+    """
+    Deletes files.
+
+    ARGUMENTS:
+    ------------------------------
+    file_paths: list
+        list of file paths to delete
+    
+    RETURNS:
+    ------------------------------
+    None
     """
 
     for file_path in file_paths:
-        file_exists = False
         if os.path.exists(file_path):
-            file_exists = True
-            break
+            os.remove(file_path)
+
+
+def delete_directory_files(directory_path: str, keep_files: list):
+    """
+    Deletes all files in a directory.
+
+    ARGUMENTS:
+    ------------------------------
+    directory_path: str
+        path to directory
+    keep_files: list
+        list of file names to keep
     
-    if file_exists:
-        while True:
-            print("At least one of the following files already exists:")
-            print(file_paths)
-            answer = input("\nDo you want to override all of them? (y/n): ")
-            if answer == "y":
-                for file_path in file_paths:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                return "y"
-            elif answer == "n":
-                return "n"
-            else:
-                print("Please enter 'y' or 'n'.")
+    RETURNS:
+    ------------------------------
+    None
+    """
+
+    for file in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, file)
+        if file in keep_files or file_path in keep_files:
+            continue
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
 
 if __name__ == "__main__":

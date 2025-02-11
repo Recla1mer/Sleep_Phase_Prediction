@@ -9,6 +9,43 @@ from main import *
 from plot_helper import *
 
 
+def ask_to_override_files(file_paths: list):
+    """
+    Asks the user if they want to override files.
+
+    ARGUMENTS:
+    ------------------------------
+    file_paths: list
+        list of file paths to ask for
+    
+    RETURNS:
+    ------------------------------
+    str
+        "y" if the user wants to override the files, "n" otherwise
+    """
+
+    for file_path in file_paths:
+        file_exists = False
+        if os.path.exists(file_path):
+            file_exists = True
+            break
+    
+    if file_exists:
+        while True:
+            print("At least one of the following files already exists:")
+            print(file_paths)
+            answer = input("\nDo you want to override all of them? (y/n): ")
+            if answer == "y":
+                for file_path in file_paths:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                return "y"
+            elif answer == "n":
+                return "n"
+            else:
+                print("Please enter 'y' or 'n'.")
+
+
 def predictions_for_model_accuracy_evaluation(
         neural_network_model = SleepStageModel,
         path_to_model_state: str = "Neural_Network/Model_State.pth",
