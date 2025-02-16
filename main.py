@@ -1428,6 +1428,147 @@ def run_model_training(
             )
 
 
+def run_model_performance_evaluation(
+        path_to_model_directory: str,
+        path_to_processed_shhs: str,
+        path_to_processed_gif: str,
+    ):
+    """
+    Corresponds to the 2nd main functionality: Evaluating the neural network model's performance.
+
+    In order to do that, this function will first predict the sleep stages for the SHHS and GIF validation
+    datasets using the trained model and save the results to a pkl-file. Then, the performance of the model
+    will be calculated from these results and printed to the console.
+
+    Before executing the functions to predict the results, the system checks whether those already exist in 
+    the specified paths. Due to the potentially long computation time, the user will be prompted to confirm 
+    whether they want to overwrite the existing data.
+
+    Most of the parameters are hardcoded in the functions called below. This ensures that the results of
+    the predictions for different models are stored analogously. 
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_model_directory: str
+        the path to the directory where all results are stored
+    path_to_processed_shhs: str
+        the path to the file where the processed SHHS data is stored
+    path_to_processed_gif: str
+        the path to the file where the processed GIF data is stored
+    """
+
+    """
+    ----------
+    SHHS Data
+    ----------
+    """
+
+    # path to save the predictions
+    path_to_save_shhs_results = path_to_model_directory + model_performance_file[:-4] + "_SHHS.pkl"
+    shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
+    # shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
+    # shhs_test_pid_results_path = path_to_save_shhs_results[:-4] + "_Test_Pid.pkl"
+
+    # paths to access the training, validation, and test pids
+    shhs_validation_data_path = path_to_processed_shhs[:-4] + "_validation_pid.pkl"
+    # shhs_training_data_path = path_to_processed_shhs[:-4] + "_training_pid.pkl"
+    # shhs_test_data_path = path_to_processed_shhs[:-4] + "_test_pid.pkl"
+
+    # check if predictions already exist
+    user_response = "y"
+    if os.path.exists(path_to_model_directory + shhs_validation_pid_results_path):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are about to predict sleep stages for the SHHS validation pid and " +
+                "save the results to an existing file. If you skip the prediction, performance values will " +
+                "be calculated from the existing results, saving significant computation time. Do you still " +
+                "want to overwrite the existing file and re-run the prediction? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([path_to_model_directory + shhs_validation_pid_results_path])
+
+    # make predictions for the relevant files
+    if user_response == "y":
+        main_model_predicting(
+            neural_network_model = SleepStageModel,
+            path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+            path_to_processed_data = shhs_validation_data_path,
+            path_to_project_configuration = model_directory_path + project_configuration_file,
+            path_to_save_results = shhs_validation_pid_results_path,
+        )
+
+    # calculate and print performance results
+    print_headline("Performance on SHHS Data:", symbol_sequence="=")
+
+    print_model_performance(
+        paths_to_pkl_files = [shhs_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
+        actual_result_key = "Actual_in_windows", # or: "Actual"
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        number_of_decimals = 3
+    )
+
+    """
+    ---------
+    GIF Data
+    ---------
+    """
+
+    # path to save the predictions
+    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
+    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
+    # gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
+    # gif_test_pid_results_path = path_to_save_gif_results[:-4] + "_Test_Pid.pkl"
+
+    # paths to access the training, validation, and test pids
+    gif_validation_data_path = path_to_processed_gif[:-4] + "_validation_pid.pkl"
+    # gif_training_data_path = path_to_processed_gif[:-4] + "_training_pid.pkl"
+    # gif_test_data_path = path_to_processed_gif[:-4] + "_test_pid.pkl"
+
+    # check if predictions already exist
+    user_response = "y"
+    if os.path.exists(path_to_model_directory + shhs_validation_pid_results_path):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are about to predict sleep stages for the GIF validation pid and " +
+                "save the results to an existing file. If you skip the prediction, performance values will " +
+                "be calculated from the existing results, saving significant computation time. Do you still " +
+                "want to overwrite the existing file and re-run the prediction? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([path_to_model_directory + shhs_validation_pid_results_path])
+
+    # make predictions for the relevant files
+    if user_response == "y":
+        main_model_predicting(
+            neural_network_model = SleepStageModel,
+            path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+            path_to_processed_data = gif_validation_data_path,
+            path_to_project_configuration = model_directory_path + project_configuration_file,
+            path_to_save_results = gif_validation_pid_results_path,
+        )
+
+    # calculate and print performance results
+    print_headline("Performance on GIF Data:", symbol_sequence="=")
+
+    print_model_performance(
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
+        actual_result_key = "Actual_in_windows", # or: "Actual"
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        number_of_decimals = 3
+    )
+
 if __name__ == "__main__":
     
     """
@@ -1484,74 +1625,10 @@ if __name__ == "__main__":
     ========================
     """
 
-    """
-    ----------
-    SHHS Data
-    ----------
-    """
-
-    path_to_save_shhs_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl"
-    shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
-    shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
-
-    # paths to access the training, validation, and test pids
-    shhs_validation_data_path = processed_shhs_path[:-4] + "_validation_pid.pkl"
-    # shhs_training_data_path = processed_shhs_path[:-4] + "_training_pid.pkl"
-    # shhs_test_data_path = processed_shhs_path[:-4] + "_test_pid.pkl"
-
-    # make predictions for the relevant files
-    main_model_predicting(
-        neural_network_model = SleepStageModel,
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = shhs_validation_data_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = shhs_validation_pid_results_path,
-    )
-
-    print_headline("Performance on SHHS Data:", symbol_sequence="-=-")
-
-    print_model_performance(
-        paths_to_pkl_files = [shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
-        actual_result_key = "Actual_in_windows", # or: "Actual"
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
-
-    """
-    ---------
-    GIF Data
-    ---------
-    """
-
-    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
-    gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
-    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
-
-    # paths to access the training, validation, and test pids
-    gif_validation_data_path = processed_gif_path[:-4] + "_validation_pid.pkl"
-    # gif_training_data_path = processed_gif_path[:-4] + "_training_pid.pkl"
-    # gif_test_data_path = processed_gif_path[:-4] + "_test_pid.pkl"
-
-    # make predictions for the relevant files
-    main_model_predicting(
-        neural_network_model = SleepStageModel,
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = gif_validation_data_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = gif_validation_pid_results_path,
-    )
-
-    print_headline("Performance on GIF Data:", symbol_sequence="-=-")
-
-    print_model_performance(
-        paths_to_pkl_files = [gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
-        actual_result_key = "Actual_in_windows", # or: "Actual"
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
+    run_model_performance_evaluation(
+        path_to_model_directory = model_directory_path,
+        path_to_processed_shhs = processed_shhs_path,
+        path_to_processed_gif = processed_gif_path,
     )
 
 
