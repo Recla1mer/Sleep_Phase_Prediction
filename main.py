@@ -1569,6 +1569,111 @@ def run_model_performance_evaluation(
         number_of_decimals = 3
     )
 
+
+def run_model_predicting(
+        path_to_model_directory: str,
+        path_to_unknown_dataset: str
+    ):
+    """
+    Corresponds to the 3rd main functionality: Applying the trained neural network model to new data.
+
+    Make sure that all files, you want to predict the sleep stages for, have a different name.
+
+    In order to do that, this function will first process the unknown dataset and save the results to a 
+    pkl-file. Then, the trained model will be used to predict the sleep stages for the unknown dataset
+    and save the results to the same pkl-file. The processing caused the signals to be split into overlapping
+    parts that fit the neural networks requirements. Therefore, all signals will be reconstructed to their
+    original form (causing to have multiple predictions for the overlapping parts).
+
+    Most of the parameters are hardcoded in the functions called below. This ensures that the results of
+    the predictions for different models are stored analogously. 
+
+    ATTENTION:  This function was designed to predict sleep stages for the NAKO dataset. However, this does
+                not mean that it is limited to this dataset.
+    
+                For more information on how the unknown dataset must be formatted to be processable, please 
+                refer to the Process_NAKO_Dataset function in dataset_processing.py. If your dataset is 
+                formatted differently, you may need to create a new function, analogous to the one mentioned
+                above, to process your dataset.
+
+                For more information on how the predictions are saved, please refer to the 
+                main_model_predicting function in this file.
+
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_model_directory: str
+        the path to the directory where all results are stored
+    path_to_unknown_dataset: str
+        the path to the file where the unknown dataset is stored
+    """
+
+    # path to save the predictions
+    path_to_processed_unknown_dataset = "Processed_NAKO/" + os.path.split(path_to_unknown_dataset)[1]
+
+    """
+    ---------------------------
+    Preprocessing Unknown Data
+    ---------------------------
+    """
+
+    # check if processed data already exists
+    user_response = "y"
+    if os.path.exists(path_to_processed_unknown_dataset):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are about to process and save NAKO data to an existing path. " +
+                "The existing file may contain results from a previous prediction using a different file " +
+                "path but the same file name. Only overwrite if you intend to reprocess older results. " +
+                "(This must be done even if you only intend to repredict the sleep stages.)" + 
+                "Do you want to proceed? (y/n)",
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([path_to_processed_unknown_dataset])
+        else:
+            return
+
+    # process unknown dataset
+    Process_NAKO_Dataset(
+        path_to_nako_dataset = path_to_unknown_dataset,
+        path_to_save_processed_data = path_to_processed_unknown_dataset,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
+    )
+
+    """
+    ------------------------
+    Predicting Sleep Phases
+    ------------------------
+    """
+
+    main_model_predicting(
+        neural_network_model = SleepStageModel,
+        path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+        path_to_processed_data = path_to_processed_unknown_dataset,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
+    )
+
+    """
+    ------------------------
+    Reverse Data Alteration
+    ------------------------
+    """
+    
+    data_manager = SleepDataManager(file_path = path_to_processed_unknown_dataset)
+
+    # reverse signal split
+    data_manager.reverse_signal_split()
+
+    # crop padded signals
+    # data_manager.crop_predicted_signals()
+
+
 if __name__ == "__main__":
     
     """
