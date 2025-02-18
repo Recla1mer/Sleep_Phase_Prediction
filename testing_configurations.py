@@ -8,6 +8,42 @@ neural network models.
 from main import *
 from plot_helper import *
 
+import os
+
+def print_project_configuration():
+    """
+    """
+    all_directories = os.listdir()
+    for directory in all_directories:
+        if "SSM" == directory[:3] or "Yao" == directory[:3]:
+            with open(directory + "/" + project_configuration_file, "rb") as file:
+                this_project_configuration = pickle.load(file)
+            print(directory)
+            print(this_project_configuration)
+            print("\n")
+            print("-"*50)
+            print("\n")
+
+
+def fix_project_configuration():
+    """
+    """
+    all_directories = os.listdir()
+    for directory in all_directories:
+        if "SSM" == directory[:3]:
+            with open(directory + "/" + project_configuration_file, "rb") as file:
+                this_project_configuration = pickle.load(file)
+            this_project_configuration["neural_network_model"] = SleepStageModel
+        elif "Yao" == directory[:3]:
+            with open(directory + "/" + project_configuration_file, "rb") as file:
+                this_project_configuration = pickle.load(file)
+            this_project_configuration["neural_network_model"] = YaoModel
+        else:
+            continue
+
+        os.remove(directory + "/" + project_configuration_file)
+        save_to_pickle(this_project_configuration, directory + "/" + project_configuration_file)
+
 
 def ask_to_override_files(file_paths: list):
     """
@@ -93,7 +129,6 @@ def predictions_for_model_accuracy_evaluation(
 
     # make predictions for the relevant files
     main_model_predicting(
-        neural_network_model = neural_network_model,
         path_to_model_state = path_to_model_state,
         path_to_processed_data = training_data_path,
         path_to_project_configuration = path_to_project_configuration,
@@ -101,7 +136,6 @@ def predictions_for_model_accuracy_evaluation(
     )
 
     main_model_predicting(
-        neural_network_model = neural_network_model,
         path_to_model_state = path_to_model_state,
         path_to_processed_data = validation_data_path,
         path_to_project_configuration = path_to_project_configuration,
@@ -149,6 +183,8 @@ def train_multiple_configurations(
     model_directory_path = "SSM_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = SleepStageModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
@@ -162,7 +198,6 @@ def train_multiple_configurations(
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -180,7 +215,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -196,13 +230,14 @@ def train_multiple_configurations(
     model_directory_path = "Yao_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = YaoModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -213,7 +248,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -255,13 +289,14 @@ def train_multiple_configurations(
     model_directory_path = "SSM_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = SleepStageModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -272,7 +307,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -288,13 +322,14 @@ def train_multiple_configurations(
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = YaoModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -305,7 +340,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -347,6 +381,8 @@ def train_multiple_configurations(
     model_directory_path = "SSM_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = SleepStageModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
@@ -360,7 +396,6 @@ def train_multiple_configurations(
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -378,7 +413,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -394,13 +428,14 @@ def train_multiple_configurations(
     model_directory_path = "Yao_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
+    project_configuration["neural_network_model"] = YaoModel
+
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Training Network on SHHS Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -411,7 +446,6 @@ def train_multiple_configurations(
 
     # Training Network on GIF Data
     main_model_training(
-        neural_network_model = YaoModel, # type: ignore
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -868,13 +902,30 @@ def accuracy_multiple_configurations(
     extensive_accuracy_printing(model_directory_path)
 
 
-if __name__ == "__main__":
-    # train_multiple_configurations()
-    # predict_multiple_configurations()
-    # accuracy_multiple_configurations()
+if False:
+    name_addition = ""
+    project_configuration_change = {
+        "RRI_inlier_interval": [None, None],
+        "normalize_rri": False,
+        "normalize_mad": False,
+    }
+    train_multiple_configurations(name_addition, project_configuration_change)
+    predict_multiple_configurations(name_addition)
+
+    name_addition = "_rm_outliers"
+    project_configuration_change = {
+        "RRI_inlier_interval": [0.3, 2],
+        "normalize_rri": False,
+        "normalize_mad": False,
+        "normalization_mode": "global",
+    }
+
+    train_multiple_configurations(name_addition, project_configuration_change)
+    predict_multiple_configurations(name_addition)
 
     name_addition = "_norm_global"
     project_configuration_change = {
+        "RRI_inlier_interval": [0.3, 2],
         "normalize_rri": True,
         "normalize_mad": False,
         "normalization_mode": "global",
@@ -885,6 +936,7 @@ if __name__ == "__main__":
 
     name_addition = "_norm_local"
     project_configuration_change = {
+        "RRI_inlier_interval": [0.3, 2],
         "normalize_rri": True,
         "normalize_mad": False,
         "normalization_mode": "local",
@@ -892,3 +944,20 @@ if __name__ == "__main__":
 
     train_multiple_configurations(name_addition, project_configuration_change)
     predict_multiple_configurations(name_addition)
+
+    name_addition = ""
+    accuracy_multiple_configurations(name_addition)
+
+    name_addition = "_rm_outliers"
+    accuracy_multiple_configurations(name_addition)
+
+    name_addition = "_norm_global"
+    accuracy_multiple_configurations(name_addition)
+
+    name_addition = "_norm_local"
+    accuracy_multiple_configurations(name_addition)
+
+
+if __name__ == "__main__":
+    fix_project_configuration()
+    print_project_configuration()

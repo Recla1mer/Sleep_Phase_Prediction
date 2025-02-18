@@ -93,6 +93,7 @@ signal_normalization_parameters = {
 
 # neural network model parameters, see SleepStageModel class in neural_network_model.py
 neural_network_model_parameters = {
+    "neural_network_model": SleepStageModel,
     "number_sleep_stages": 4,
     "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
     "datapoints_per_mad_window": int(sleep_data_manager_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
@@ -507,7 +508,6 @@ Training And Applying Neural Network Model
 
 
 def main_model_training(
-        neural_network_model = SleepStageModel,
         neural_network_hyperparameters: dict = neural_network_hyperparameters_shhs,
         path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
@@ -542,8 +542,6 @@ def main_model_training(
     
     ARGUMENTS:
     ------------------------------
-    neural_network_model
-        the neural network model to use
     neural_network_hyperparameters: dict
         the hyperparameters for the neural network model training
         (batch_size, number_epochs, lr_scheduler_parameters)
@@ -574,12 +572,21 @@ def main_model_training(
     validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
     test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
 
+    """
+    --------------------------------
+    Accessing Project Configuration
+    --------------------------------
+    """
+
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
         project_configuration = pickle.load(f)
     
     # access neural network initialization parameters
+    neural_network_model = project_configuration["neural_network_model"]
+
     nnm_params = {key: project_configuration[key] for key in neural_network_model_parameters}
+    del nnm_params["neural_network_model"]
     
     # access window_reshape_parameters
     CustomDatasetKeywords = {key: project_configuration[key] for key in window_reshape_parameters}
@@ -739,7 +746,6 @@ Applying Trained Neural Network Model
 
 
 def main_model_predicting(
-        neural_network_model = SleepStageModel,
         path_to_model_state: str = "Neural_Network/Model_State.pth",
         path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
@@ -837,17 +843,20 @@ def main_model_predicting(
         actual_results_available = True
 
     """
-    ---------------------------------------
-    Accessing Signal Processing Parameters
-    ---------------------------------------
+    --------------------------------
+    Accessing Project Configuration
+    --------------------------------
     """
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
         project_configuration = pickle.load(f)
-    
+
     # access neural network initialization parameters
+    neural_network_model = project_configuration["neural_network_model"]
+
     nnm_params = {key: project_configuration[key] for key in neural_network_model_parameters}
+    del nnm_params["neural_network_model"]
     
     # access window_reshape_parameters
     common_window_reshape_params = {key: project_configuration[key] for key in window_reshape_parameters}
@@ -1356,7 +1365,6 @@ def run_model_training(
     # train neural network on SHHS data
     if user_response == "y":
         main_model_training(
-            neural_network_model = SleepStageModel,
             neural_network_hyperparameters = neural_network_hyperparameters_shhs,
             path_to_processed_data = path_to_processed_shhs,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
@@ -1418,7 +1426,6 @@ def run_model_training(
     # train neural network on GIF data
     if user_response == "y":
         main_model_training(
-            neural_network_model = SleepStageModel,
             neural_network_hyperparameters = neural_network_hyperparameters_gif,
             path_to_processed_data = path_to_processed_gif,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
@@ -1478,6 +1485,12 @@ def run_model_performance_evaluation(
     # shhs_training_data_path = path_to_processed_shhs[:-4] + "_training_pid.pkl"
     # shhs_test_data_path = path_to_processed_shhs[:-4] + "_test_pid.pkl"
 
+    """
+    -------------------------------------
+    Predicting Sleep Phases of SHHS Data
+    -------------------------------------
+    """
+
     # check if predictions already exist
     user_response = "y"
     if os.path.exists(path_to_model_directory + shhs_validation_pid_results_path):
@@ -1496,7 +1509,6 @@ def run_model_performance_evaluation(
     # make predictions for the relevant files
     if user_response == "y":
         main_model_predicting(
-            neural_network_model = SleepStageModel,
             path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
             path_to_processed_data = shhs_validation_data_path,
             path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -1550,7 +1562,6 @@ def run_model_performance_evaluation(
     # make predictions for the relevant files
     if user_response == "y":
         main_model_predicting(
-            neural_network_model = SleepStageModel,
             path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
             path_to_processed_data = gif_validation_data_path,
             path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -1653,7 +1664,6 @@ def run_model_predicting(
     """
 
     main_model_predicting(
-        neural_network_model = SleepStageModel,
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_processed_data = path_to_processed_unknown_dataset,
         path_to_project_configuration = path_to_model_directory + project_configuration_file,
@@ -1691,9 +1701,9 @@ if __name__ == "__main__":
 
 
     """
-    ---------------------------------
-    Set Signal Processing Parameters
-    ---------------------------------
+    --------------------------
+    Set Project Configuration
+    --------------------------
     """
 
     project_configuration = dict()
