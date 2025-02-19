@@ -1070,28 +1070,29 @@ def main_model_predicting(
             # convert probabilities to sleep stages
             predictions_original_structure = np.argmax(copy.deepcopy(predictions_probability), axis=1)
 
-            # remove padding from signals with overlapping windows
-            predictions_in_windows = remove_padding_from_windows(
-                signal_in_windows = predictions_in_windows,
-                target_frequency = slp_frequency,
-                original_signal_length = original_signal_length,
-                window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
-                overlap_seconds = common_window_reshape_params["overlap_seconds"],
-            )
-
-            slp = remove_padding_from_windows(
-                signal_in_windows = slp, # type: ignore
-                target_frequency = slp_frequency,
-                original_signal_length = original_signal_length,
-                window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
-                overlap_seconds = common_window_reshape_params["overlap_seconds"],
-            )
-
             """
             Saving Predicted (and Actual) Sleep Phases
             """
             
             if actual_results_available:
+                # remove padding from signals with overlapping windows
+                predictions_in_windows = remove_padding_from_windows(
+                    signal_in_windows = predictions_in_windows,
+                    target_frequency = slp_frequency,
+                    original_signal_length = original_signal_length,
+                    window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
+                    overlap_seconds = common_window_reshape_params["overlap_seconds"],
+                )
+
+                slp = remove_padding_from_windows(
+                    signal_in_windows = slp, # type: ignore
+                    target_frequency = slp_frequency,
+                    original_signal_length = original_signal_length,
+                    window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
+                    overlap_seconds = common_window_reshape_params["overlap_seconds"],
+                )
+
+                # save results to new dictionary
                 results = {
                     "Predicted_Probabilities": predictions_probability,
                     "Predicted": predictions_original_structure,
@@ -1100,12 +1101,15 @@ def main_model_predicting(
                     "Actual_in_windows": slp
                 }
 
+                # save results to file
                 append_to_pickle(results, path_to_save_results)
             
             else:
+                # save results to exisitng dictionary
                 data_dict["SLP_predicted_probability"] = predictions_probability
                 data_dict["SLP_predicted"] = predictions_original_structure
 
+                # save updated dictionary to working file
                 append_to_pickle(data_dict, working_file_path)
             
             # update progress

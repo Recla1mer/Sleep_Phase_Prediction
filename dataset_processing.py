@@ -1082,19 +1082,13 @@ def remove_padding_from_windows(
     """
     Formula Explanation:
     ------------------------------
-    - first window consists of [ window_duration_seconds * target_frequency ] new datapoints
-        -> adds 1 to number_windows 
-    - due to overlap, remaining windows only contain 
-        [ (window_duration_seconds - overlap_seconds) * target_frequency ] new datapoints
-        -> adds remaining_length / new datapoints per window to number_windows
-    
-    remaining_length = original_signal_length - window_duration_seconds * target_frequency
-    new_datapoints_per_window = (window_duration_seconds - overlap_seconds) * target_frequency
+    -   need to find last window that contains signal data -> find number of shifts it takes to reach the end 
+        of the signal
 
-    number_windows_with_data    = 1 + remaining_length / new_datapoints_per_window
-                                = 1 + (original_signal_length / target_frequency - window_duration_seconds) / (window_duration_seconds - overlap_seconds)
+    window shift = (window_duration_seconds - overlap_seconds) * target_frequency
+    number windows with signal data = signal length / window shift
     """
-    number_windows_with_data = 1 + (original_signal_length / target_frequency - window_duration_seconds) / (window_duration_seconds - overlap_seconds)
+    number_windows_with_data = original_signal_length / ((window_duration_seconds - overlap_seconds) / target_frequency)
     number_windows_with_data = int(np.ceil(number_windows_with_data))
 
     # return signal without windows that only contain padding
