@@ -7,6 +7,7 @@ It is basically the less commented version of the notebook: "Classification_Demo
 
 # IMPORTS
 from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, recall_score, f1_score
+import random
 
 # LOCAL IMPORTS
 from dataset_processing import *
@@ -1583,7 +1584,8 @@ def run_model_performance_evaluation(
 
 def run_model_predicting(
         path_to_model_directory: str,
-        path_to_unknown_dataset: str
+        path_to_unknown_dataset: str,
+        path_to_processed_unknown_dataset: str,
     ):
     """
     Corresponds to the 3rd main functionality: Applying the trained neural network model to new data.
@@ -1621,10 +1623,9 @@ def run_model_predicting(
         the path to the directory where all results are stored
     path_to_unknown_dataset: str
         the path to the file where the unknown dataset is stored
+    path_to_processed_unknown_dataset: str
+        the path to the file where the processed unknown dataset and the predictions are stored
     """
-
-    # path to save the predictions
-    path_to_processed_unknown_dataset = "Processed_NAKO/" + os.path.split(path_to_unknown_dataset)[1]
 
     """
     ---------------------------
@@ -1687,9 +1688,9 @@ def run_model_predicting(
 if __name__ == "__main__":
     
     """
-    ---------------
+    ===============
     Set File Paths
-    ---------------
+    ===============
     """
 
     processed_shhs_path = "Processed_Data/shhs_data.pkl"
@@ -1701,9 +1702,9 @@ if __name__ == "__main__":
 
 
     """
-    --------------------------
+    ==========================
     Set Project Configuration
-    --------------------------
+    ==========================
     """
 
     project_configuration = dict()
@@ -1745,6 +1746,43 @@ if __name__ == "__main__":
         path_to_processed_shhs = processed_shhs_path,
         path_to_processed_gif = processed_gif_path,
     )
+
+    """
+    ===========================================
+    Predict Sleep Phases for Non-Training Data
+    ===========================================
+    """
+
+    unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
+
+    # predict sleep stages for unknown data
+    for unknown_dataset_path in unknown_dataset_paths:
+        processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
+
+        run_model_predicting(
+            path_to_model_directory = model_directory_path,
+            path_to_unknown_dataset = unknown_dataset_path,
+            path_to_processed_unknown_dataset = processed_unknown_dataset_path,
+        )
+    
+    """
+    =========================
+    Access Predicted Results
+    =========================
+    """
+
+    results_data_manager = SleepDataManager(file_path = processed_unknown_dataset_path)
+    
+    # accessing random datapoint
+    random_datapoint = results_data_manager.load(random.randint(0, len(results_data_manager) - 1))
+    
+    # access predicted results of random datapoint (2D arrays, provide more information on sleep stage likelihood)
+    slp_predicted_probability = random_datapoint["SLP_predicted_probability"] # type: ignore
+    slp_predicted = random_datapoint["SLP_predicted"] # type: ignore
+
+    # summarize predicted results (1D arrays, provide final sleep stage prediction)
+    slp_predicted_probability_summarized = summarize_predicted_signal(predicted_signal = slp_predicted_probability, mode = "probability")
+    slp_predicted_summarized = summarize_predicted_signal(predicted_signal = slp_predicted, mode = "majority")
 
 
 # IDEAS: max conv channels for mad
