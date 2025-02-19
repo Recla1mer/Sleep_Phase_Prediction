@@ -1043,6 +1043,64 @@ def reshape_signal_to_overlapping_windows(
     return signal_windows
 
 
+def remove_padding_from_windows(
+        signal_in_windows: list, 
+        target_frequency: int,
+        original_signal_length: int,
+        window_duration_seconds: int = 120, 
+        overlap_seconds: int = 90,
+    ) -> np.ndarray:
+    """
+    Later, we want to estimate the performance of the neural network. We will calculate multiple metrics
+    using the predictions reshaped to overlapping windows (nn output), as well as the predictions reshaped to
+    the original signal. 
+
+    To gain a more precise estimation, we want to exclude the padding. The function that reshapes the signal
+    with overlapping windows to the original structure also removes the padding. However, for the signal with 
+    overlapping windows, we need to remove the padding with this function.
+
+    RETURNS:
+    ------------------------------
+    signal_without_padding: np.ndarray
+        The signal with overlapping windows without padding.
+    
+    ARGUMENTS:
+    ------------------------------
+    signal_in_windows: list
+        The signal with overlapping windows.
+    target_frequency: int
+        Frequency of signal in the neural network.
+    original_signal_length: int
+        The number of datapoints in the original signal.
+    window_duration_seconds: int
+        The window length in seconds.
+    overlap_seconds: int
+        The overlap between windows in seconds.
+    """
+
+    # calculate number of windows that contain signal data
+    """
+    Formula Explanation:
+    ------------------------------
+    - first window consists of [ window_duration_seconds * target_frequency ] new datapoints
+        -> adds 1 to number_windows 
+    - due to overlap, remaining windows only contain 
+        [ (window_duration_seconds - overlap_seconds) * target_frequency ] new datapoints
+        -> adds remaining_length / new datapoints per window to number_windows
+    
+    remaining_length = original_signal_length - window_duration_seconds * target_frequency
+    new_datapoints_per_window = (window_duration_seconds - overlap_seconds) * target_frequency
+
+    number_windows_with_data    = 1 + remaining_length / new_datapoints_per_window
+                                = 1 + (original_signal_length / target_frequency - window_duration_seconds) / (window_duration_seconds - overlap_seconds)
+    """
+    number_windows_with_data = 1 + (original_signal_length / target_frequency - window_duration_seconds) / (window_duration_seconds - overlap_seconds)
+    number_windows_with_data = int(np.ceil(number_windows_with_data))
+
+    # return signal without windows that only contain padding
+    return signal_in_windows[:number_windows_with_data] # type: ignore
+
+
 def reverse_signal_to_windows_reshape(
         signal_in_windows: list, 
         target_frequency: int,

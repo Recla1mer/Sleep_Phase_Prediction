@@ -1068,7 +1068,24 @@ def main_model_predicting(
                 predictions_probability = np.append(predictions_probability, temp_original_structure, axis=1)
             
             # convert probabilities to sleep stages
-            predictions_original_structure = np.argmax(predictions_probability, axis=1)
+            predictions_original_structure = np.argmax(copy.deepcopy(predictions_probability), axis=1)
+
+            # remove padding from signals with overlapping windows
+            predictions_in_windows = remove_padding_from_windows(
+                signal_in_windows = predictions_in_windows,
+                target_frequency = slp_frequency,
+                original_signal_length = original_signal_length,
+                window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
+                overlap_seconds = common_window_reshape_params["overlap_seconds"],
+            )
+
+            slp = remove_padding_from_windows(
+                signal_in_windows = slp, # type: ignore
+                target_frequency = slp_frequency,
+                original_signal_length = original_signal_length,
+                window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
+                overlap_seconds = common_window_reshape_params["overlap_seconds"],
+            )
 
             """
             Saving Predicted (and Actual) Sleep Phases

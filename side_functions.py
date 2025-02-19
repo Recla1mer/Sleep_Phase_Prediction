@@ -41,7 +41,7 @@ def print_headline(headline: str, symbol_sequence: str = "="):
     width = len(headline)
     repeat_symbol = int(np.ceil(width / len(symbol_sequence)))
 
-    print("\n" + symbol_sequence*repeat_symbol)
+    print("\n\n" + symbol_sequence*repeat_symbol)
     print(headline)
     print(symbol_sequence*repeat_symbol)
 
