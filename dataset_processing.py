@@ -2282,25 +2282,26 @@ class SleepDataManager:
         # signal in windows not needed anymore (saves storage space)
         self.remove_reshaped_signals()
 
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        # load all data point ids
+        all_ids = self.load("ID")
 
-        # skip file information
-        next(file_generator)
-
-        # find all splitted signals
-        splitted_signal_ids = list()
-
-        for data_point in file_generator:
-            already_appended = False
-            for id_list in splitted_signal_ids:
-                if data_point["ID"] in id_list:
-                    already_appended = True
-                    continue
-            if "_shift" in data_point["ID"] and not already_appended:
-                splitted_signal_ids.append(self._collect_splitted_datapoint_ids(data_point["ID"]))
+        # find base ids of splitted signals
+        base_id_of_splitted_signals_list = list()
+        for this_id in all_ids: # type: ignore
+            for char_index in range(0, len(this_id)):
+                if "_shift" == this_id[char_index:char_index+6]:
+                    base_id = this_id[:char_index]
+                    if base_id not in base_id_of_splitted_signals_list:
+                        base_id_of_splitted_signals_list.append(base_id)
         
-        del file_generator
+        # collect all splitted signal ids for each base id into an individual list
+        splitted_signal_ids = [[base_id] for base_id in base_id_of_splitted_signals_list]
+        for this_id in all_ids: # type: ignore
+            for base_id_index in range(len(base_id_of_splitted_signals_list)):
+                base_id = base_id_of_splitted_signals_list[base_id_index]
+                if base_id + "_shift" == this_id[:len(base_id) + 6]:
+                    splitted_signal_ids[base_id_index].append(this_id)
+                    break
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
