@@ -3103,7 +3103,7 @@ class SleepDataManager:
             if key not in self.file_info:
                 print(f"Attention: Key {key} not recognized. It will be skipped.")
                 continue
-            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_reshape_applied", "signal_split_reversed", "SLP_predicted_frequency"]:
+            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_reshape_applied", "signal_split_reversed"]:
                 print(f"Attention: Key {key} is a reserved key and cannot be changed.")
                 continue
             self.file_info[key] = new_file_info[key]
