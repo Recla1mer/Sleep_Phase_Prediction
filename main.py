@@ -82,6 +82,7 @@ window_reshape_parameters = {
     "pad_target_with": 0
 }
 sleep_data_manager_parameters["SLP_expected_predicted_frequency"] = 1/window_reshape_parameters["window_duration_seconds"]
+sleep_data_manager_parameters["SLP_predicted_frequency"] = 1/window_reshape_parameters["window_duration_seconds"]
 
 # parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
 signal_normalization_parameters = {

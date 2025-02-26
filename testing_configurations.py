@@ -45,6 +45,30 @@ def fix_project_configuration():
         save_to_pickle(this_project_configuration, directory + "/" + project_configuration_file)
 
 
+def fix_project_configuration_2():
+    """
+    """
+    all_directories = os.listdir()
+    for directory in all_directories:
+        if "SSM" == directory[:3] or "Yao" == directory[:3]:
+            with open(directory + "/" + project_configuration_file, "rb") as file:
+                this_project_configuration = pickle.load(file)
+            this_project_configuration["SLP_predicted_frequency"] = 1/120
+        else:
+            continue
+
+        os.remove(directory + "/" + project_configuration_file)
+        save_to_pickle(this_project_configuration, directory + "/" + project_configuration_file)
+
+
+def fix_file_info(path):
+    """
+    """
+    data_manager = SleepDataManager(file_path=path)
+    data_manager.change_file_information({"SLP_predicted_frequency": 1/120})
+    del data_manager
+
+
 def ask_to_override_files(file_paths: list):
     """
     Asks the user if they want to override files.
@@ -959,5 +983,9 @@ if False:
 
 
 if __name__ == "__main__":
-    fix_project_configuration()
+    # fix_file_info("Processed_NAKO/NAKO-33a.pkl")
+    # fix_project_configuration_2()
     print_project_configuration()
+
+    # data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33b.pkl")
+    # print(data_manager.file_info)
