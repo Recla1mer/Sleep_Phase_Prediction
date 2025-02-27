@@ -285,13 +285,11 @@ def Process_SHHS_Dataset(
     shhs_data_manager.check_if_ids_are_unique(patients)
 
     # showing progress bar
-    total_data_points = len(patients)
     print("\nPreproccessing datapoints from SHHS dataset (ensuring uniformity):")
-    progress_bar = DynamicProgressBar(total = total_data_points)
+    progress_bar = DynamicProgressBar(total = len(patients))
 
     # saving all data from SHHS dataset to the pickle file
-    for patient_index in range(total_data_points):
-        patient_id = patients[patient_index]
+    for patient_id in patients:
         new_datapoint = {
             "ID": patient_id,
             "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
@@ -302,7 +300,7 @@ def Process_SHHS_Dataset(
         }
 
         shhs_data_manager.save(new_datapoint, unique_id=True)
-        progress_bar.update(current_index = patient_index+1)
+        progress_bar.update()
 
     # Train-, Validation- and Test-Split
     shhs_data_manager.separate_train_test_validation(**split_data_params)
@@ -367,13 +365,11 @@ def Process_GIF_Dataset(
     gif_data_manager.check_if_ids_are_unique(patients)
 
     # showing progress bar
-    total_data_points = len(patients)
     print("\nPreproccessing datapoints from GIF dataset (ensuring uniformity):")
-    progress_bar = DynamicProgressBar(total = total_data_points)
+    progress_bar = DynamicProgressBar(total = len(patients))
 
     # saving all data from GIF dataset to the pickle file
-    for patient_index in range(total_data_points):
-        patient_id = patients[patient_index]
+    for patient_id in patients:
         new_datapoint = {
             "ID": patient_id,
             "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
@@ -386,7 +382,7 @@ def Process_GIF_Dataset(
         }
 
         gif_data_manager.save(new_datapoint, unique_id=True)
-        progress_bar.update(current_index = patient_index+1)
+        progress_bar.update()
 
     # Train-, Validation- and Test-Split
     gif_data_manager.separate_train_test_validation(**split_data_params)
@@ -479,7 +475,6 @@ def Process_NAKO_Dataset(
     nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
 
     # showing progress bar
-    count_progress = 0
     print("\nPreproccessing datapoints from NAKO dataset (ensuring uniformity):")
     progress_bar = DynamicProgressBar(total = total_data_points)
 
@@ -494,8 +489,7 @@ def Process_NAKO_Dataset(
         }
 
         nako_data_manager.save(new_datapoint, unique_id=True)
-        count_progress += 1
-        progress_bar.update(current_index = count_progress)
+        progress_bar.update()
 
 
 """
@@ -940,10 +934,8 @@ def main_model_predicting(
     """
 
     # variables to track progress
-    size = len(data_manager)
-    progress = 0
     print("\nPredicting Sleep Stages:")
-    progress_bar = DynamicProgressBar(total = size)
+    progress_bar = DynamicProgressBar(total = len(data_manager))
 
 
     with torch.no_grad():
@@ -1110,8 +1102,7 @@ def main_model_predicting(
                 append_to_pickle(data_dict, working_file_path)
             
             # update progress
-            progress += 1
-            progress_bar.update(current_index = progress)
+            progress_bar.update()
 
     
     # Remove the old file and rename the working file

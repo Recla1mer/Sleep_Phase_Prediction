@@ -66,9 +66,24 @@ def fix_project_configuration_2():
 def fix_file_info(path):
     """
     """
-    data_manager = SleepDataManager(file_path=path)
-    data_manager.change_file_information({"SLP_predicted_frequency": 1/120})
-    del data_manager
+    # Create temporary file to save data in progress
+    working_file_path = os.path.split(copy.deepcopy(path))[0] + "/save_in_progress"
+    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+    gen = load_from_pickle(path)
+    file_info = next(gen)
+    if "SLP_expected_predicted_frequency" in file_info:
+        del file_info["SLP_expected_predicted_frequency"]
+    file_info["SLP_predicted_frequency"] = 1/30
+
+    save_to_pickle(file_info, working_file_path)
+
+    # Save the rest of the data
+    for data in gen:
+        append_to_pickle(data, working_file_path)
+
+    os.remove(path)
+    os.rename(working_file_path, path)
 
 
 def ask_to_override_files(file_paths: list):
@@ -985,9 +1000,13 @@ if False:
 
 
 if __name__ == "__main__":
-    # fix_file_info("Processed_NAKO/NAKO-33a.pkl")
     # fix_project_configuration_2()
-    print_project_configuration()
+    # print_project_configuration()
+    
+    # fix_file_info("Processed_NAKO/NAKO-33a.pkl")
 
-    # data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33b.pkl")
+    # data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33a.pkl")
     # print(data_manager.file_info)
+
+    data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33a.pkl")
+    data_manager.reverse_signal_split()

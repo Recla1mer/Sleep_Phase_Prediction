@@ -205,14 +205,31 @@ def get_os_type():
 
 
 class DynamicProgressBar:
-    def __init__(self, total, batch_size: int = 1):
+    def __init__(self, total, batch_size: int = 1, seconds_between_updates: float = 1):
+        """
+        Initializes the dynamic progress bar.
+
+        ARGUMENTS:
+        ------------------------------
+        total: int
+            total number of iterations
+        batch_size: int
+            batch size (index updates by this number)
+        seconds_between_updates: float
+            minimum time between updates
+
+        RETURNS:
+        ------------------------------
+        None
+        """
         self.start_time = time.time()
-        self.min_time_between_updates = 1
+        self.min_time_between_updates = seconds_between_updates
         self.last_bar_update = self.start_time - self.min_time_between_updates
 
         self.padding_right = 3
         self.total = total
         self.batch_size = batch_size
+        self.auto_index = 0
 
         terminal_width = shutil.get_terminal_size().columns
 
@@ -348,7 +365,19 @@ class DynamicProgressBar:
         return clearing_sequence
 
 
-    def update(self, current_index, additional_info=""):
+    def update(self, current_index=None, additional_info=""):
+        # update auto index
+        self.auto_index += self.batch_size
+        
+        # assign auto index to current index if not provided
+        if current_index is None:
+            current_index = self.auto_index
+        
+        # limit current index to total
+        if current_index > self.total:
+            current_index = self.total
+
+        # skip update if not enough time has passed since last update
         if current_index != self.total:
             if time.time() - self.last_bar_update < self.min_time_between_updates:
                 return
@@ -381,6 +410,11 @@ class DynamicProgressBar:
                 self.previous_output_length = len(progress_bar)
                 break
         
+        # perform line break if progress bar is finished
+        if current_index == self.total:
+            print("")
+
+        # update last bar update time
         self.last_bar_update = time.time()
 
 
@@ -468,9 +502,20 @@ def delete_directory_files(directory_path: str, keep_files: list):
 
 
 if __name__ == "__main__":
-    total = 100
-    bar = DynamicProgressBar(total)
+    # total = 100
+    # bar = DynamicProgressBar(total=total, batch_size=1, seconds_between_updates=0)
 
-    for i in range(total):
-        time.sleep(0.1)
-        bar.update(i + 1)
+    # for i in range(total):
+    #     time.sleep(0.05)
+    #     bar.update()
+    
+    # print(bar.auto_index)
+
+    total = 100
+    bar = DynamicProgressBar(total=total, batch_size=10, seconds_between_updates=0)
+
+    for i in range(10):
+        time.sleep(0.15)
+        bar.update()
+    
+    print(bar.auto_index)

@@ -1722,6 +1722,19 @@ class SleepDataManager:
         if "sleep_stage_label" in new_data and "SLP" not in new_data:
             raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
         
+        # Check if predicted frequency matches the one in the file
+        if "SLP_predicted_frequency" in new_data and new_data["SLP_predicted_frequency"] != self.file_info["SLP_predicted_frequency"]:
+            raise ValueError("Predicted frequency must match the one in the file!")
+        
+        # Check if predicted frequency keys are provided if predicted signal keys are provided
+        for signal_key_index in range(0, len(self.predicted_signal_keys)):
+            signal_key = self.predicted_signal_keys[signal_key_index]
+            signal_frequency_key = self.predicted_signal_frequency_keys[signal_key_index]
+            if signal_key in new_data and signal_frequency_key not in new_data:
+                raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
+            if signal_frequency_key in new_data and signal_key not in new_data:
+                raise ValueError(f"What sense does it make to provide a sampling frequency \"{signal_frequency_key}\" without the corresponding signal \"{signal_key}\" ?")
+        
         """
         -------------------------------
         Alter Entries In New Datapoint
@@ -2259,12 +2272,6 @@ class SleepDataManager:
                     splitted_signal_ids[base_id_index].append(this_id)
                     break
 
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
         # Create temporary files to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
@@ -2281,6 +2288,16 @@ class SleepDataManager:
             id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
             id_list_paths.append(id_list_path)
 
+        # Initialize progress bar
+        print("\nDistributing split data parts into individual files (Subprocess of Reversing Signal Split):")
+        progress_bar = DynamicProgressBar(total = len(all_ids)) # type: ignore
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        # skip file information
+        next(file_generator)
+
         # iterate over entries and append them to appropriate files
         for data_point in file_generator:
             this_id = data_point["ID"]
@@ -2292,8 +2309,15 @@ class SleepDataManager:
                     break
             if not appended:
                 append_to_pickle(data = data_point, file_name = working_file_path)
+            
+            # update progress bar
+            progress_bar.update()
         
-        del file_generator
+        del file_generator, progress_bar
+
+        # Initialize progress bar
+        print("\nMerging data points back into the main file and reversing the Signal Split:")
+        progress_bar = DynamicProgressBar(total = len(id_list_paths))
 
         # iterate over entries in database and reverse signal split
         for id_path in id_list_paths:
@@ -2329,6 +2353,12 @@ class SleepDataManager:
 
             # append fused dictionary to working file
             append_to_pickle(data = fused_dictionary, file_name = working_file_path)
+
+            # remove file containing transferred data points
+            os.remove(id_path)
+
+            # update progress bar
+            progress_bar.update()
         
         # Remove the old file and rename the working file
         try:
@@ -2337,10 +2367,6 @@ class SleepDataManager:
             pass
 
         os.rename(working_file_path, self.file_path)
-
-        # remove all splitted signal files
-        for id_path in id_list_paths:
-            os.remove(id_path)
 
 
     def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]):
@@ -2449,9 +2475,6 @@ class SleepDataManager:
         # Fuse data back together if train_val_test_split_applied is True
         if self.file_info["train_val_test_split_applied"]:
             self.fuse_train_test_validation()
-        
-        # variables to track progress
-        total_number_datapoints = len(self)
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2510,13 +2533,10 @@ class SleepDataManager:
                     pass
                 
                 save_to_pickle(data = self.file_info, file_name = file_path)
-            
-            # variables to track progress
-            current_index = 0
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:")
-            progress_bar = DynamicProgressBar(total = total_number_datapoints)
+            progress_bar = DynamicProgressBar(total = len(self))
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2534,8 +2554,7 @@ class SleepDataManager:
                     append_to_pickle(data = data_point, file_name = working_file_path)
                 
                 # print progress
-                current_index += 1
-                progress_bar.update(current_index = current_index)
+                progress_bar.update()
         
         else:
             """
@@ -2567,13 +2586,10 @@ class SleepDataManager:
                     pass
                 
                 save_to_pickle(data = self.file_info, file_name = file_path)
-            
-            # variables to track progress
-            current_index = 0
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:")
-            progress_bar = DynamicProgressBar(total = total_number_datapoints)
+            progress_bar = DynamicProgressBar(total = len(self))
             
             # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
@@ -2593,8 +2609,7 @@ class SleepDataManager:
                     append_to_pickle(data = data_point, file_name = working_file_path)
                 
                 # print progress
-                current_index += 1
-                progress_bar.update(current_index = current_index)
+                progress_bar.update()
         
         # Remove the old file and rename the working file
         try:

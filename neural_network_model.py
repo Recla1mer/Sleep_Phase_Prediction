@@ -1000,11 +1000,10 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     train_loss, correct = 0, 0
 
     # variables to track progress
-    size = len(dataloader.dataset)
     num_batches = len(dataloader)
     total_number_predictions = 0
     print("\nTraining Neural Network Model:")
-    progress_bar = DynamicProgressBar(total = size, batch_size = batch_size)
+    progress_bar = DynamicProgressBar(total = len(dataloader.dataset), batch_size = batch_size)
 
     # Iterate over the training dataset
     for batch, (rri, mad, slp) in enumerate(dataloader):
@@ -1040,12 +1039,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         total_number_predictions += this_number_predictions
 
         # print progress bar
-        datapoints_done = (batch+1) * batch_size
-        if datapoints_done > size:
-            datapoints_done = size
-        
         progress_bar.update(
-            current_index = datapoints_done,
             additional_info = f'Loss: {print_smart_float(loss.item(), 3)} | Acc: {round(this_correct_predicted / this_number_predictions*100, 2)}%',
             )
 
@@ -1099,11 +1093,10 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
     model.eval()
 
     # variables to track progress
-    size = len(dataloader.dataset)
     num_batches = len(dataloader)
     total_number_predictions = 0
     print("\nCalculating Prediction Accuracy on Test Data:")
-    progress_bar = DynamicProgressBar(total=size)
+    progress_bar = DynamicProgressBar(total = len(dataloader.dataset), batch_size = batch_size)
 
     # variables to save accuracy progress
     test_loss, correct = 0, 0
@@ -1135,11 +1128,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             total_number_predictions += slp.shape[0]
 
             # print progress bar
-            datapoints_done = (batch+1) * batch_size
-            if datapoints_done > size:
-                datapoints_done = size
-            
-            progress_bar.update(current_index = datapoints_done)
+            progress_bar.update()
 
     test_loss /= num_batches
     correct /= total_number_predictions
