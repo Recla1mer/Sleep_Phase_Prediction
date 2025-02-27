@@ -54,6 +54,7 @@ sleep_data_manager_parameters = {
     "wanted_shift_length_seconds": 5400,
     "absolute_shift_deviation_seconds": 1800,
 }
+sleep_data_manager_parameters["SLP_predicted_frequency"] = sleep_data_manager_parameters["SLP_frequency"]
 
 # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
 split_data_parameters = {
@@ -81,8 +82,6 @@ window_reshape_parameters = {
     "pad_feature_with": 0,
     "pad_target_with": 0
 }
-sleep_data_manager_parameters["SLP_expected_predicted_frequency"] = 1/window_reshape_parameters["window_duration_seconds"]
-sleep_data_manager_parameters["SLP_predicted_frequency"] = 1/window_reshape_parameters["window_duration_seconds"]
 
 # parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
 signal_normalization_parameters = {
@@ -202,9 +201,6 @@ def check_project_configuration(parameters: dict):
     # check parameters that should be equal
     if parameters["signal_length_seconds"] != parameters["nn_signal_duration_seconds"]:
         raise ValueError("Parameters: 'signal_length_seconds' and 'nn_signal_duration_seconds' must be equal. Adjust parameters accordingly.")
-    
-    if parameters["SLP_expected_predicted_frequency"] != 1/parameters["window_duration_seconds"]:
-        raise ValueError("'SLP_expected_predicted_frequency' and 1 / 'window_duration_seconds' must be equal. Adjust parameters accordingly.")
     
     if parameters["datapoints_per_rri_window"] != int(parameters["RRI_frequency"] * parameters["window_duration_seconds"]):
         raise ValueError("'datapoints_per_rri_window' must be equal to 'RRI_frequency' * 'window_duration_seconds'. Adjust parameters accordingly.")
@@ -1813,3 +1809,7 @@ if __name__ == "__main__":
 # > 2s, < 1/3s rauswerfen
 
 # remove class function to turn signal into wi dows in sleepdatamanager class
+
+# why predicted freuqency = 1/30?
+# why does accuracy not match? slp stage is reversed to 1/30, meaning one value becomes 4
+# lists to store failed predictions

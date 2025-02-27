@@ -53,7 +53,9 @@ def fix_project_configuration_2():
         if "SSM" == directory[:3] or "Yao" == directory[:3]:
             with open(directory + "/" + project_configuration_file, "rb") as file:
                 this_project_configuration = pickle.load(file)
-            this_project_configuration["SLP_predicted_frequency"] = 1/120
+            this_project_configuration["SLP_predicted_frequency"] = 1/30
+            if "SLP_expected_predicted_frequency" in this_project_configuration:
+                del this_project_configuration["SLP_expected_predicted_frequency"]
         else:
             continue
 

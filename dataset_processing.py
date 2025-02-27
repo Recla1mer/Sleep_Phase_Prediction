@@ -13,9 +13,13 @@ then head to 'Classification_Demo.ipynb' and follow the instructions there.
 """
 
 # IMPORTS:
-import numpy as np
 import os
+import pickle
 import copy
+
+import numpy as np
+from sklearn.model_selection import train_test_split
+
 
 # LOCAL IMPORTS:
 from side_functions import *
@@ -130,82 +134,6 @@ def unity_based_normalization(
             signal[i] = unity_based_normalization(signal[i], normalization_max, normalization_min, normalization_mode)
 
         return np.array(signal)
-
-
-def calculate_overlap(signal_length: int, number_windows: int, datapoints_per_window: int) -> float:
-    """
-    Calculate the overlap between windows of length 'datapoints_per_window' in a signal of
-    length 'signal_length'.
-
-    Assuming number_windows * datapoints_per_window > signal_length:
-    ----------------------------------------------------------------
-    new_datapoints_per_window = datapoints_per_window - window_overlap
-    signal_length   = datapoints_per_window + (number_windows - 1) * new_datapoints_per_window
-                    = datapoints_per_window + (number_windows - 1) * (datapoints_per_window - window_overlap)
-
-    -> window_overlap = datapoints_per_window - (signal_length - datapoints_per_window) / (number_windows - 1)
-
-    RETURNS:
-    ------------------------------
-    window_overlap: float
-        The needed overlap between windows of size datapoints_per_window to fit into signal_length.
-
-    ARGUMENTS:
-    ------------------------------
-    signal_length: int
-        The length of the signal.
-    number_windows: int
-        The number of windows.
-    datapoints_per_window: int
-        The number of datapoints in each window.
-    """
-
-    return datapoints_per_window - ((signal_length - datapoints_per_window) / (number_windows - 1))
-
-
-def find_suitable_window_parameters(
-        signal_length: int = 36000,
-        number_windows_range: tuple = (1000, 1400),
-        window_size_range: tuple = (120, 180),
-        minimum_window_size_overlap_difference: int = 30
-    ) -> None:
-    """
-    The data passed to the neural network will be split into windows of equal length that
-    overlap each other.
-
-    This function searches for suitable window parameters (number_windows, datapoints_per_window, 
-    window_overlap) in a given range for a signal of length 'signal_length' and prints them to console.
-
-    RETURNS:
-    ------------------------------
-    None, but prints suitable window parameters to console.
-
-    ARGUMENTS:
-    ------------------------------
-    signal_length: int
-        The length of the signal.
-    number_windows_range: tuple
-        The range of number of windows to consider.
-    window_size_range: tuple
-        The range of window sizes to consider.
-    minimum_window_size_overlap_difference: int
-        The minimum difference between window_size and window_overlap.
-    """
-
-    window_parameters_found = False
-
-    for num_win in range(number_windows_range[0], number_windows_range[1]):
-        for win_size in range(window_size_range[0], window_size_range[1]):
-            window_overlap = calculate_overlap(signal_length, num_win, win_size)
-            if int(window_overlap) == window_overlap and win_size - window_overlap >= minimum_window_size_overlap_difference:
-                if not window_parameters_found:
-                    window_parameters_found = True
-                    print(f"Suitable window parameters for signal of length: {signal_length}:")
-                    print("-" * 55)
-                print(f"Number of windows: {num_win}, Window size: {win_size}, Overlap: {window_overlap}")
-    
-    if not window_parameters_found:
-        print("No suitable window parameters found. Expand search range.")
 
 
 def interpolate_signal(signal: list, signal_frequency: float, target_frequency: float) -> np.ndarray:
@@ -413,6 +341,57 @@ def scale_signal(
         return scale_classification_signal(signal, signal_frequency, target_frequency)
 
 
+def retrieve_possible_shift_lengths(
+        min_shift_seconds: float,
+        max_shift_seconds: float,
+        all_signal_frequencies: list,
+    ) -> list:
+    """
+    The neural network must always be applied with a signal of the same length. If the signal is longer
+    than the desired length, it will be split into multiple signals of the desired length. To create more data, 
+    the signal will only be shifted by a certain amount. 
+    
+    Because every signal has a different sampling frequency, the shift length must be chosen so, that
+    the factor of the shift length (in seconds) and every signal frequency is an integer number.
+
+    This function calculates all shift lengths that fulfill this condition and returns them.
+
+    If no shift length can be found within the allowed deviation, the function raises an error.
+    Therefore, this function can also be used to check if the set signal frequencies within the 
+    SleepDataManager class can be processed.
+
+    RETURNS:
+    ------------------------------
+    possible_shift_length: int
+        The optimal shift length in seconds.
+    
+    ARGUMENTS:
+    ------------------------------
+    min_shift_seconds: float
+        The minimum shift length in seconds.
+    max_shift_seconds: float
+        The maximum shift length in seconds.
+    all_signal_frequencies: list
+        The frequencies of all signals that must be split.
+    """
+
+    # collect all shift length seconds that result in an integer number shift length for all signals
+    possible_shift_lengths = []
+    for shift_length in range(int(min_shift_seconds), int(np.ceil(max_shift_seconds))+1):
+        possible = True
+        for signal_frequency in all_signal_frequencies:
+            if shift_length * signal_frequency != int(shift_length * signal_frequency):
+                possible = False
+                break
+        if possible:
+            possible_shift_lengths.append(shift_length)
+    
+    if len(possible_shift_lengths) == 0:
+        raise ValueError("For the current set of signal frequencies, no reasonable shift length can be found. Change the parameters that control the shift length, or use different signal frequencies.")
+    
+    return possible_shift_lengths
+
+
 def calculate_optimal_shift_length(
         signal_length_seconds: float, 
         desired_length_seconds: float, 
@@ -426,7 +405,7 @@ def calculate_optimal_shift_length(
     the signal will only be shifted by a certain amount. 
     
     Because every signal has a different sampling frequency, the shift length must be chosen so, that
-    the factor of the shift length and every signal frequency is an integer number.
+    the factor of the shift length (in seconds) and every signal frequency is an integer number.
 
     This function calculates the optimal shift length. It tries to find the shift length that is closest to the
     wanted shift length, but still fulfills the condition above. If no shift length can be found within the
@@ -457,19 +436,12 @@ def calculate_optimal_shift_length(
         min_shift = 1
     max_shift = wanted_shift_length_seconds + absolute_shift_deviation_seconds
 
-    # collect all shift length seconds that result in an integer number shift length for all signals
-    possible_shift_lengths = []
-    for shift_length in range(int(min_shift), int(np.ceil(max_shift))+1):
-        possible = True
-        for signal_frequency in all_signal_frequencies:
-            if shift_length * signal_frequency != int(shift_length * signal_frequency):
-                possible = False
-                break
-        if possible:
-            possible_shift_lengths.append(shift_length)
-    
-    if len(possible_shift_lengths) == 0:
-        raise ValueError("No possible shift length found. Increase allowed deviation.")
+    # Retrieve possible shift lengths
+    possible_shift_lengths = retrieve_possible_shift_lengths(
+        min_shift_seconds = min_shift,
+        max_shift_seconds = max_shift,
+        all_signal_frequencies = all_signal_frequencies
+    )
     
     possible_shift_lengths = np.array(possible_shift_lengths)
 
@@ -532,7 +504,7 @@ def split_long_signal(
         nn_signal_duration_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
         absolute_shift_deviation_seconds: int = 1800,
-        all_signal_frequencies: list = [4, 1, 1/30, 1/120],
+        all_signal_frequencies: list = [4, 1, 1/30],
         use_shift_length_seconds: int = 0
     ) -> tuple[list, int]:
     """
@@ -824,6 +796,82 @@ def fuse_splitted_signals_within_dictionaries(
             restored_dictionary[key] = data_dictionaries[0][key]
     
     return restored_dictionary
+
+
+def calculate_overlap(signal_length: int, number_windows: int, datapoints_per_window: int) -> float:
+    """
+    Calculate the overlap between windows of length 'datapoints_per_window' in a signal of
+    length 'signal_length'.
+
+    Assuming number_windows * datapoints_per_window > signal_length:
+    ----------------------------------------------------------------
+    new_datapoints_per_window = datapoints_per_window - window_overlap
+    signal_length   = datapoints_per_window + (number_windows - 1) * new_datapoints_per_window
+                    = datapoints_per_window + (number_windows - 1) * (datapoints_per_window - window_overlap)
+
+    -> window_overlap = datapoints_per_window - (signal_length - datapoints_per_window) / (number_windows - 1)
+
+    RETURNS:
+    ------------------------------
+    window_overlap: float
+        The needed overlap between windows of size datapoints_per_window to fit into signal_length.
+
+    ARGUMENTS:
+    ------------------------------
+    signal_length: int
+        The length of the signal.
+    number_windows: int
+        The number of windows.
+    datapoints_per_window: int
+        The number of datapoints in each window.
+    """
+
+    return datapoints_per_window - ((signal_length - datapoints_per_window) / (number_windows - 1))
+
+
+def find_suitable_window_parameters(
+        signal_length: int = 36000,
+        number_windows_range: tuple = (1000, 1400),
+        window_size_range: tuple = (120, 180),
+        minimum_window_size_overlap_difference: int = 30
+    ) -> None:
+    """
+    The data passed to the neural network will be split into windows of equal length that
+    overlap each other.
+
+    This function searches for suitable window parameters (number_windows, datapoints_per_window, 
+    window_overlap) in a given range for a signal of length 'signal_length' and prints them to console.
+
+    RETURNS:
+    ------------------------------
+    None, but prints suitable window parameters to console.
+
+    ARGUMENTS:
+    ------------------------------
+    signal_length: int
+        The length of the signal.
+    number_windows_range: tuple
+        The range of number of windows to consider.
+    window_size_range: tuple
+        The range of window sizes to consider.
+    minimum_window_size_overlap_difference: int
+        The minimum difference between window_size and window_overlap.
+    """
+
+    window_parameters_found = False
+
+    for num_win in range(number_windows_range[0], number_windows_range[1]):
+        for win_size in range(window_size_range[0], window_size_range[1]):
+            window_overlap = calculate_overlap(signal_length, num_win, win_size)
+            if int(window_overlap) == window_overlap and win_size - window_overlap >= minimum_window_size_overlap_difference:
+                if not window_parameters_found:
+                    window_parameters_found = True
+                    print(f"Suitable window parameters for signal of length: {signal_length}:")
+                    print("-" * 55)
+                print(f"Number of windows: {num_win}, Window size: {win_size}, Overlap: {window_overlap}")
+    
+    if not window_parameters_found:
+        print("No suitable window parameters found. Expand search range.")
 
 
 def signal_to_windows(
@@ -1315,11 +1363,6 @@ Handling Pickle Files And Paths
 ================================
 """
 
-import pickle
-import os
-from sklearn.model_selection import train_test_split
-import copy
-
 
 def save_to_pickle(data, file_name):
     """
@@ -1472,31 +1515,6 @@ Signal Checking
 ================
 """
 
-def is_multiple(
-        number: float, 
-        multiple: float
-    ) -> bool:
-    """
-    Checks if "multiple" is a multiple of "number".
-
-    RETURNS:
-    ------------------------------
-    True, if "multiple" is a multiple of "number"
-    False, if "multiple" is not a multiple of "number"
-
-    ARGUMENTS:
-    ------------------------------
-    number: float,
-    multiple: float
-    """
-    i = 0
-    while True:
-        if i * number == multiple:
-            return True
-        if i * number > multiple:
-            return False
-        i += 1
-
 
 def check_signal_length(
         data_point: dict,
@@ -1560,6 +1578,8 @@ class SleepDataManager:
     file_info["MAD_frequency"] = 1
     file_info["SLP_frequency"] = 1/30
 
+    file_info["SLP_predicted_frequency"] = 1/30
+    
     file_info["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
     file_info["MAD_inlier_interval"] = [None, None] # No MAD values are altered
     file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
@@ -1568,7 +1588,6 @@ class SleepDataManager:
     file_info["wanted_shift_length_seconds"] = 5400
     file_info["absolute_shift_deviation_seconds"] = 1800
 
-    file_info["signal_reshape_applied"] = False
     file_info["signal_split_reversed"] = False
 
     file_info["train_val_test_split_applied"] = False
@@ -1576,9 +1595,6 @@ class SleepDataManager:
     file_info["train_file_path"] = "unassigned"
     file_info["validation_file_path"] = "unassigned"
     file_info["test_file_path"] = "unassigned"
-
-    file_info["SLP_predicted_frequency"] = None
-    file_info["SLP_expected_predicted_frequency"] = 1/120
 
 
     def __init__(self, file_path):
@@ -1627,17 +1643,20 @@ class SleepDataManager:
 
         # Check if file exists, if not create it and save default file information
         if not os.path.exists(self._file_path):
-            # check if default signal frequencies are multiples of each other
+            # Check if the parameters ensure correct signal processing
             all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-            all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+            all_signal_frequency_keys.append("SLP_predicted_frequency")
             all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
             minimum_signal_frequency = min(all_signal_frequencies)
             if minimum_signal_frequency <= 0:
                 raise ValueError("Signal Frequencies must be larger than 0!")
-
-            for signal_frequency in all_signal_frequencies:
-                if not is_multiple(minimum_signal_frequency, signal_frequency):
-                    raise ValueError("All default signal frequencies must be multiples of each other. This ensures that signals can be split and fused correctly.")
+            
+            # Check if signals can be split and fused correctly
+            retrieve_possible_shift_lengths(
+                min_shift_seconds = max(self.file_info["wanted_shift_length_seconds"]-self.file_info["absolute_shift_deviation_seconds"], 1),
+                max_shift_seconds = self.file_info["wanted_shift_length_seconds"]+self.file_info["absolute_shift_deviation_seconds"],
+                all_signal_frequencies = all_signal_frequencies
+            )
             
             save_to_pickle(data = self.file_info, file_name = self._file_path)
     
@@ -1702,60 +1721,6 @@ class SleepDataManager:
             raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
         if "sleep_stage_label" in new_data and "SLP" not in new_data:
             raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
-        
-        # Check if predicted frequency keys are provided if predicted signal keys are provided
-        # make sure predicted signals match the length of the other signals (rescaling not possible for predicted signals)
-        for pred_signal_key_index in range(0, len(self.predicted_signal_keys)):
-            pred_signal_key = self.predicted_signal_keys[pred_signal_key_index]
-            pred_signal_frequency_key = self.predicted_signal_frequency_keys[pred_signal_key_index]
-            if pred_signal_key in new_data and pred_signal_frequency_key not in new_data:
-                raise ValueError(f"If you want to add a {pred_signal_key} Signal (key: \"{pred_signal_key}\"), then you must also provide the sampling frequency: \"{pred_signal_frequency_key}\" !")
-            if pred_signal_frequency_key in new_data and pred_signal_key not in new_data:
-                raise ValueError(f"What sense does it make to provide a sampling frequency \"{pred_signal_frequency_key}\" without the corresponding signal \"{pred_signal_key}\" ?")
-            if pred_signal_key in new_data:
-                if self.file_info[pred_signal_frequency_key] == None:
-
-                    """
-                    Check if predicted signal frequency is appropriate (must be multiple of another signal frequency)
-                    """
-
-                    all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-                    all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
-                    all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
-                    minimum_signal_frequency = min(all_signal_frequencies)
-                    if minimum_signal_frequency <= 0:
-                        raise ValueError("Signal Frequencies must be larger than 0!")
-
-                    if not is_multiple(minimum_signal_frequency, new_data[pred_signal_frequency_key]):
-                        raise ValueError(f"All signal frequencies must be multiples of each other. Change the predicted signal frequency (Sorry, I know this sucks).\nMinimum Signal Frequency: {min(all_signal_frequencies)}")
-
-                    """
-                    Change predicted signal frequency key in file information
-                    """
-
-                    # Create temporary file to save data in progress
-                    working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-                    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-                    # Change file information
-                    self.file_info[pred_signal_frequency_key] = new_data[pred_signal_frequency_key]
-
-                    # save file information to working file
-                    save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-                    # save all other data to working file
-                    for data_dict in self:
-                        append_to_pickle(data = data_dict, file_name = working_file_path)
-                    
-                    # delete old file
-                    os.remove(self.file_path)
-                    os.rename(working_file_path, self.file_path)
-                
-                if self.file_info[pred_signal_frequency_key] != new_data[pred_signal_frequency_key]:
-                    raise ValueError(f"Predicted signal frequency does not match the frequency in the file. Frequency in file: {self.file_info[pred_signal_frequency_key]}, frequency in new data: {new_data[pred_signal_frequency_key]}")
-                if len(new_data[pred_signal_key]) > np.ceil(self.file_info["signal_length_seconds"] * new_data[pred_signal_frequency_key]):
-                    raise ValueError(f"Predicted signal is too long. Predicted signal expected to be added after all datapoints were added, modified and passed to neural network model. Therefore splitting it is prohibited, as it should match the signal length, unless something went wrong.")
-
         
         """
         -------------------------------
@@ -1822,7 +1787,7 @@ class SleepDataManager:
             corresponding_target_frequencies = [self.file_info[key] for key in signal_frequency_keys_in_new_data]
 
             all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-            all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+            all_signal_frequency_keys.append("SLP_predicted_frequency")
             all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
 
             splitted_data_dictionaries = split_signals_within_dictionary(
@@ -2176,16 +2141,6 @@ class SleepDataManager:
             The ID, key, or index of the data to be removed.
         """
 
-        # check if key_id_index is a reshaped signal key
-        if key_id_index in self.signal_window_keys:
-            self.remove_reshaped_signals()
-            return
-        
-        # check if key_id_index is a predicted signal key
-        if key_id_index in self.predicted_signal_keys:
-            self.remove_predicted_signals()
-            return
-
         # check if key_id_index is an id, a key, or an index
         remove_keys = False
         valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
@@ -2275,12 +2230,13 @@ class SleepDataManager:
         None
         """
 
+        # prevent running this function if it was already applied
+        if self.file_info["signal_split_reversed"]:
+            raise ValueError("This function was already applied to the data.")
+
         # prevent runnning this function if data was split into training, validation, and test files
         if self.file_info["train_val_test_split_applied"]:
             raise ValueError("This function should not be called for data you want to use for training and validating the neural network.")
-
-        # signal in windows not needed anymore (saves storage space)
-        self.remove_reshaped_signals()
 
         # load all data point ids
         all_ids = self.load("ID")
@@ -2385,347 +2341,6 @@ class SleepDataManager:
         # remove all splitted signal files
         for id_path in id_list_paths:
             os.remove(id_path)
-    
-
-    def reapply_signal_split(self):
-        """
-        This function re-applies the signal split to the data by saving each data point using a class 
-        instance.
-
-        This function is designed to reprepare the data for passing it to the neural network. Predicted 
-        signals will therefore be removed.
-
-        ATTENTION:  This function is designed to prepare the data for the neural network model again to 
-                    repredict the Sleep Stage signals. Therefore it also gets rid of the predicted Sleep Stage
-                    signals.
-        
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        None
-        """
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-
-        # skip function if reverse signal split was not applied
-        if not self.file_info["signal_split_reversed"]:
-            return
-        
-        self.remove_predicted_signals()
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        self.file_info["signal_split_reversed"] = False
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-        # iterate over entries in database and reapply signal split by saving each data point
-        working_file_class = SleepDataManager(working_file_path)
-
-        for data_point in file_generator:
-            for key in self.predicted_signal_keys:
-                if key in data_point:
-                    del data_point[key]
-            working_file_class.save(data_point, unique_id = True)
-        
-        del file_generator, working_file_class
-
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
-    
-
-    def apply_signal_reshape(
-            self,
-            pad_feature_with = 0,
-            pad_target_with = 0,
-            number_windows: int = 1197, 
-            window_duration_seconds: int = 120, 
-            overlap_seconds: int = 90,
-            priority_order: list = [3, 2, 1, 0],
-        ):
-        """
-        Reshape all signals (RRI, MAD, SLP) in database with shape 
-        (n <= nn_signal_duration_seconds * target_frequency) to (number_windows, window_size), where windows 
-        overlap by 'overlap_seconds' and adjust the signal to the neural network's requirements.
-        (Using 'reshape_signal_to_overlapping_windows' function.)
-
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        pad_feature_with : int
-        Value to pad feature (RRI and MAD) with if signal too short, by default 0
-        pad_target_with : int
-            Value to pad target (SLP) with if signal too short, by default 0
-        number_windows: int
-            The number of windows to split the signal into.
-        window_duration_seconds: int
-            The window length in seconds.
-        overlap_seconds: int
-            The overlap between windows in seconds.
-        priority_order: list
-            The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
-        """
-
-        # prevent running this function if signal split was reversed
-        if self.file_info["signal_split_reversed"]:
-            raise ValueError("This function can not be called after the signal split was reversed. The data can not be passed to the neural network model anymore. This function would therefore only lead to unnecessary storage space and computation time.")
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-        
-        # if signal reshape was already applied, remove reshaped signals first
-        if self.file_info["signal_reshape_applied"]:
-            self.remove_reshaped_signals()
-
-        # variables to track progress
-        total_number_datapoints = len(self)
-        current_index = 0
-        print("\nReshaping all signals (RRI, MAD, SLP) in database:")
-        progress_bar = DynamicProgressBar(total = total_number_datapoints)
-        
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # Change file information
-        self.file_info["signal_reshape_applied"] = True
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-        # iterate over entries in database and reshape signals
-        for data_point in file_generator:
-            for signal_key_index in range(0, len(self.signal_keys)):
-                signal_key = self.signal_keys[signal_key_index]
-                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
-                if signal_key in data_point:
-                    new_window_key = self.signal_window_keys[signal_key_index]
-                    this_pad_with = pad_target_with if signal_key == "SLP" else pad_feature_with
-                    this_signal_type = "target" if signal_key == "SLP" else "feature"
-
-                    data_point[new_window_key] = reshape_signal_to_overlapping_windows(
-                        signal = data_point[signal_key], 
-                        target_frequency = self.file_info[signal_frequency_key], 
-                        nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
-                        pad_with = this_pad_with,
-                        number_windows = number_windows, 
-                        window_duration_seconds = window_duration_seconds, 
-                        overlap_seconds = overlap_seconds,
-                        signal_type = this_signal_type,
-                        priority_order = priority_order
-                        )
-
-            # save data point to working file
-            append_to_pickle(data = data_point, file_name = working_file_path)
-
-            # print progress
-            current_index += 1
-            progress_bar.update(current_index = current_index)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-            
-        os.rename(working_file_path, self.file_path)
-
-    
-    def remove_reshaped_signals(self):
-        """
-        Remove all reshaped signals (RRI_windows, MAD_windows, SLP_windows) from the database.
-
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        None
-        """
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-        
-        # skip function if signal reshape was not applied
-        if not self.file_info["signal_reshape_applied"]:
-            return
-        
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # Change file information
-        self.file_info["signal_reshape_applied"] = False
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-        # iterate over entries in database and reshape signals
-        for data_point in file_generator:
-            for signal_window_key in self.signal_window_keys:
-                if signal_window_key in data_point:
-                    del data_point[signal_window_key]
-
-            append_to_pickle(data = data_point, file_name = working_file_path)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
-    
-
-    def remove_predicted_signals(self):
-        """
-        Removes all predicted signals (SLP_predicted, SLP_predicted_probability) from the database.
-
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        None
-        """
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-        
-        # skip function if no precited signals were added
-        if self.file_info["SLP_predicted_frequency"] == None:
-            return
-        
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # Change file information
-        self.file_info["SLP_predicted_frequency"] = None
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-        # iterate over entries in database and predicted signals
-        for data_point in file_generator:
-            for pred_signal_key in self.predicted_signal_keys:
-                if pred_signal_key in data_point:
-                    del data_point[pred_signal_key]
-
-            append_to_pickle(data = data_point, file_name = working_file_path)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
-    
-
-    def crop_predicted_signals(self):
-        """
-        If you pass a signal to the neural network, which has less datapoints than it was trained with, then 
-        the signal will be padded with numbers to match the length. The resulting predictions will therefore 
-        have overlength and can be cropped using this function, to match the original signal length.
-
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        None
-        """
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-            
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-        
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # save file information to working file
-        save_to_pickle(data = next(file_generator), file_name = working_file_path)
-
-        # iterate over database
-        for datapoint in file_generator:
-            # calculate signal length in seconds from signals
-            temporary_signal_length_seconds = list()
-            for signal_key_index in range(0, len(self.signal_keys)):
-                signal_key = self.signal_keys[signal_key_index]
-                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
-                if signal_key in datapoint:
-                    temporary_signal_length_seconds.append(len(datapoint[signal_key]) / self.file_info[signal_frequency_key])
-            signal_length_seconds = int(max(temporary_signal_length_seconds))
-
-            # crop predicted signals to respective signal length
-            for pred_signal_key_index in range(len(self.predicted_signal_keys)):
-                pred_signal_key = self.predicted_signal_keys[pred_signal_key_index]
-                pred_signal_frequency = self.file_info[self.predicted_signal_frequency_keys[pred_signal_key_index]]
-                pred_signal_length = signal_length_seconds * pred_signal_frequency
-                if pred_signal_key in datapoint:
-                    datapoint[pred_signal_key] = datapoint[pred_signal_key][:pred_signal_length]
-            
-            # append datapoint to working file
-            append_to_pickle(data = datapoint, file_name = working_file_path)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
 
 
     def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]):
@@ -3103,22 +2718,25 @@ class SleepDataManager:
             if key not in self.file_info:
                 print(f"Attention: Key {key} not recognized. It will be skipped.")
                 continue
-            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_reshape_applied", "signal_split_reversed"]:
+            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_split_reversed"]:
                 print(f"Attention: Key {key} is a reserved key and cannot be changed.")
                 continue
             self.file_info[key] = new_file_info[key]
         
-        # check if signal frequencies are multiples of each other
+        # Check if the parameters ensure correct signal processing
         all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-        all_signal_frequency_keys.append("SLP_expected_predicted_frequency")
+        all_signal_frequency_keys.append("SLP_predicted_frequency")
         all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
         minimum_signal_frequency = min(all_signal_frequencies)
         if minimum_signal_frequency <= 0:
             raise ValueError("Signal Frequencies must be larger than 0!")
-
-        for signal_frequency in all_signal_frequencies:
-            if not is_multiple(minimum_signal_frequency, signal_frequency):
-                raise ValueError("All default signal frequencies must be multiples of each other. This ensures that signals can be split and fused correctly.")
+        
+        # Check if signals can be split and fused correctly
+        retrieve_possible_shift_lengths(
+            min_shift_seconds = max(self.file_info["wanted_shift_length_seconds"]-self.file_info["absolute_shift_deviation_seconds"], 1),
+            max_shift_seconds = self.file_info["wanted_shift_length_seconds"]+self.file_info["absolute_shift_deviation_seconds"],
+            all_signal_frequencies = all_signal_frequencies
+        )
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)

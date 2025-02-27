@@ -19,7 +19,7 @@ from matplotlib import cm
 import seaborn as sns
 
 # LOCAL IMPORTS
-from dataset_processing import load_from_pickle
+from dataset_processing import load_from_pickle # type: ignore
 from main import loss_per_epoch_shhs_file, loss_per_epoch_gif_file, project_configuration_file, model_performance_file
 
 """
