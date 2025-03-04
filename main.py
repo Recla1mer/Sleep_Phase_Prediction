@@ -933,6 +933,9 @@ def main_model_predicting(
     ------------------------
     """
 
+    # list to track unpredicatable signals
+    unpredictable_signals = []
+
     # variables to track progress
     print("\nPredicting Sleep Stages:")
     progress_bar = DynamicProgressBar(total = len(data_manager))
@@ -975,6 +978,10 @@ def main_model_predicting(
             rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
             rri = rri.to(device) # type: ignore
 
+            # Ensure RRI is of the correct data type
+            if not isinstance(rri, torch.FloatTensor):
+                rri = rri.float()
+
             # MAD preparation analogously to RRI
             try:
                 mad = reshape_signal_to_overlapping_windows(
@@ -993,6 +1000,9 @@ def main_model_predicting(
                     mad = feature_transform(mad)
                 mad = mad.unsqueeze(0) # type: ignore # add batch dimension (= 1)
                 mad = mad.to(device) # type: ignore
+
+                if not isinstance(mad, torch.FloatTensor):
+                    mad = mad.float()
             except:
                 mad = None
 
@@ -1022,7 +1032,11 @@ def main_model_predicting(
             Applying Neural Network Model
             """
 
-            predictions_in_windows = neural_network_model(rri, mad)
+            try:
+                predictions_in_windows = neural_network_model(rri, mad)
+            except:
+                unpredictable_signals.append(data_dict["ID"])
+                continue
 
             """
             Preparing Predicted Sleep Phases
@@ -1111,6 +1125,10 @@ def main_model_predicting(
             os.remove(path_to_processed_data)
             
         os.rename(working_file_path, path_to_processed_data)
+    
+    # Print unpredictable signals to console
+    print("\nFor the data points with the following IDs, the neural network model was unable to make predictions:")
+    print(unpredictable_signals)
 
 
 """
