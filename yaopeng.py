@@ -650,11 +650,14 @@ if __name__ == "__main__":
     #     print(data)
     # raise SystemExit
 
-    unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
+    # unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
+    unknown_dataset_paths = ["RRI_and_MAD/NAKO-33a.pkl", "RRI_and_MAD/NAKO-33b.pkl", "RRI_and_MAD/NAKO-84.pkl", "RRI_and_MAD/NAKO-419.pkl", "RRI_and_MAD/NAKO-609.pkl"]
 
     net = DCNN_classifier_input()
     net.load_state_dict(torch.load(directory + "yao_net.pt", map_location=torch.device(device), weights_only=True))
     net.to(device)
+
+    unpreditable_data = []
 
     # predict sleep stages for unknown data
     for unknown_dataset_path in unknown_dataset_paths:
@@ -672,7 +675,11 @@ if __name__ == "__main__":
 
         count = 0
         for data_dict in data_manager:
-            predicted_results = predict_stage(net, torch.from_numpy(data_dict["RRI"]).float(), torch.from_numpy(data_dict["MAD"]).float())
+            try:
+                predicted_results = predict_stage(net, torch.from_numpy(data_dict["RRI"]).float(), torch.from_numpy(data_dict["MAD"]).float())
+            except:
+                unpreditable_data.append([unknown_dataset_path, data_dict["ID"]])
+                continue
             # print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
             results = {
                 "ID": data_dict["ID"],
@@ -681,3 +688,6 @@ if __name__ == "__main__":
             append_to_pickle(results, results_path)
             count += 1
             print(count, end="\r")
+        
+        print(unpreditable_data)
+        print(len(unpreditable_data))
