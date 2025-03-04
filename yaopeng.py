@@ -571,7 +571,7 @@ def sort_yao_files(my_files, yao_files):
             try:
                 position = ids.index(data["ID"])
             except:
-                break
+                continue
             new_path = os.path.split(yao_files[file_index])[0] + "/split" + str(position) + ".pkl"
             all_paths[position] = new_path
             
@@ -597,6 +597,8 @@ def sort_yao_files(my_files, yao_files):
 def compare_predictions(my_files, yao_files):
     my_results = []
     yao_results = []
+
+    number_data = 0
     
     for file_index in range(len(my_files)):
         my_gen = load_from_pickle(my_files[file_index])
@@ -615,15 +617,26 @@ def compare_predictions(my_files, yao_files):
                 min_length = min(len(my_data["SLP_predicted"]), len(yao_data["SLP_predicted"]))
                 my_results.extend(my_data["SLP_predicted"][:min_length])
                 yao_results.extend(yao_data["SLP_predicted"][:min_length])
+                number_data += 1
             except:
                 break
     
+    print("Number of data:", number_data)
+    print("Number of predictions:", len(my_results))
     print(accuracy_score(my_results, yao_results))
 
 
 from main import *
 
 if __name__ == "__main__":
+
+    # my_files = ["Processed_NAKO/NAKO-33a.pkl", "Processed_NAKO/NAKO-33b.pkl", "Processed_NAKO/NAKO-84.pkl", "Processed_NAKO/NAKO-419.pkl", "Processed_NAKO/NAKO-609.pkl"]
+    # yao_files = ["yyao_net_compare/NAKO-33a_results.pkl", "yyao_net_compare/NAKO-33b_results.pkl", "yyao_net_compare/NAKO-84_results.pkl", "yyao_net_compare/NAKO-419_results.pkl", "yyao_net_compare/NAKO-609_results.pkl"]
+
+    # sort_yao_files(my_files, yao_files)
+    # compare_predictions(my_files, yao_files)
+
+    # raise SystemExit
 
     if torch.cuda.is_available():
         device = "cuda"
@@ -645,7 +658,8 @@ if __name__ == "__main__":
 
     # predict sleep stages for unknown data
     for unknown_dataset_path in unknown_dataset_paths:
-        processed_unknown_dataset_path = directory + os.path.split(unknown_dataset_path)[1]
+        # processed_unknown_dataset_path = directory + os.path.split(unknown_dataset_path)[1]
+        processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
         results_path = directory + os.path.split(unknown_dataset_path)[1][:-4] + "_results.pkl"
 
         # Process_NAKO_Dataset(
@@ -659,7 +673,7 @@ if __name__ == "__main__":
         count = 0
         for data_dict in data_manager:
             predicted_results = predict_stage(net, torch.from_numpy(data_dict["RRI"]).float(), torch.from_numpy(data_dict["MAD"]).float())
-            print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
+            # print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
             results = {
                 "ID": data_dict["ID"],
                 "SLP_predicted": predicted_results[0].cpu().numpy(),

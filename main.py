@@ -1127,8 +1127,10 @@ def main_model_predicting(
         os.rename(working_file_path, path_to_processed_data)
     
     # Print unpredictable signals to console
-    print("\nFor the data points with the following IDs, the neural network model was unable to make predictions:")
-    print(unpredictable_signals)
+    number_unpredictable_signals = len(unpredictable_signals)
+    if number_unpredictable_signals > 0:
+        print(f"\nFor {number_unpredictable_signals} data points with the following IDs, the neural network model was unable to make predictions:")
+        print(unpredictable_signals)
 
 
 """
