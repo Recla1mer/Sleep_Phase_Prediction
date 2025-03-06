@@ -1040,7 +1040,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
         # print progress bar
         progress_bar.update(
-            additional_info = f'Loss: {print_smart_float(loss.item(), 3)} | Acc: {round(this_correct_predicted / this_number_predictions*100, 2)}%',
+            additional_info = f'Loss: {format_float(loss.item(), 3)} | Acc: {round(this_correct_predicted / this_number_predictions*100, 2)}%',
             )
 
         del this_correct_predicted

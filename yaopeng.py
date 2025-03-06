@@ -406,10 +406,10 @@ def predict_stage(net, rri, mad=None, out_prob=False, out_energy=False):
         result_prob = None
 
     for i in range(predict_result.shape[0]):
-        if i == predict_result.shape[0] - 1:
-            result.append(predict_result[i][:zero_start])
-        elif i == 0:
+        if i == 0:
             result.append(predict_result[i])
+        elif i == predict_result.shape[0] - 1:
+            result.append(predict_result[i][-240:zero_start])
         else:
             result.append(predict_result[i][-240:])
         if out_prob:
@@ -662,21 +662,15 @@ if __name__ == "__main__":
     # predict sleep stages for unknown data
     for unknown_dataset_path in unknown_dataset_paths:
         # processed_unknown_dataset_path = directory + os.path.split(unknown_dataset_path)[1]
-        processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
+        # processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
         results_path = directory + os.path.split(unknown_dataset_path)[1][:-4] + "_results.pkl"
 
-        # Process_NAKO_Dataset(
-        #     path_to_nako_dataset = unknown_dataset_path,
-        #     path_to_save_processed_data = processed_unknown_dataset_path,
-        #     path_to_project_configuration = directory + project_configuration_file,
-        # )
-
-        data_manager = SleepDataManager(file_path=processed_unknown_dataset_path)
+        data_manager = SleepDataManager(file_path=unknown_dataset_path)
 
         count = 0
         for data_dict in data_manager:
             try:
-                predicted_results = predict_stage(net, torch.from_numpy(data_dict["RRI"]).float(), torch.from_numpy(data_dict["MAD"]).float())
+                predicted_results = predict_stage(net, torch.from_numpy(np.array(copy.deepcopy(data_dict["RRI"]))).float(), torch.from_numpy(np.array(copy.deepcopy(data_dict["MAD"]))).float())
             except:
                 unpreditable_data.append([unknown_dataset_path, data_dict["ID"]])
                 continue
@@ -691,3 +685,6 @@ if __name__ == "__main__":
         
         print(unpreditable_data)
         print(len(unpreditable_data))
+
+# ask yaopeng
+# predict stage append wrong ? if elif statements were exchanged?

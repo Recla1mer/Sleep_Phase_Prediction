@@ -53,7 +53,7 @@ Progress Bar
 """
 
 
-def print_smart_float(floating_point_number: float, decimals: int) -> str:
+def format_float(floating_point_number: float, decimals: int) -> str:
     """
     Convert a floating point number to a string with a certain number of decimals.
 
@@ -97,42 +97,92 @@ def print_smart_float(floating_point_number: float, decimals: int) -> str:
         return str(floating_point_number)
 
 
-def print_smart_time(time_seconds: float) -> str:
+def format_time(seconds: float, max_parts: int = 2, written_unit: bool = False) -> str:
     """
-    Convert seconds to a time format that is easier to read.
+    Converts a time duration in seconds into a human-readable format. 
+    
+    If the time duration is larger than 60 seconds, the time will be displayed using a combination of
+    units like days, hours, minutes, and seconds. 
+    
+    If the time duration is smaller than 60 seconds, the time will be displayed using SI prefixes like
+    milliseconds, microseconds, and nanoseconds.
 
     ARGUMENTS:
     ------------------------------
-    time_seconds: int
-        time in seconds
+    seconds: float
+        time duration in seconds
+    max_parts: int
+        maximum number of time parts to display for large time durations (e.g., 1d 2h 3m 4s = 4 parts)
+    written_unit: bool
+        whether to write out the unit names (e.g., "days" instead of "d")
     
     RETURNS:
     ------------------------------
     str
-        time in a more readable format
+        human-readable time
     """
 
-    if time_seconds <= 1:
-        return str(round(time_seconds, 1)) + "s"
-    else:
-        time_seconds = round(time_seconds)
-        days = time_seconds // 86400
-        if days > 0:
-            time_seconds = time_seconds % 86400
-        hours = time_seconds // 3600
-        if hours > 0:
-            time_seconds = time_seconds % 3600
-        minutes = time_seconds // 60
-        seconds = time_seconds % 60
+    output = str()
+    if seconds < 0:
+        seconds = abs(seconds)
+        output = "- "
 
-        if days > 0:
-            return str(days) + "d " + str(hours) + "h"
-        if hours > 0:
-            return str(hours) + "h " + str(minutes) + "m"
-        elif minutes > 0:
-            return str(minutes) + "m " + str(seconds) + "s"
-        else:
-            return str(seconds) + "s"
+    if seconds < 60:
+        small_units = [
+            ("second", 1),
+            ("millisecond", 1e-3),
+            ("microsecond", 1e-6),
+            ("nanosecond", 1e-9),
+        ] if written_unit else [
+            ("s", 1),
+            ("ms", 1e-3),
+            ("µs", 1e-6),
+            ("ns", 1e-9),
+        ]
+
+        for name, value in small_units:
+            if seconds >= value: # Always show smallest unit
+                this_share = seconds / value
+                this_share = int(np.ceil(this_share)) if this_share >= 10 else round(this_share, 1)
+
+                if written_unit:
+                    output = f"{this_share} {name}{'' if this_share == 1 else 's'}"
+                else:
+                    output = f"{this_share} {name}"
+                break
+
+    else:
+        big_units = [
+            ("day", 86400),
+            ("hour", 3600),
+            ("minute", 60),
+            ("second", 1),
+        ] if written_unit else [
+            ("d", 86400),
+            ("h", 3600),
+            ("m", 60),
+            ("s", 1),
+        ]
+
+        count_parts = 0
+        for name, value in big_units:
+            if seconds >= value:
+                this_share = int(seconds // value)
+                seconds %= value
+
+                if written_unit:
+                    output += f"{this_share} {name}{'' if this_share == 1 else 's'} "
+                else:
+                    output += f"{this_share}{name} "
+
+                count_parts += 1
+            
+            if count_parts == max_parts:
+                break
+        
+        output = output[:-1]
+
+    return output
 
 
 def get_cursor_position():
@@ -297,10 +347,10 @@ class DynamicProgressBar:
             # time_remaining = time_per_index*(total-index)
             time_per_index *= self.batch_size
 
-            time_passed_str = print_smart_time(time_passed)
-            time_per_index_str = print_smart_time(time_per_index)
-            # time_remaining_str = print_smart_time(time_remaining)
-            time_total_str = print_smart_time(time_total)
+            time_passed_str = format_time(time_passed)
+            time_per_index_str = format_time(time_per_index)
+            # time_remaining_str = format_time(time_remaining)
+            time_total_str = format_time(time_total)
 
             time_message = f' | {time_passed_str} / {time_total_str} ({time_per_index_str}/it)'
         
