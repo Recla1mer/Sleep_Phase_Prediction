@@ -406,10 +406,10 @@ def predict_stage(net, rri, mad=None, out_prob=False, out_energy=False):
         result_prob = None
 
     for i in range(predict_result.shape[0]):
-        if i == 0:
-            result.append(predict_result[i])
-        elif i == predict_result.shape[0] - 1:
+        if i == predict_result.shape[0] - 1:
             result.append(predict_result[i][-240:zero_start])
+        elif i == 0:
+            result.append(predict_result[i])
         else:
             result.append(predict_result[i][-240:])
         if out_prob:
@@ -676,12 +676,12 @@ if __name__ == "__main__":
             except:
                 unpreditable_data.append([unknown_dataset_path, data_dict["ID"]])
                 continue
-            # print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
+            print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
             results = {
                 "ID": data_dict["ID"],
                 "SLP_predicted": predicted_results[0].cpu().numpy(),
             }
-            append_to_pickle(results, results_path)
+            # append_to_pickle(results, results_path)
             count += 1
             print(count, end="\r")
         
