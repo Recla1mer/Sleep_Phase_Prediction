@@ -615,6 +615,8 @@ def compare_predictions(my_files, yao_files):
                     break
 
                 min_length = min(len(my_data["SLP_predicted"]), len(yao_data["SLP_predicted"]))
+                if len(my_data["SLP_predicted"]) != len(yao_data["SLP_predicted"]):
+                    print("Length mismatch: ", len(my_data["SLP_predicted"]), len(yao_data["SLP_predicted"]))
                 my_results.extend(my_data["SLP_predicted"][:min_length])
                 yao_results.extend(yao_data["SLP_predicted"][:min_length])
                 number_data += 1
@@ -665,10 +667,10 @@ if __name__ == "__main__":
         # processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
         results_path = directory + os.path.split(unknown_dataset_path)[1][:-4] + "_results.pkl"
 
-        data_manager = SleepDataManager(file_path=unknown_dataset_path)
+        data_generator = load_from_pickle(unknown_dataset_path)
 
         count = 0
-        for data_dict in data_manager:
+        for data_dict in data_generator:
             try:
                 predicted_results = predict_stage(net, torch.from_numpy(np.array(copy.deepcopy(data_dict["RRI"]))).float(), torch.from_numpy(np.array(copy.deepcopy(data_dict["MAD"]))).float())
             except:
