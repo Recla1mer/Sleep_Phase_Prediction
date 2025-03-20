@@ -22,6 +22,7 @@ import datetime
 import pyedflib 
 from numba import jit
 
+
 def padding_same(kernel_size=3, dilation=1, stride=1):
     # stride * Lout = Lin + 2padding - dilation (kernel_size - 1) - 1 + stride
     # (stride - 1) * Lout + dilation (kernel_size - 1) + 1 - stride = 2 padding
@@ -405,27 +406,34 @@ def predict_stage(net, rri, mad=None, out_prob=False, out_energy=False):
     else:
         result_prob = None
 
-    for i in range(predict_result.shape[0]):
-        if i == predict_result.shape[0] - 1:
-            result.append(predict_result[i][-240:zero_start])
-        elif i == 0:
-            result.append(predict_result[i])
-        else:
-            result.append(predict_result[i][-240:])
+    if predict_result.shape[0] == 1:
+        result.append(predict_result[0][:zero_start])
         if out_prob:
-            if i == predict_result.shape[0] - 1:
-                result_prob.append(predict_prob[i][-240:zero_start])
-            elif i == 0:
-                result_prob.append(predict_prob[i])
-            else:
-                result_prob.append(predict_prob[i][-240:])
+            result_prob.append(predict_prob[0][:zero_start])
         if out_energy:
+            result_energy.append(energy[0][:zero_start])
+    else:
+        for i in range(predict_result.shape[0]):
             if i == predict_result.shape[0] - 1:
-                result_energy.append(energy[i][-240:zero_start])
+                result.append(predict_result[i][-240:zero_start])
             elif i == 0:
-                result_energy.append(energy[i])
+                result.append(predict_result[i])
             else:
-                result_energy.append(energy[i][-240:])
+                result.append(predict_result[i][-240:])
+            if out_prob:
+                if i == predict_result.shape[0] - 1:
+                    result_prob.append(predict_prob[i][-240:zero_start])
+                elif i == 0:
+                    result_prob.append(predict_prob[i])
+                else:
+                    result_prob.append(predict_prob[i][-240:])
+            if out_energy:
+                if i == predict_result.shape[0] - 1:
+                    result_energy.append(energy[i][-240:zero_start])
+                elif i == 0:
+                    result_energy.append(energy[i])
+                else:
+                    result_energy.append(energy[i][-240:])
 
     if out_prob:
         result_prob = torch.cat(result_prob)
@@ -628,32 +636,11 @@ def compare_predictions(my_files, yao_files):
     print(accuracy_score(my_results, yao_results))
 
 
-from main import *
-
-if __name__ == "__main__":
-
-    # my_files = ["Processed_NAKO/NAKO-33a.pkl", "Processed_NAKO/NAKO-33b.pkl", "Processed_NAKO/NAKO-84.pkl", "Processed_NAKO/NAKO-419.pkl", "Processed_NAKO/NAKO-609.pkl"]
-    # yao_files = ["yyao_net_compare/NAKO-33a_results.pkl", "yyao_net_compare/NAKO-33b_results.pkl", "yyao_net_compare/NAKO-84_results.pkl", "yyao_net_compare/NAKO-419_results.pkl", "yyao_net_compare/NAKO-609_results.pkl"]
-
-    # sort_yao_files(my_files, yao_files)
-    # compare_predictions(my_files, yao_files)
-
-    # raise SystemExit
-
+def quick_yao_predict(unknown_dataset_paths: list):
     if torch.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"
-
-    directory = "yyao_net_compare/"
-
-    # data_gen = load_from_pickle(directory + "NAKO-33a_results.pkl")
-    # for data in data_gen:
-    #     print(data)
-    # raise SystemExit
-
-    # unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
-    unknown_dataset_paths = ["RRI_and_MAD/NAKO-33a.pkl", "RRI_and_MAD/NAKO-33b.pkl", "RRI_and_MAD/NAKO-84.pkl", "RRI_and_MAD/NAKO-419.pkl", "RRI_and_MAD/NAKO-609.pkl"]
 
     net = DCNN_classifier_input()
     net.load_state_dict(torch.load(directory + "yao_net.pt", map_location=torch.device(device), weights_only=True))
@@ -663,30 +650,116 @@ if __name__ == "__main__":
 
     # predict sleep stages for unknown data
     for unknown_dataset_path in unknown_dataset_paths:
-        # processed_unknown_dataset_path = directory + os.path.split(unknown_dataset_path)[1]
-        # processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
-        results_path = directory + os.path.split(unknown_dataset_path)[1][:-4] + "_results.pkl"
 
         data_generator = load_from_pickle(unknown_dataset_path)
+        results_path = directory + os.path.split(unknown_dataset_path)[1].split(".")[0] + "_yao.pkl"
 
         count = 0
         for data_dict in data_generator:
             try:
                 predicted_results = predict_stage(net, torch.from_numpy(np.array(copy.deepcopy(data_dict["RRI"]))).float(), torch.from_numpy(np.array(copy.deepcopy(data_dict["MAD"]))).float())
+                new_result = scale_classification_signal(predicted_results[0].cpu().numpy(), len(predicted_results[0].cpu().numpy())/len(data_dict["MAD"]), 1/30)
             except:
                 unpreditable_data.append([unknown_dataset_path, data_dict["ID"]])
                 continue
-            print(len(predicted_results[0].cpu().numpy()), len(data_dict["RRI"]), len(data_dict["MAD"]))
+            
+            # print(len(data_dict["MAD"]), len(predicted_results[0].cpu().numpy())*30, len(new_result)*30)
+
             results = {
                 "ID": data_dict["ID"],
-                "SLP_predicted": predicted_results[0].cpu().numpy(),
+                "SLP_predicted": new_result,
             }
-            # append_to_pickle(results, results_path)
+            append_to_pickle(results, results_path)
             count += 1
             print(count, end="\r")
         
         print(unpreditable_data)
         print(len(unpreditable_data))
 
-# ask yaopeng
-# predict stage append wrong ? if elif statements were exchanged?
+
+def append_all_results_to_one_file(my_files, yao_files, new_path):
+    for file_index in range(len(my_files)):
+        my_gen = load_from_pickle(my_files[file_index])
+        next(my_gen)
+        yao_gen = load_from_pickle(yao_files[file_index])
+
+        while True:
+            try:
+                my_data = next(my_gen)
+                yao_data = next(yao_gen)
+
+                if my_data["ID"] != yao_data["ID"]:
+                    print("ID mismatch")
+                    break
+
+                min_length = min(len(my_data["SLP_predicted"]), len(yao_data["SLP_predicted"]))
+                if len(my_data["SLP_predicted"]) != len(yao_data["SLP_predicted"]):
+                    print("Length mismatch: ", len(my_data["SLP_predicted"]), len(yao_data["SLP_predicted"]))
+                
+                this_data = {
+                    "ID": my_data["ID"],
+                    "my_SLP": my_data["SLP_predicted"][:min_length],
+                    "yao_SLP": yao_data["SLP_predicted"][:min_length]
+                }
+                append_to_pickle(this_data, new_path)
+            except:
+                break
+
+
+from main import *
+from plot_helper import *
+
+if __name__ == "__main__":
+
+    directory = "yao_net_compare/"
+    model_directory_path = "Yao_Original/"
+
+    unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
+    # unknown_dataset_paths = ["RRI_and_MAD/NAKO-33a.pkl", "RRI_and_MAD/NAKO-33b.pkl", "RRI_and_MAD/NAKO-84.pkl", "RRI_and_MAD/NAKO-419.pkl", "RRI_and_MAD/NAKO-609.pkl"]
+
+    quick_yao_predict(unknown_dataset_paths)
+
+    my_files = ["Processed_NAKO/NAKO-33a.pkl", "Processed_NAKO/NAKO-33b.pkl", "Processed_NAKO/NAKO-84.pkl", "Processed_NAKO/NAKO-419.pkl", "Processed_NAKO/NAKO-609.pkl"]
+    yao_files = [directory + "NAKO-33a_yao.pkl", directory + "NAKO-33b_yao.pkl", directory + "NAKO-84_yao.pkl", directory + "NAKO-419_yao.pkl", directory + "NAKO-609_yao.pkl"]
+
+    sort_yao_files(my_files, yao_files)
+    # compare_predictions(my_files, yao_files)
+
+    all_results_path = directory + "all_results.pkl"
+    append_all_results_to_one_file(my_files, yao_files, all_results_path)
+
+    print_model_performance(
+        paths_to_pkl_files = [all_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "my_SLP",
+        actual_result_key = "yao_SLP",
+        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        number_of_decimals = 3
+    )
+
+    plot_distribution_of_score(
+        paths_to_pkl_files = [all_results_path],
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "my_SLP",
+        actual_result_key = "yao_SLP",
+        score_function = metrics.accuracy_score, # metrics.cohen_kappa_score
+        combine_file_predictions = False,
+        title = "Distribution of Accuracy",
+        xlabel = "Accuracy",
+        label = ["Training Data"],
+        binrange = (0, 1),
+        binwidth = 0.05,
+        xlim = (0.6, 1.01),
+    )
+
+    plot_confusion_matrix(
+        path_to_pkl_file = all_results_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        prediction_result_key = "my_SLP",
+        actual_result_key = "yao_SLP",
+        title = "Confusion Matrix of Neural Network",
+        xlabel = "my stage",
+        ylabel = "yao stage",
+        normalize = None, # 'true', 'pred', 'all'
+        values_format = None, # 'd', 'f', '.1%'
+    )

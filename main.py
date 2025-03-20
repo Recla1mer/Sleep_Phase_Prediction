@@ -1823,3 +1823,4 @@ if __name__ == "__main__":
 
 # why predicted freuqency = 1/30?
 # why does accuracy not match? slp stage is reversed to 1/30, meaning one value becomes 4
+# make function that performs all data transformations and use this witin predicting and training
