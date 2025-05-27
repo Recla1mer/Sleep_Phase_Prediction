@@ -124,7 +124,6 @@ def ask_to_override_files(file_paths: list):
 
 
 def predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state: str = "Neural_Network/Model_State.pth",
         path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
@@ -269,6 +268,7 @@ def train_multiple_configurations(
     Using YaoModel
     """
 
+    """
     model_directory_path = "Yao_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -298,6 +298,7 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
+    """
 
     """
     ---------------------------------------------------------------
@@ -359,6 +360,7 @@ def train_multiple_configurations(
 
     # Using YaoModel
 
+    """
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -388,6 +390,7 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
+    """
 
     """
     -------------------------------------------------------------------
@@ -467,6 +470,7 @@ def train_multiple_configurations(
     Using YaoModel
     """
 
+    """
     model_directory_path = "Yao_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -496,6 +500,7 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
+    """
 
 
 def predict_multiple_configurations(
@@ -524,7 +529,6 @@ def predict_multiple_configurations(
     model_directory_path = "SSM_Original" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -532,7 +536,6 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -543,10 +546,11 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
+    """
+
     model_directory_path = "Yao_Original" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -554,12 +558,12 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
+    """
 
     """
     ---------------------------------------------------------------
@@ -578,7 +582,6 @@ def predict_multiple_configurations(
     model_directory_path = "SSM_no_overlap" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -586,7 +589,6 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -597,10 +599,10 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
+    """
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -608,12 +610,12 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
+    """
 
     """
     -------------------------------------------------------------------
@@ -632,7 +634,6 @@ def predict_multiple_configurations(
     model_directory_path = "SSM_Artifect" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -640,7 +641,6 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = SleepStageModel,
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -651,10 +651,10 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
+    """
     model_directory_path = "Yao_Artifect" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_shhs_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
@@ -662,12 +662,12 @@ def predict_multiple_configurations(
     )
 
     predictions_for_model_accuracy_evaluation(
-        neural_network_model = YaoModel, # type: ignore
         path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_processed_data = processed_gif_path,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
+    """
 
 
 def extensive_accuracy_printing(model_directory_path: str):
@@ -683,50 +683,50 @@ def extensive_accuracy_printing(model_directory_path: str):
     shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
     shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
 
-    message = "Accuracy of SHHS Training and Validation Data in windows:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of SHHS Training and Validation Data in windows:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted_in_windows",
+    #     actual_result_key = "Actual_in_windows",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
-    message = "Accuracy of SHHS Training and Validation Data reshaped to original signal structure:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of SHHS Training and Validation Data reshaped to original signal structure:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
-    message = "Accuracy of SHHS Validation Data in windows:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of SHHS Validation Data in windows:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [shhs_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted_in_windows",
+    #     actual_result_key = "Actual_in_windows",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
     message = "Accuracy of SHHS Validation Data reshaped to original signal structure:"
     print()
@@ -751,50 +751,50 @@ def extensive_accuracy_printing(model_directory_path: str):
     gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
     
-    message = "Accuracy of GIF Training and Validation Data in windows:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of GIF Training and Validation Data in windows:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted_in_windows",
+    #     actual_result_key = "Actual_in_windows",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
-    message = "Accuracy of GIF Training and Validation Data reshaped to original signal structure:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of GIF Training and Validation Data reshaped to original signal structure:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted",
+    #     actual_result_key = "Actual",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
-    message = "Accuracy of GIF Validation Data in windows:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
+    # message = "Accuracy of GIF Validation Data in windows:"
+    # print()
+    # print("-"*len(message))
+    # print(message)
+    # print("-"*len(message))
 
-    print_model_performance(
-        paths_to_pkl_files = [gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows",
-        actual_result_key = "Actual_in_windows",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
-        number_of_decimals = 3
-    )
+    # print_model_performance(
+    #     paths_to_pkl_files = [gif_validation_pid_results_path],
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     prediction_result_key = "Predicted_in_windows",
+    #     actual_result_key = "Actual_in_windows",
+    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     number_of_decimals = 3
+    # )
 
     message = "Accuracy of GIF Validation Data reshaped to original signal structure:"
     print()
@@ -858,7 +858,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_Original" + name_addition + "/"
 
-    extensive_accuracy_printing(model_directory_path)
+    # extensive_accuracy_printing(model_directory_path)
 
     """
     -------------------------------------------------------------------
@@ -900,7 +900,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_Artifect" + name_addition + "/"
 
-    extensive_accuracy_printing(model_directory_path)
+    # extensive_accuracy_printing(model_directory_path)
 
     """
     ---------------------------------------------------------------
@@ -942,7 +942,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
 
-    extensive_accuracy_printing(model_directory_path)
+    # extensive_accuracy_printing(model_directory_path)
 
 
 if True:
