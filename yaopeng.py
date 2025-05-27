@@ -686,6 +686,7 @@ def append_all_results_to_one_file(my_files, yao_files, new_path):
         while True:
             try:
                 my_data = next(my_gen)
+                my_slp = summarize_predicted_signal(predicted_signal = my_data["SLP_predicted_probability"], mode = "probability")
                 yao_data = next(yao_gen)
 
                 if my_data["ID"] != yao_data["ID"]:
@@ -698,7 +699,7 @@ def append_all_results_to_one_file(my_files, yao_files, new_path):
                 
                 this_data = {
                     "ID": my_data["ID"],
-                    "my_SLP": my_data["SLP_predicted"][:min_length],
+                    "my_SLP": my_slp[:min_length],
                     "yao_SLP": yao_data["SLP_predicted"][:min_length]
                 }
                 append_to_pickle(this_data, new_path)

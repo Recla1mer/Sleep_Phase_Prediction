@@ -123,9 +123,9 @@ def unity_based_normalization(
             old_min = np.min(signal[i])
 
             if old_max == old_min:
-                continue
-            
-            signal[i] = (signal[i] - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
+                signal[i] = (signal[i] / old_max) * (normalization_max - normalization_min) / 2 + normalization_min
+            else:
+                signal[i] = (signal[i] - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
 
         return np.array(signal)
     
@@ -1136,7 +1136,7 @@ def remove_padding_from_windows(
     window shift = (window_duration_seconds - overlap_seconds) * target_frequency
     number windows with signal data = signal length / window shift
     """
-    number_windows_with_data = original_signal_length / ((window_duration_seconds - overlap_seconds) / target_frequency)
+    number_windows_with_data = original_signal_length / ((window_duration_seconds - overlap_seconds) * target_frequency)
     number_windows_with_data = int(np.ceil(number_windows_with_data))
 
     # return signal without windows that only contain padding

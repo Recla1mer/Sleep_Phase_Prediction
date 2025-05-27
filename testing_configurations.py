@@ -224,7 +224,8 @@ def train_multiple_configurations(
     model_directory_path = "SSM_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = SleepStageModel
+    # project_configuration["neural_network_model"] = SleepStageModel
+    project_configuration["neural_network_model"] = SleepStageModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -271,7 +272,8 @@ def train_multiple_configurations(
     model_directory_path = "Yao_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = YaoModel
+    # project_configuration["neural_network_model"] = YaoModel
+    project_configuration["neural_network_model"] = YaoModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -323,14 +325,13 @@ def train_multiple_configurations(
 
     check_project_configuration(project_configuration)
 
-    """
-    Using SleepStageModel
-    """
+    # Using SleepStageModel
 
     model_directory_path = "SSM_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = SleepStageModel
+    # project_configuration["neural_network_model"] = SleepStageModel
+    project_configuration["neural_network_model"] = SleepStageModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -356,14 +357,13 @@ def train_multiple_configurations(
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
 
-    """
-    Using YaoModel
-    """
+    # Using YaoModel
 
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = YaoModel
+    # project_configuration["neural_network_model"] = YaoModel
+    project_configuration["neural_network_model"] = YaoModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -388,7 +388,7 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
-    
+
     """
     -------------------------------------------------------------------
     Testing with Overlapping windows but artifect being a unique stage
@@ -422,7 +422,8 @@ def train_multiple_configurations(
     model_directory_path = "SSM_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = SleepStageModel
+    # project_configuration["neural_network_model"] = SleepStageModel
+    project_configuration["neural_network_model"] = SleepStageModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -469,7 +470,8 @@ def train_multiple_configurations(
     model_directory_path = "Yao_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
-    project_configuration["neural_network_model"] = YaoModel
+    # project_configuration["neural_network_model"] = YaoModel
+    project_configuration["neural_network_model"] = YaoModelNew
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -943,8 +945,8 @@ def accuracy_multiple_configurations(
     extensive_accuracy_printing(model_directory_path)
 
 
-if False:
-    name_addition = ""
+if True:
+    name_addition = "_NEW"
     project_configuration_change = {
         "RRI_inlier_interval": [None, None],
         "normalize_rri": False,
@@ -953,7 +955,7 @@ if False:
     train_multiple_configurations(name_addition, project_configuration_change)
     predict_multiple_configurations(name_addition)
 
-    name_addition = "_rm_outliers"
+    name_addition = "_rm_outliers_NEW"
     project_configuration_change = {
         "RRI_inlier_interval": [0.3, 2],
         "normalize_rri": False,
@@ -964,7 +966,7 @@ if False:
     train_multiple_configurations(name_addition, project_configuration_change)
     predict_multiple_configurations(name_addition)
 
-    name_addition = "_norm_global"
+    name_addition = "_norm_global_NEW"
     project_configuration_change = {
         "RRI_inlier_interval": [0.3, 2],
         "normalize_rri": True,
@@ -975,7 +977,7 @@ if False:
     train_multiple_configurations(name_addition, project_configuration_change)
     predict_multiple_configurations(name_addition)
 
-    name_addition = "_norm_local"
+    name_addition = "_norm_local_NEW"
     project_configuration_change = {
         "RRI_inlier_interval": [0.3, 2],
         "normalize_rri": True,
@@ -999,7 +1001,7 @@ if False:
     accuracy_multiple_configurations(name_addition)
 
 
-if __name__ == "__main__":
+if False:
     # fix_project_configuration_2()
     # print_project_configuration()
     
