@@ -741,7 +741,7 @@ def main_model_predicting(
         path_to_model_state: str = "Neural_Network/Model_State.pth",
         path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
-        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
+        path_to_save_results: str = "Neural_Network/Model_Performance.pkl",
     ):
     """
     Applies the trained neural network model to the processed data. The processed data is accessed using the
@@ -1145,7 +1145,7 @@ def print_model_performance(
         path_to_project_configuration: str,
         prediction_result_key: str,
         actual_result_key: str,
-        additional_score_function_args: dict = {"average": None, "zero_division": np.nan},
+        additional_score_function_args: dict = {"zero_division": np.nan},
         number_of_decimals = 2
     ):
     """
@@ -1172,6 +1172,7 @@ def print_model_performance(
                 average parameter
             - zero_division: {"warn", 0.0, 1.0, np.nan}
                 zero division parameter
+            - Attention: if average not specified, the performance values are printed for average = 'macro', 'weighted' and None
     number_of_decimals: int
         the number of decimals to round the results to
     
@@ -1228,31 +1229,64 @@ def print_model_performance(
             # Add the results to the arrays
             all_predicted_results = np.append(all_predicted_results, predicted_results)
             all_actual_results = np.append(all_actual_results, actual_results)
-    
-    # Calculate the accuracy values
-    accuracy = accuracy_score(all_actual_results, all_predicted_results)
-    kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
 
-    precision = precision_score(all_actual_results, all_predicted_results, **additional_score_function_args)
-    recall = recall_score(all_actual_results, all_predicted_results, **additional_score_function_args)
-    f1 = f1_score(all_actual_results, all_predicted_results, **additional_score_function_args)
-
-    # Define description of accuracy parameters
+    # Define description of performance parameters
     accuracy_description = "Accuracy"
     kappa_description = "Cohen's Kappa"
     precision_description = "Precision"
     recall_description = "Recall"
     f1_description = "f1"
 
+    # Calculate and print accuracy and cohen's kappa score
+    accuracy = accuracy_score(all_actual_results, all_predicted_results)
+    kappa = cohen_kappa_score(all_actual_results, all_predicted_results)
+
+    print()
+    print(f"{accuracy_description:^{15}}| {round(accuracy, number_of_decimals)}")
+    print(f"{kappa_description:^{15}}| {round(kappa, number_of_decimals)}")
+    print("\n")
+
     # Print the results
-    if additional_score_function_args["average"] is not None:
-        print()
-        print(accuracy_description, round(accuracy, number_of_decimals))
-        print(kappa_description, round(kappa, number_of_decimals))
-        print(precision_description, round(precision, number_of_decimals)) # type: ignore
-        print(recall_description, round(recall, number_of_decimals)) # type: ignore
-        print(f1_description, round(f1, number_of_decimals)) # type: ignore
-    else:
+    if "average" in additional_score_function_args:
+        # Calculate performance values
+        precision = precision_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+        recall = recall_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+        f1 = f1_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+
+        if additional_score_function_args["average"] is not None:
+            print(precision_description, round(precision, number_of_decimals)) # type: ignore
+            print(recall_description, round(recall, number_of_decimals)) # type: ignore
+            print(f1_description, round(f1, number_of_decimals)) # type: ignore
+
+        return
+    
+    if "average" not in additional_score_function_args:
+        precision = np.empty(0)
+        recall = np.empty(0)
+        f1 = np.empty(0)
+
+        # Calculate Macro performance values
+        additional_score_function_args["average"] = "macro"
+        additional_score_function_args["zero_division"] = np.nan
+
+        precision = np.append(precision, precision_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        recall = np.append(recall, recall_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        f1 = np.append(f1, f1_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+
+        # Calculate Micro performance values
+        additional_score_function_args["average"] = "micro"
+
+        precision = np.append(precision, precision_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        recall = np.append(recall, recall_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        f1 = np.append(f1, f1_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+
+        # Calculate Weighted performance values
+        additional_score_function_args["average"] = "weighted"
+
+        precision = np.append(precision, precision_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        recall = np.append(recall, recall_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+        f1 = np.append(f1, f1_score(all_actual_results, all_predicted_results, **additional_score_function_args))
+
         # Round the results
         precision = np.round(precision, number_of_decimals)
         recall = np.round(recall, number_of_decimals)
@@ -1263,24 +1297,19 @@ def print_model_performance(
         longest_recall_value = max([len(str(value)) for value in recall])
         longest_f1_value = max([len(str(value)) for value in f1])
 
-        column_width = max([len(label) for label in display_labels])
+        column_header = ["Macro", "Micro", "Weighted"]
+        column_width = max([len(label) for label in column_header])
         column_width = max([column_width, longest_precision_value, longest_recall_value, longest_f1_value])
         column_width += 2
 
         first_column_width = max([len(precision_description), len(recall_description), len(f1_description)]) + 1
 
-        # Print the results
-        print()
-        print(accuracy_description, round(accuracy, number_of_decimals))
-        print(kappa_description, round(kappa, number_of_decimals))
-        print()
-        
         # Print the header
         print(" "*first_column_width, end = "")
-        for label in display_labels:
+        for label in column_header:
             print(f"|{label:^{column_width}}", end = "")
         print()
-        print("-"*(first_column_width + len(display_labels)*(column_width + 1)))
+        print("-"*(first_column_width + len(column_header)*(column_width + 1)))
 
         # Print the results
         print(f"{precision_description:<{first_column_width}}", end = "")
@@ -1294,7 +1323,54 @@ def print_model_performance(
         print(f"{f1_description:<{first_column_width}}", end = "")
         for value in f1:
             print(f"|{value:^{column_width}}", end = "")
-        print()
+        print("\n\n")
+
+        # cleaning up
+        del precision, recall, f1
+
+        # Calculate the performance values for "average"=None
+        additional_score_function_args["average"] = None
+
+        precision = precision_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+        recall = recall_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+        f1 = f1_score(all_actual_results, all_predicted_results, **additional_score_function_args)
+
+    # Round the results
+    precision = np.round(precision, number_of_decimals)
+    recall = np.round(recall, number_of_decimals)
+    f1 = np.round(f1, number_of_decimals)
+
+    # Calculate column width
+    longest_precision_value = max([len(str(value)) for value in precision])
+    longest_recall_value = max([len(str(value)) for value in recall])
+    longest_f1_value = max([len(str(value)) for value in f1])
+
+    column_width = max([len(label) for label in display_labels])
+    column_width = max([column_width, longest_precision_value, longest_recall_value, longest_f1_value])
+    column_width += 2
+
+    first_column_width = max([len(precision_description), len(recall_description), len(f1_description)]) + 1
+    
+    # Print the header
+    print(" "*first_column_width, end = "")
+    for label in display_labels:
+        print(f"|{label:^{column_width}}", end = "")
+    print()
+    print("-"*(first_column_width + len(display_labels)*(column_width + 1)))
+
+    # Print the results
+    print(f"{precision_description:<{first_column_width}}", end = "")
+    for value in precision:
+        print(f"|{value:^{column_width}}", end = "")
+    print()
+    print(f"{recall_description:<{first_column_width}}", end = "")
+    for value in recall:
+        print(f"|{value:^{column_width}}", end = "")
+    print()
+    print(f"{f1_description:<{first_column_width}}", end = "")
+    for value in f1:
+        print(f"|{value:^{column_width}}", end = "")
+    print()
 
 
 """
@@ -1523,7 +1599,7 @@ def run_model_performance_evaluation(
 
     # check if predictions already exist
     user_response = "y"
-    if os.path.exists(path_to_model_directory + shhs_validation_pid_results_path):
+    if os.path.exists(shhs_validation_pid_results_path):
         # ask the user if they want to overwrite
         user_response = retrieve_user_response(
             message = "ATTENTION: You are about to predict sleep stages for the SHHS validation pid and " +
@@ -1534,7 +1610,7 @@ def run_model_performance_evaluation(
         )
 
         if user_response == "y":
-            delete_files([path_to_model_directory + shhs_validation_pid_results_path])
+            delete_files([shhs_validation_pid_results_path])
 
     # make predictions for the relevant files
     if user_response == "y":
@@ -1553,7 +1629,7 @@ def run_model_performance_evaluation(
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows", # or: "Predicted"
         actual_result_key = "Actual_in_windows", # or: "Actual"
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -1576,7 +1652,7 @@ def run_model_performance_evaluation(
 
     # check if predictions already exist
     user_response = "y"
-    if os.path.exists(path_to_model_directory + shhs_validation_pid_results_path):
+    if os.path.exists(gif_validation_pid_results_path):
         # ask the user if they want to overwrite
         user_response = retrieve_user_response(
             message = "ATTENTION: You are about to predict sleep stages for the GIF validation pid and " +
@@ -1587,7 +1663,7 @@ def run_model_performance_evaluation(
         )
 
         if user_response == "y":
-            delete_files([path_to_model_directory + shhs_validation_pid_results_path])
+            delete_files([gif_validation_pid_results_path])
 
     # make predictions for the relevant files
     if user_response == "y":
@@ -1606,7 +1682,7 @@ def run_model_performance_evaluation(
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted_in_windows", # or: "Predicted"
         actual_result_key = "Actual_in_windows", # or: "Actual"
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -1765,9 +1841,9 @@ if __name__ == "__main__":
     )
 
     """
-    ========================
-    Evaluate Model Accuracy
-    ========================
+    ===========================
+    Evaluate Model Performance
+    ===========================
     """
 
     run_model_performance_evaluation(

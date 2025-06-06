@@ -226,49 +226,48 @@ def train_multiple_configurations(
     # project_configuration["neural_network_model"] = SleepStageModel
     project_configuration["neural_network_model"] = SleepStageModelNew
 
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
+    # if os.path.isfile(model_directory_path + project_configuration_file):
+    #     os.remove(model_directory_path + project_configuration_file)
+    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Preprocess SHHS Data
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
+    # Process_SHHS_Dataset(
+    #     path_to_shhs_dataset = original_shhs_data_path,
+    #     path_to_save_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     )
 
     # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+    #     path_to_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = None,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
+    #     )
 
     # Preprocess GIF Data
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
+    # Process_GIF_Dataset(
+    #     path_to_gif_dataset = original_gif_data_path,
+    #     path_to_save_processed_data = processed_gif_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file
+    #     )
 
     # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
+    #     path_to_processed_data = processed_gif_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
+    #     )
 
     """
     Using YaoModel
     """
 
-    """
     model_directory_path = "Yao_Original" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -298,7 +297,6 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
-    """
 
     """
     ---------------------------------------------------------------
@@ -334,33 +332,32 @@ def train_multiple_configurations(
     # project_configuration["neural_network_model"] = SleepStageModel
     project_configuration["neural_network_model"] = SleepStageModelNew
 
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
+    # if os.path.isfile(model_directory_path + project_configuration_file):
+    #     os.remove(model_directory_path + project_configuration_file)
+    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+    #     path_to_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = None,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
+    #     )
 
     # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
+    #     path_to_processed_data = processed_gif_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
+    #     )
 
     # Using YaoModel
 
-    """
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -390,7 +387,6 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
-    """
 
     """
     -------------------------------------------------------------------
@@ -428,49 +424,48 @@ def train_multiple_configurations(
     # project_configuration["neural_network_model"] = SleepStageModel
     project_configuration["neural_network_model"] = SleepStageModelNew
 
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
+    # if os.path.isfile(model_directory_path + project_configuration_file):
+    #     os.remove(model_directory_path + project_configuration_file)
+    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     # Preprocess SHHS Data
-    Process_SHHS_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        )
+    # Process_SHHS_Dataset(
+    #     path_to_shhs_dataset = original_shhs_data_path,
+    #     path_to_save_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     )
 
     # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+    #     path_to_processed_data = processed_shhs_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = None,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
+    #     )
 
     # Preprocess GIF Data
-    Process_GIF_Dataset(
-        path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file
-        )
+    # Process_GIF_Dataset(
+    #     path_to_gif_dataset = original_gif_data_path,
+    #     path_to_save_processed_data = processed_gif_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file
+    #     )
 
     # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
+    # main_model_training(
+    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
+    #     path_to_processed_data = processed_gif_path,
+    #     path_to_project_configuration = model_directory_path + project_configuration_file,
+    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
+    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
+    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
+    #     )
 
     """
     Using YaoModel
     """
 
-    """
     model_directory_path = "Yao_Artifect" + name_addition + "/"
     create_directories_along_path(model_directory_path)
 
@@ -500,7 +495,6 @@ def train_multiple_configurations(
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
         )
-    """
 
 
 def predict_multiple_configurations(
@@ -546,8 +540,6 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
-    """
-
     model_directory_path = "Yao_Original" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
@@ -563,7 +555,6 @@ def predict_multiple_configurations(
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
-    """
 
     """
     ---------------------------------------------------------------
@@ -599,7 +590,6 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
-    """
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
@@ -615,7 +605,6 @@ def predict_multiple_configurations(
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
-    """
 
     """
     -------------------------------------------------------------------
@@ -651,7 +640,6 @@ def predict_multiple_configurations(
     Using YaoModel
     """
 
-    """
     model_directory_path = "Yao_Artifect" + name_addition + "/"
 
     predictions_for_model_accuracy_evaluation(
@@ -667,7 +655,6 @@ def predict_multiple_configurations(
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
     )
-    """
 
 
 def extensive_accuracy_printing(model_directory_path: str):
@@ -694,7 +681,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted_in_windows",
     #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -709,7 +696,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted",
     #     actual_result_key = "Actual",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -724,7 +711,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted_in_windows",
     #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -739,7 +726,7 @@ def extensive_accuracy_printing(model_directory_path: str):
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -762,7 +749,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted_in_windows",
     #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -777,7 +764,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted",
     #     actual_result_key = "Actual",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -792,7 +779,7 @@ def extensive_accuracy_printing(model_directory_path: str):
     #     path_to_project_configuration = model_directory_path + project_configuration_file,
     #     prediction_result_key = "Predicted_in_windows",
     #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"average": None, "zero_division": np.nan},
+    #     additional_score_function_args = {"zero_division": np.nan},
     #     number_of_decimals = 3
     # )
 
@@ -807,7 +794,7 @@ def extensive_accuracy_printing(model_directory_path: str):
         path_to_project_configuration = model_directory_path + project_configuration_file,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
-        additional_score_function_args = {"average": None, "zero_division": np.nan},
+        additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
 
@@ -858,7 +845,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_Original" + name_addition + "/"
 
-    # extensive_accuracy_printing(model_directory_path)
+    extensive_accuracy_printing(model_directory_path)
 
     """
     -------------------------------------------------------------------
@@ -900,7 +887,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_Artifect" + name_addition + "/"
 
-    # extensive_accuracy_printing(model_directory_path)
+    extensive_accuracy_printing(model_directory_path)
 
     """
     ---------------------------------------------------------------
@@ -942,7 +929,7 @@ def accuracy_multiple_configurations(
 
     model_directory_path = "Yao_no_overlap" + name_addition + "/"
 
-    # extensive_accuracy_printing(model_directory_path)
+    extensive_accuracy_printing(model_directory_path)
 
 
 if True:
@@ -985,8 +972,8 @@ if True:
         "normalization_mode": "local",
     }
 
-    train_multiple_configurations(name_addition, project_configuration_change)
-    predict_multiple_configurations(name_addition)
+    # train_multiple_configurations(name_addition, project_configuration_change)
+    # predict_multiple_configurations(name_addition)
 
     name_addition = ""
     accuracy_multiple_configurations(name_addition)
