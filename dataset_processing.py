@@ -1463,36 +1463,6 @@ def find_non_existing_path(path_without_file_type: str, file_type: str = "pkl"):
     return f"{path_without_file_type}_{i}.{file_type}"
 
 
-def ask_to_create_directory(directory_path: str):
-    """
-    Ask the user if a directory should be created if it does not exist yet.
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    directory_path: str
-        path to the directory
-    """
-
-    if not os.path.exists(directory_path):
-        false_input = False
-        while True:
-            if not false_input:
-                user_input = input(f"In order to operate correctly, the program wants to create the directory: \'{directory_path}\'. Do you approve? (y/n)")
-                false_input = True
-            else:
-                user_input = input("Please enter \'y\' or \'n\'.")
-
-            if user_input == "y":
-                os.mkdir(directory_path)
-                break
-            elif user_input == "n":
-                raise ValueError(f"Directory '{directory_path}' does not exist.")
-
-
 def create_directories_along_path(file_path: str):
     """
     Create all directories along a given path that do not exist yet.
@@ -1515,7 +1485,9 @@ def create_directories_along_path(file_path: str):
             path_parts = file_path.split("/")
         for i in range(1, len(path_parts)):
             path = "/".join(path_parts[:i])
-            ask_to_create_directory(path)
+
+            if not os.path.exists(path):
+                os.mkdir(path)
 
 
 """
@@ -2432,19 +2404,24 @@ class SleepDataManager:
     def separate_train_test_validation(
             self, 
             train_size = 0.8, 
-            validation_size = 0.1, 
+            validation_size = 0.1,
             test_size = None, 
             random_state = None, 
-            shuffle = True
+            shuffle = True,
+            join_splitted_parts = False,
+            stratify = False
         ):
         """
         Depending whether "test_size" = None/float: Separate the data in the file into training and validation 
         data / training, validation, and test data. New files will be created in the same directory as the 
         main file. The file information will be saved to each file.
 
-        Data that can not be used to train the network (i.e. missing "RRI" and "SLP") will be left in the
-        main file. 
-        
+        Data that can not be used to train the network (i.e. missing "RRI" and/or "SLP") will be left in the
+        main file.
+
+        Data saved to this file likely has been split. You can choose whether to assign all splitted parts to
+        one of the pids (training, validation, test) or distribute them equally or randomly across the pids.
+
         As we can manage data with "RRI" and "MAD" and data with "RRI" only, the algorithm makes sure
         that only one of the two types of data is used (the one with more samples). The other type will 
         be left in the main file.
@@ -2470,13 +2447,43 @@ class SleepDataManager:
             The ratio of the training data.
         validation_size: float
             The ratio of the validation data.
-        test_size: float
+        test_size: float or None
             The ratio of the test data.
         random_state: int
             The random state for the train_test_split function.
         shuffle: bool
             If True, the data will be shuffled before splitting.
+        join_splitted_parts: bool
+            If True, all splitted parts of a datapoint will be joined together and assigned to the same pid.
+            If False, the splitted parts will be randomly distributed across the pids.
+        stratify: bool
+            If True, the data will be stratified by the sleep stage labels. This means that the distribution of 
+            sleep stages in the training, validation, and test data will be similar to the distribution in the 
+            original data. If False, the data will be split randomly.
+
+            To enable stratification, each datapoint will be represented by only one sleep stage label, which
+            is the most frequent one in the datapoint. Of course, this will not be representative if the datapoints
+            represent long time periods and therefore contain a large amount of sleep stage labels.
         """
+
+        # check arguments:
+        if join_splitted_parts and stratify:
+            stratify = False
+            print("Attention: Stratification does not make sense when 'join_splitted_parts' is True, as joining the splitted parts corresponds to distributing datapoints representing a 'whole night' of recording. Therefore, stratification will be disabled.")
+
+        if test_size == 0:
+            test_size = None
+        
+        if validation_size == 0 or validation_size is None and test_size is not None:
+            validation_size = test_size
+            test_size = None
+
+        if test_size is None:
+            if train_size + validation_size != 1: # type: ignore
+                raise ValueError("The sum of train_size and validation_size must be 1.")
+        else:
+            if train_size + validation_size + test_size != 1: # type: ignore
+                raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
 
         # prevent running this function if signal split was reversed
         if self.file_info["signal_split_reversed"]:
@@ -2501,15 +2508,128 @@ class SleepDataManager:
         id_with_rri_and_mad = list()
         id_with_rri = list()
 
+        # iterate over entries and collect ids
+        num_invalid_data_points = 0
         for data_point in file_generator:
             if "SLP" in data_point and "RRI" in data_point:
                 if "MAD" in data_point:
                     id_with_rri_and_mad.append(data_point["ID"])
                 else:
                     id_with_rri.append(data_point["ID"])
+            else:
+                num_invalid_data_points += 1
         
         del file_generator
+        
+        if num_invalid_data_points > 0:
+            print(f"Attention: {num_invalid_data_points} datapoints do not contain a SLP and/or RRI signal and will be left in the main file.")
+        del num_invalid_data_points
 
+        # check which id's are more numerous
+        if len(id_with_rri_and_mad) > len(id_with_rri):
+            consider_identifications = id_with_rri_and_mad
+            if len(id_with_rri) != 0:
+                print(f"Attention: {len(id_with_rri)} datapoints without MAD signal will be left in the main file.")
+        else:
+            consider_identifications = id_with_rri
+            if len(id_with_rri_and_mad) != 0:
+                print(f"Attention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
+        
+        del id_with_rri_and_mad, id_with_rri
+        
+        # collect unique original datapoints and number of parts resulted from splitting
+        original_identifications = [id for id in consider_identifications if "_shift_" not in id]
+        splitted_data_ids = [id for id in consider_identifications if "_shift_" in id]
+        original_id_splits = [1 for _ in original_identifications]  # initialize with 1, will be filled later
+
+        for id in splitted_data_ids:
+            for id_index in range(len(id)):
+                if id[id_index:id_index+7] == "_shift_":
+                    base_id = id[:id_index]
+                    if base_id in original_identifications:
+                        original_id_splits[original_identifications.index(base_id)] += 1
+                    break
+        
+        del splitted_data_ids
+
+        # ensure that each group has at least 2 (if test_size is None) or 3 datapoints (if test_size is not None)
+        if join_splitted_parts and len(original_identifications) < 2 and test_size is None:
+            raise ValueError("There are not enough originally saved data points to split into training and validation data. Either aquire more data or set 'join_splitted_parts' to False.")
+        if join_splitted_parts and len(original_identifications) < 3 and test_size is not None:
+            raise ValueError("There are not enough originally saved data points to split into training, validation, and test data. Either aquire more data or set 'join_splitted_parts' to False.")
+        if not join_splitted_parts and len(consider_identifications) < 2 and test_size is None:
+            raise ValueError("There are not enough data points to split into training and validation data. Aquire more data or consider splitting it into more parts by decreasing the signal length.")
+        if not join_splitted_parts and len(consider_identifications) < 3 and test_size is not None:
+            raise ValueError("There are not enough data points to split into training, validation, and test data. Aquire more data or consider splitting it into more parts by decreasing the signal length.")
+        
+        # Collect sleep stage labels if stratification is requested
+        if stratify:
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
+
+            # skip file information
+            next(file_generator)
+
+            # collect sleep stage label that appears the most often for each data point
+            majority_sleep_stage = [0 for _ in range(len(consider_identifications))]
+            for data_point in file_generator:
+                if data_point["ID"] in consider_identifications:
+                    # collect unique labels and their counts
+                    different_labels, label_counts = np.unique(data_point["SLP"], return_counts=True)
+                    majority_sleep_stage[consider_identifications.index(data_point["ID"])] = different_labels[np.argmax(label_counts)]
+                    last_valid_datapoint = data_point
+            
+            # Warn user of stratification
+            if len(last_valid_datapoint["SLP"]) > 10:
+                print(f"WARNING: To enable stratification, every datapoint can only be represented by one sleep stage. Each of your datapoints currently contains {len(last_valid_datapoint['SLP'])} sleep stages. As usual, the most common sleep stage will be used to represent the datapoint. However, due to the number of sleep stages, this may not be representative of the actual sleep stage distribution in your data.")
+            
+            del file_generator, last_valid_datapoint
+
+        # prepare groups of ids with equal number of splits to draw from when splitting the data later (only needed if parts of original datapoint are supposed to end up in the same pid)
+        if join_splitted_parts:
+            # distribute ids into pods with equal number of splitted parts
+            unique_number_of_splits = np.sort(np.unique(np.array(copy.deepcopy(original_id_splits), dtype=np.float64)))
+            ids_with_equal_number_splits = list()
+
+            for splits in unique_number_of_splits:
+                ids_with_equal_number_splits.append([id for id, num_splits in zip(original_identifications, original_id_splits) if num_splits == splits])
+
+            # ensure that each group holds well splittable amount of datapoints (at least 10)
+            current_index = 0
+            while True:
+                if current_index == len(ids_with_equal_number_splits) - 1:
+                    break
+
+                for ids_index in range(current_index, len(ids_with_equal_number_splits)):
+                    # append ids with equal number of splits to the next or previous group (depending on difference in number of splits) if it has less than 10 ids
+                    if len(ids_with_equal_number_splits[ids_index]) < 10:
+                        if ids_index == 0:
+                            unique_number_of_splits[ids_index+1] = (unique_number_of_splits[ids_index+1]*len(ids_with_equal_number_splits[ids_index+1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index+1]) + len(ids_with_equal_number_splits[ids_index]))
+                            ids_with_equal_number_splits[ids_index+1].extend(ids_with_equal_number_splits[ids_index])
+                            del ids_with_equal_number_splits[ids_index]
+                            unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
+                            break
+                        if ids_index == len(ids_with_equal_number_splits) - 1:
+                            unique_number_of_splits[ids_index-1] = (unique_number_of_splits[ids_index-1]*len(ids_with_equal_number_splits[ids_index-1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index-1]) + len(ids_with_equal_number_splits[ids_index]))
+                            ids_with_equal_number_splits[ids_index-1].extend(ids_with_equal_number_splits[ids_index])
+                            del ids_with_equal_number_splits[ids_index]
+                            unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
+                            current_index = ids_index
+                            break
+
+                        if unique_number_of_splits[ids_index] - unique_number_of_splits[ids_index-1] < unique_number_of_splits[ids_index+1] - unique_number_of_splits[ids_index]:
+                            unique_number_of_splits[ids_index-1] = (unique_number_of_splits[ids_index-1]*len(ids_with_equal_number_splits[ids_index-1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index-1]) + len(ids_with_equal_number_splits[ids_index]))
+                            ids_with_equal_number_splits[ids_index-1].extend(ids_with_equal_number_splits[ids_index])
+                        else:
+                            unique_number_of_splits[ids_index+1] = (unique_number_of_splits[ids_index+1]*len(ids_with_equal_number_splits[ids_index+1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index+1]) + len(ids_with_equal_number_splits[ids_index]))
+                            ids_with_equal_number_splits[ids_index+1].extend(ids_with_equal_number_splits[ids_index])
+                        
+                        del ids_with_equal_number_splits[ids_index]
+                        unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
+                        break
+
+                    current_index = ids_index
+            
         # Create temporary file to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
@@ -2522,22 +2642,60 @@ class SleepDataManager:
 
         if test_size is None:
             """
-            split into training and validation data
+            split into training and validation data based on the chosen distribution method
             """
-            # check arguments:
-            if train_size + validation_size != 1:
-                self.file_info["train_val_test_split_applied"] = False
-                raise ValueError("The sum of train_size and validation_size must be 1.")
 
-            # choose which data to keep in the main file
-            if len(id_with_rri_and_mad) > len(id_with_rri):
-                if len(id_with_rri) != 0:
-                    print(f"\nAttention: {len(id_with_rri)} datapoints without MAD signal will be left in the main file.")
-                train_data_ids, validation_data_ids = train_test_split(copy.deepcopy(id_with_rri_and_mad), train_size = train_size, random_state = random_state, shuffle = shuffle)
-            else:
-                if len(id_with_rri_and_mad) != 0:
-                    print(f"\nAttention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
-                train_data_ids, validation_data_ids = train_test_split(copy.deepcopy(id_with_rri), train_size = train_size, random_state = random_state, shuffle = shuffle)
+            if not join_splitted_parts:
+                if stratify:
+                    train_data_ids, validation_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = majority_sleep_stage
+                    )
+
+                else:
+                    train_data_ids, validation_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle
+                    )
+            
+            else:                
+                # initialize training and validation data ids
+                train_data_ids = list()
+                validation_data_ids = list()
+
+                # distribute ids with equal number of splits into training and validation pids
+                for ids_index in range(len(ids_with_equal_number_splits)):
+                    this_train_data_ids, this_validation_data_ids = train_test_split(
+                        ids_with_equal_number_splits[ids_index],
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle
+                    )
+                    
+                    train_data_ids.extend(this_train_data_ids)
+                    validation_data_ids.extend(this_validation_data_ids)
+
+                # now add the splitted parts to the training and validation data ids
+                additional_train_data_ids = list()
+                additional_validation_data_ids = list()
+
+                for train_id in train_data_ids:
+                    number_splits = original_id_splits[original_identifications.index(train_id)]
+                    for i in range(1, number_splits):
+                        additional_train_data_ids.append(train_id + "_shift_x" + str(i))
+
+                for val_id in validation_data_ids:
+                    number_splits = original_id_splits[original_identifications.index(val_id)]
+                    for i in range(1, number_splits):
+                        additional_validation_data_ids.append(val_id + "_shift_x" + str(i))
+                
+                train_data_ids.extend(additional_train_data_ids)
+                validation_data_ids.extend(additional_validation_data_ids)
 
             # Create files and save file information to it
             for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"]]:
@@ -2549,7 +2707,7 @@ class SleepDataManager:
                 save_to_pickle(data = self.file_info, file_name = file_path)
 
             # print progress
-            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:")
+            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:") # type: ignore
             progress_bar = DynamicProgressBar(total = len(self))
             
             # Load data generator from the file
@@ -2575,22 +2733,95 @@ class SleepDataManager:
             split into training validation and test data
             """
 
-            # check arguments:
-            if train_size + validation_size + test_size != 1: # type: ignore
-                self.file_info["train_val_test_split_applied"] = False
-                raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
+            if not join_splitted_parts:
+                if stratify:
+                    train_data_ids, rest_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = majority_sleep_stage
+                    )
+                    validation_data_ids, test_data_ids = train_test_split(
+                        rest_data_ids,
+                        train_size = validation_size / (1 - train_size), # type: ignore
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = [majority_sleep_stage[consider_identifications.index(id)] for id in rest_data_ids]
+                    )
 
-            # choose which data to keep in the main file
-            if len(id_with_rri_and_mad) > len(id_with_rri):
-                if len(id_with_rri) != 0:
-                    print(f"\nAttention: {len(id_with_rri)} datapoints without MAD signal will be left in the main file.")
-                train_data_ids, rest_data_ids = train_test_split(copy.deepcopy(id_with_rri_and_mad), train_size = train_size, random_state = random_state, shuffle = shuffle)
-                validation_data_ids, test_data_ids = train_test_split(rest_data_ids, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
-            else:
-                if len(id_with_rri_and_mad) != 0:
-                    print(f"\nAttention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
-                train_data_ids, rest_data_ids = train_test_split(copy.deepcopy(id_with_rri), train_size = train_size, random_state = random_state, shuffle = shuffle)
-                validation_data_ids, test_data_ids = train_test_split(rest_data_ids, train_size = validation_size / (1 - train_size), random_state = random_state, shuffle = shuffle)
+                else:
+                    train_data_ids, rest_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle
+                    )
+                    validation_data_ids, test_data_ids = train_test_split(
+                        rest_data_ids,
+                        train_size = validation_size / (1 - train_size), # type: ignore
+                        random_state = random_state,
+                        shuffle = shuffle,
+                    )
+
+            
+            else:                
+                # initialize training and validation data ids
+                train_data_ids = list()
+                validation_data_ids = list()
+                test_data_ids = list()
+
+                # distribute ids with equal number of splits into training and validation pids
+                for ids_index in range(len(ids_with_equal_number_splits)):
+                    this_train_data_ids, this_rest_data_ids = train_test_split(
+                        ids_with_equal_number_splits[ids_index],
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle
+                    )
+
+                    # ensure that there are enough datapoints left for validation and test
+                    while True:
+                        if len(this_rest_data_ids) < 2:
+                            this_rest_data_ids.append(this_train_data_ids[0])
+                            del this_train_data_ids[0]
+                        else:
+                            break
+
+                    this_validation_data_ids, this_test_data_ids = train_test_split(
+                        this_rest_data_ids,
+                        train_size = validation_size / (1 - train_size), # type: ignore
+                        random_state = random_state,
+                        shuffle = shuffle
+                    )
+                    
+                    train_data_ids.extend(this_train_data_ids)
+                    validation_data_ids.extend(this_validation_data_ids)
+                    test_data_ids.extend(this_test_data_ids)
+
+                # now add the splitted parts to the training and validation data ids
+                additional_train_data_ids = list()
+                additional_validation_data_ids = list()
+                additional_test_data_ids = list()
+
+                for train_id in train_data_ids:
+                    number_splits = original_id_splits[original_identifications.index(train_id)]
+                    for i in range(1, number_splits):
+                        additional_train_data_ids.append(train_id + "_shift_x" + str(i))
+
+                for val_id in validation_data_ids:
+                    number_splits = original_id_splits[original_identifications.index(val_id)]
+                    for i in range(1, number_splits):
+                        additional_validation_data_ids.append(val_id + "_shift_x" + str(i))
+
+                for test_id in test_data_ids:
+                    number_splits = original_id_splits[original_identifications.index(test_id)]
+                    for i in range(1, number_splits):
+                        additional_test_data_ids.append(test_id + "_shift_x" + str(i))
+                
+                train_data_ids.extend(additional_train_data_ids)
+                validation_data_ids.extend(additional_validation_data_ids)
+                test_data_ids.extend(additional_test_data_ids)
 
             # Create files and save file information to it
             for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"], self.file_info["test_file_path"]]:
@@ -2602,7 +2833,7 @@ class SleepDataManager:
                 save_to_pickle(data = self.file_info, file_name = file_path)
 
             # print progress
-            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:")
+            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:") # type: ignore
             progress_bar = DynamicProgressBar(total = len(self))
             
             # Load data generator from the file
@@ -2626,13 +2857,11 @@ class SleepDataManager:
                 progress_bar.update()
         
         # Remove the old file and rename the working file
-        try:
+        if os.path.exists(self.file_path):
             os.remove(self.file_path)
-        except:
-            pass
             
         os.rename(working_file_path, self.file_path)
-    
+
 
     def fuse_train_test_validation(self):
         """
