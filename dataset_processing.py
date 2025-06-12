@@ -113,7 +113,7 @@ def unity_based_normalization(
         old_min = np.min(signal)
 
         if old_max == old_min:
-            return np.array(signal)
+            return np.full_like(signal, (normalization_max - normalization_min) / 2 + normalization_min, dtype=float)
 
         return (signal - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
 

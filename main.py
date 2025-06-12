@@ -62,20 +62,24 @@ split_data_parameters = {
     "validation_size": 0.2,
     "test_size": None,
     "random_state": None,
-    "shuffle": True
+    "shuffle": True,
+    "join_splitted_parts": False,
+    "stratify": False
 }
 
 # transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
 dataset_class_transform_parameters = {
-    "transform": ToTensor(), 
+    "feature_transform": ToTensor(),
     "target_transform": None,
 }
 
 # parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
 # function in dataset_processing.py
 window_reshape_parameters = {
-    "nn_signal_duration_seconds": sleep_data_manager_parameters["signal_length_seconds"],
-    "number_windows": 1197,
+    "reshape_to_overlapping_windows": True, # whether to reshape the signals to overlapping windows
+    # following parameters are not required if 'reshape_to_overlapping_windows' is False
+    "signal_length_seconds": sleep_data_manager_parameters["signal_length_seconds"], # 'nn_signal_duration_seconds' in 'reshape_signal_to_overlapping_windows' function
+    "windows_per_signal": 1197, # 'number_windows' in 'reshape_signal_to_overlapping_windows' function
     "window_duration_seconds": 120,
     "overlap_seconds": 90,
     "priority_order": [3, 2, 1, 0],
@@ -85,24 +89,30 @@ window_reshape_parameters = {
 
 # parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
 signal_normalization_parameters = {
-    "normalize_rri": False,
-    "normalize_mad": False,
+    "normalize_rri": False, # whether to normalize the RRI signal
+    "normalize_mad": False, # whether to normalize the MAD signal
+    # following parameters are not required if 'normalize_rri' and 'normalize_mad' are False
     "normalization_max": 1,
     "normalization_min": 0,
     "normalization_mode": "global"
 }
 
-# neural network model parameters, see SleepStageModel class in neural_network_model.py
+# neural network model parameters, see DemoWholeNightModel and DemoLocalSleepStageModel class in neural_network_model.py
 neural_network_model_parameters = {
     "neural_network_model": SleepStageModel,
+    # parameters necessary for neural network models based on whole night signals AND short time signals
     "number_sleep_stages": 4,
-    "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-    "datapoints_per_mad_window": int(sleep_data_manager_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-    "windows_per_signal": window_reshape_parameters["number_windows"],
     "number_window_learning_features": 128,
     "rri_convolutional_channels": [1, 8, 16, 32, 64],
     "mad_convolutional_channels": [1, 8, 16, 32, 64],
     "window_learning_dilations": [2, 4, 8, 16, 32],
+    # parameters necessary for neural network models only based on whole night signals (do not append if using a model based on short time signals)
+    "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
+    "datapoints_per_mad_window": int(sleep_data_manager_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
+    "windows_per_signal": window_reshape_parameters["windows_per_signal"],
+    # parameters necessary for neural network models only based on short time signals (do not append if using a model based on whole night signals)
+    "rri_datapoints": int(sleep_data_manager_parameters["RRI_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
+    "mad_datapoints": int(sleep_data_manager_parameters["MAD_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
 }
 
 # neural network hyperparameters, see main_model_training function in this file
@@ -146,35 +156,101 @@ def check_project_configuration(parameters: dict):
     parameters: dict
         the parameters to check
     """
+
+    # Check if all necessary parameters for the SleepDataManager class are provided
+    required_keys = [
+        "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted_frequency", "RRI_inlier_interval", 
+        "MAD_inlier_interval", "sleep_stage_label", "signal_length_seconds", 
+        "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"
+    ]
+
+    for key in required_keys:
+        if key not in parameters:
+            raise ValueError(f"Parameter '{key}' is missing. Check 'sleep_data_manager_parameters' in 'main.py'.")
+    
+    # Check if all necessary parameters for the train, validation, and test split are provided and valid
+    required_keys = ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "stratify"]
+    for key in required_keys:
+        if key not in parameters:
+            raise ValueError(f"Parameter '{key}' is missing. Check 'split_data_parameters' in 'main.py'.")
+    
+    equals_one = parameters["train_size"]
+    if parameters["validation_size"] is not None:
+        equals_one += parameters["validation_size"]
+    if parameters["test_size"] is not None:
+        equals_one += parameters["test_size"]
+    if equals_one != 1:
+        raise ValueError("The sum of train_size, validation_size (and test_size) must be 1.")
+    
+    if parameters["join_splitted_parts"] and parameters["stratify"]:
+        raise ValueError("Cannot join splitted parts and stratify at the same time (see 'separate_train_test_validation' function of 'SleepDataManager' class in 'dataset_processing.py'). Set 'join_splitted_parts' to False or 'stratify' to False.")
+
+    if parameters["stratify"] and parameters["signal_length_seconds"] > 900:
+        raise ValueError("Stratification only makes sense for short signals ('signal_length_seconds' <= 900). Set 'stratify' to False or 'signal_length_seconds' to a smaller value.")
+
+    # Check if all parameters for the neural network model are provided
+    try:
+        neural_network_model = parameters["neural_network_model"]
+        nnm_params = {key: parameters[key] for key in parameters if key in neural_network_model_parameters and key != "neural_network_model"}
+        neural_network_model = neural_network_model(**nnm_params)
+    except:
+        raise ValueError("Neural network model parameters are not provided correctly. Check 'neural_network_model_parameters' in 'main.py' and compare parameters to corresponding model class in 'neural_network_model.py'.")
+    
+    # Check if all necessary parameters for reshaping the signal to overlapping windows are provided
+    if parameters["reshape_to_overlapping_windows"]:
+        required_keys = [
+            "reshape_to_overlapping_windows", "signal_length_seconds", "windows_per_signal",
+            "window_duration_seconds", "overlap_seconds", "priority_order", 
+            "pad_feature_with", "pad_target_with"
+        ]
+        for key in required_keys:
+            if key not in parameters:
+                raise ValueError(f"Parameter '{key}' is missing. Check 'window_reshape_parameters' in 'main.py'.")
+    
+    # Check if all necessary parameters for normalizing the signal are provided
+    required_keys = ["normalization_max", "normalization_min", "normalization_mode"]
+    if parameters["normalize_rri"] or parameters["normalize_mad"]:
+        for key in required_keys:
+            if key not in parameters:
+                raise ValueError(f"Parameter '{key}' is missing. Check 'signal_normalization_parameters' in 'main.py'.")
+    
+    # Check if all necessary parameters for the dataset class transformations are provided
+    required_keys = ["feature_transform", "target_transform"]
+    for key in required_keys:
+        if key not in parameters:
+            raise ValueError(f"Parameter '{key}' is missing. Check 'dataset_class_transform_parameters' in 'main.py'.")
+    
     frequencies = [parameters["RRI_frequency"], parameters["MAD_frequency"], parameters["SLP_frequency"]]
 
     for freq in frequencies:
-        # Calculate number of datapoints from signal length in seconds
+
+        # Check if number of datapoints is an integer
         number_nn_datapoints = parameters["signal_length_seconds"] * freq
-        datapoints_per_window = parameters["window_duration_seconds"] * freq
-        window_overlap = parameters["overlap_seconds"] * freq
-        
-        # Check parameters
         if int(number_nn_datapoints) != number_nn_datapoints:
             raise ValueError("Number of datapoints must be an integer. Choose 'signal_length_seconds' and 'target_frequency' accordingly.")
         number_nn_datapoints = int(number_nn_datapoints)
 
-        if int(datapoints_per_window) != datapoints_per_window:
-            raise ValueError("Datapoints per window must be an integer. Choose 'window_duration_seconds' and 'target_frequency' accordingly.")
-        datapoints_per_window = int(datapoints_per_window)
+        if parameters["reshape_to_overlapping_windows"]:
+            # Check parameters needed for reshaping the signal to overlapping windows
+            datapoints_per_window = parameters["window_duration_seconds"] * freq
+            window_overlap = parameters["overlap_seconds"] * freq
 
-        if int(window_overlap) != window_overlap:
-            raise ValueError("Window overlap must be an integer. Choose 'overlap_seconds' and 'target_frequency' accordingly.")
-        window_overlap = int(window_overlap)
+            if int(datapoints_per_window) != datapoints_per_window:
+                raise ValueError("Datapoints per window must be an integer. Choose 'window_duration_seconds' and 'target_frequency' accordingly.")
+            datapoints_per_window = int(datapoints_per_window)
 
-        check_overlap = calculate_overlap(
-            signal_length = number_nn_datapoints, 
-            number_windows = parameters["number_windows"], 
-            datapoints_per_window = datapoints_per_window
-            )
+            if int(window_overlap) != window_overlap:
+                raise ValueError("Window overlap must be an integer. Choose 'overlap_seconds' and 'target_frequency' accordingly.")
+            window_overlap = int(window_overlap)
+
+            check_overlap = calculate_overlap(
+                signal_length = number_nn_datapoints, 
+                number_windows = parameters["windows_per_signal"], 
+                datapoints_per_window = datapoints_per_window
+                )
     
-        if window_overlap != check_overlap:
-            raise ValueError("Overlap does not match the number of windows and datapoints per window. Check parameters.")
+            if window_overlap != check_overlap:
+                raise ValueError("Overlap does not match the number of windows and datapoints per window. Check parameters.")
     
     # Neural Network Model Parameters
         if len(parameters["mad_convolutional_channels"]) % 2 != 1 or len(parameters["mad_convolutional_channels"]) < 3:
@@ -199,17 +275,12 @@ def check_project_configuration(parameters: dict):
         raise ValueError("Number of sleep stages does not match the sleep stage label. Adjust parameters accordingly.")
     
     # check parameters that should be equal
-    if parameters["signal_length_seconds"] != parameters["nn_signal_duration_seconds"]:
-        raise ValueError("Parameters: 'signal_length_seconds' and 'nn_signal_duration_seconds' must be equal. Adjust parameters accordingly.")
-    
-    if parameters["datapoints_per_rri_window"] != int(parameters["RRI_frequency"] * parameters["window_duration_seconds"]):
-        raise ValueError("'datapoints_per_rri_window' must be equal to 'RRI_frequency' * 'window_duration_seconds'. Adjust parameters accordingly.")
-    
-    if parameters["datapoints_per_mad_window"] != int(parameters["MAD_frequency"] * parameters["window_duration_seconds"]):
-        raise ValueError("'datapoints_per_mad_window' must be equal to 'MAD_frequency' * 'window_duration_seconds'. Adjust parameters accordingly.")
-
-    if parameters["windows_per_signal"] != parameters["number_windows"]:
-        raise ValueError("Parameters: 'windows_per_signal' and 'number_windows' must be equal. Adjust parameters accordingly.")
+    if parameters["reshape_to_overlapping_windows"]:
+        if parameters["datapoints_per_rri_window"] != int(parameters["RRI_frequency"] * parameters["window_duration_seconds"]):
+            raise ValueError("'datapoints_per_rri_window' must be equal to 'RRI_frequency' * 'window_duration_seconds'. Adjust parameters accordingly.")
+        
+        if parameters["datapoints_per_mad_window"] != int(parameters["MAD_frequency"] * parameters["window_duration_seconds"]):
+            raise ValueError("'datapoints_per_mad_window' must be equal to 'MAD_frequency' * 'window_duration_seconds'. Adjust parameters accordingly.")
 
 
 """
@@ -577,19 +648,27 @@ def main_model_training(
     # access neural network initialization parameters
     neural_network_model = project_configuration["neural_network_model"]
 
-    nnm_params = {key: project_configuration[key] for key in neural_network_model_parameters}
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in neural_network_model_parameters}
     del nnm_params["neural_network_model"]
     
-    # access window_reshape_parameters
-    CustomDatasetKeywords = {key: project_configuration[key] for key in window_reshape_parameters}
-    del CustomDatasetKeywords["nn_signal_duration_seconds"]
+    # access parameters adjusting the final data preprocessing
+    CustomDatasetKeywords = dict()
+
+    # add window_reshape_parameters
+    CustomDatasetKeywords["reshape_to_overlapping_windows"] = project_configuration["reshape_to_overlapping_windows"]
+    if project_configuration["reshape_to_overlapping_windows"]:
+        CustomDatasetKeywords.update({key: project_configuration[key] for key in window_reshape_parameters})
+    del CustomDatasetKeywords["signal_length_seconds"]
 
     # add signal_normalization_parameters
-    CustomDatasetKeywords.update({key: project_configuration[key] for key in signal_normalization_parameters})
+    CustomDatasetKeywords["normalize_rri"] = project_configuration["normalize_rri"]
+    CustomDatasetKeywords["normalize_mad"] = project_configuration["normalize_mad"]
+    if project_configuration["normalize_rri"] or project_configuration["normalize_mad"]:
+        CustomDatasetKeywords.update({key: project_configuration[key] for key in signal_normalization_parameters})
 
     # add transform parameters
     CustomDatasetKeywords.update({key: project_configuration[key] for key in dataset_class_transform_parameters})
-
+    
     training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
     validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
     # test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
@@ -847,31 +926,34 @@ def main_model_predicting(
     # access neural network initialization parameters
     neural_network_model = project_configuration["neural_network_model"]
 
-    nnm_params = {key: project_configuration[key] for key in neural_network_model_parameters}
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in neural_network_model_parameters}
     del nnm_params["neural_network_model"]
-    
-    # access window_reshape_parameters
-    common_window_reshape_params = {key: project_configuration[key] for key in window_reshape_parameters}
 
-    # following values need to be assigned to "pad_with" parameter depending on "signal_type"
-    del common_window_reshape_params["pad_feature_with"]
-    del common_window_reshape_params["pad_target_with"]
+    # access common window_reshape_parameters
+    reshape_to_overlapping_windows = project_configuration["reshape_to_overlapping_windows"]
+    common_window_reshape_params = dict()
 
-    # access pad_with values
-    pad_feature_with = project_configuration["pad_feature_with"]
-    pad_target_with = project_configuration["pad_target_with"]
+    if reshape_to_overlapping_windows:
+        for key in ["windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order", "signal_length_seconds"]:
+            common_window_reshape_params[key] = project_configuration[key]
+        
+        pad_feature_with = project_configuration["pad_feature_with"]
+        pad_target_with = project_configuration["pad_target_with"]
+    else:
+        pad_feature_with = None
+        pad_target_with = None
 
-    # access signal_normalization_parameters
-    common_signal_normalization_parameters = {key: project_configuration[key] for key in signal_normalization_parameters}
-
-    del common_signal_normalization_parameters["normalize_rri"]
-    del common_signal_normalization_parameters["normalize_mad"]
-
+    # access common signal_normalization_parameters
     normalize_rri = project_configuration["normalize_rri"]
     normalize_mad = project_configuration["normalize_mad"]
+    common_signal_normalization_params = dict()
+
+    if normalize_mad or normalize_rri:
+        for key in ["normalization_max", "normalization_min", "normalization_mode"]:
+            common_signal_normalization_params[key] = project_configuration[key]
 
     # access feature and target transformations
-    feature_transform = project_configuration["transform"]
+    feature_transform = project_configuration["feature_transform"]
     target_transform = project_configuration["target_transform"]
 
     del project_configuration
@@ -944,37 +1026,27 @@ def main_model_predicting(
     with torch.no_grad():
         # Iterate over Database
         for data_dict in data_manager:
+            
+            # retrieve signal length in seconds
+            signal_length_seconds = len(data_dict["RRI"]) / rri_frequency
 
             """
             Data Processing (Analogue to CustomSleepDataset class in neural_network_model.py)
             """
 
-            # set window_reshape_parameters for features
-            common_window_reshape_params["pad_with"] = pad_feature_with
-            common_window_reshape_params["signal_type"] = "feature"
-
-            # access processed features and reshape to overlapping windows
-            rri = reshape_signal_to_overlapping_windows(
-                signal = copy.deepcopy(data_dict["RRI"]),
+            rri = final_data_preprocessing(
+                signal = copy.deepcopy(data_dict["RRI"]), # type: ignore
+                reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                **common_window_reshape_params,
                 target_frequency = rri_frequency,
-                **common_window_reshape_params
+                pad_with = pad_feature_with,
+                signal_type = "feature",
+                normalize = normalize_rri,
+                **common_signal_normalization_params,
+                datatype_mappings = [(np.float64, np.float32)],
+                transform = feature_transform
             )
 
-            # normalize RRI signal if requested:
-            if normalize_rri:
-                rri = unity_based_normalization(
-                    signal = copy.deepcopy(rri), # type: ignore
-                    **common_signal_normalization_parameters
-                )
-
-            # retrieve signal length in seconds
-            signal_length_seconds = len(data_dict["RRI"]) / rri_frequency
-
-            # apply transformations
-            if rri.dtype == np.float64:
-                rri = rri.astype(np.float32)
-            if feature_transform:
-                rri = feature_transform(rri)
             rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
             rri = rri.to(device) # type: ignore
 
@@ -983,48 +1055,45 @@ def main_model_predicting(
                 rri = rri.float()
 
             # MAD preparation analogously to RRI
-            try:
-                mad = reshape_signal_to_overlapping_windows(
-                    signal = copy.deepcopy(data_dict["MAD"]),
+            if "MAD" in data_dict:
+                mad = final_data_preprocessing(
+                    signal = copy.deepcopy(data_dict["MAD"]), # type: ignore
+                    reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                    **common_window_reshape_params,
                     target_frequency = mad_frequency,
-                    **common_window_reshape_params
+                    pad_with = pad_feature_with,
+                    signal_type = "feature",
+                    normalize = normalize_mad,
+                    **common_signal_normalization_params,
+                    datatype_mappings = [(np.float64, np.float32)],
+                    transform = feature_transform
                 )
-                if normalize_mad:
-                    mad = unity_based_normalization(
-                        signal = copy.deepcopy(mad), # type: ignore
-                        **common_signal_normalization_parameters
-                    )
-                if mad.dtype == np.float64:
-                    mad = mad.astype(np.float32)
-                if feature_transform:
-                    mad = feature_transform(mad)
+
                 mad = mad.unsqueeze(0) # type: ignore # add batch dimension (= 1)
                 mad = mad.to(device) # type: ignore
 
                 if not isinstance(mad, torch.FloatTensor):
                     mad = mad.float()
-            except:
+            else:
                 mad = None
 
             if actual_results_available:
-                # set window_reshape_parameters for target
-                common_window_reshape_params["pad_with"] = pad_target_with
-                common_window_reshape_params["signal_type"] = "target"
-
                 actual_original_structure = data_dict["SLP"]
-
                 original_signal_length = len(copy.deepcopy(actual_original_structure))
 
                 # access processed target, reshape to overlapping windows and apply transformations
-                slp = reshape_signal_to_overlapping_windows(
+                slp = final_data_preprocessing(
                     signal = copy.deepcopy(actual_original_structure),
+                    reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                    **common_window_reshape_params,
                     target_frequency = slp_frequency,
-                    **common_window_reshape_params
+                    pad_with = pad_target_with,
+                    signal_type = "target",
+                    normalize = False, # SLP is not normalized
+                    datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
+                    transform = target_transform
                 )
-                if slp.dtype == np.int64:
-                    slp = slp.astype(np.int32)
-                if slp.dtype == np.float64:
-                    slp = slp.astype(np.float32)
+
             else:
                 original_signal_length = int(np.ceil(signal_length_seconds * slp_frequency))
             
@@ -1063,7 +1132,7 @@ def main_model_predicting(
                     signal_in_windows = pred_prob_expanded_to_windows,
                     target_frequency = slp_frequency,
                     original_signal_length = original_signal_length,
-                    number_windows = common_window_reshape_params["number_windows"],
+                    number_windows = common_window_reshape_params["windows_per_signal"],
                     window_duration_seconds = common_window_reshape_params["window_duration_seconds"],
                     overlap_seconds = common_window_reshape_params["overlap_seconds"],
                 )
@@ -1802,7 +1871,7 @@ if __name__ == "__main__":
     processed_gif_path = "Processed_Data/gif_data.pkl"
 
     # Create directory to store configurations and results
-    model_directory_path = "Neural_Network/"
+    model_directory_path = "Neural_Network_test/"
     create_directories_along_path(model_directory_path)
 
 

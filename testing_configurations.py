@@ -63,6 +63,38 @@ def fix_project_configuration_2():
         save_to_pickle(this_project_configuration, directory + "/" + project_configuration_file)
 
 
+def fix_project_configuration_3(directory = ""):
+    """
+    """
+    if directory == "":
+        directory = os.getcwd() + "/"
+    all_files = os.listdir(directory)
+    for file in all_files:
+        if os.path.isdir(file):
+            fix_project_configuration_3(directory + file + "/")
+        if file == project_configuration_file:
+            print("Fixing project configuration in", directory + project_configuration_file)
+            with open(directory + project_configuration_file, "rb") as file:
+                this_project_configuration = pickle.load(file)
+            if "number_windows" in this_project_configuration:
+                del this_project_configuration["number_windows"]
+            if "nn_signal_duration_seconds" in this_project_configuration:
+                del this_project_configuration["nn_signal_duration_seconds"]
+            if not this_project_configuration["normalize_rri"] and not this_project_configuration["normalize_mad"]:
+                for key in ["normalization_max", "normalization_min", "normalization_mode"]:
+                    if key in this_project_configuration:
+                        del this_project_configuration[key]
+            this_project_configuration["reshape_to_overlapping_windows"] = True
+            if "transform" in this_project_configuration:
+                this_project_configuration["feature_transform"] = this_project_configuration["transform"]
+                del this_project_configuration["transform"]
+        else:
+            continue
+
+        os.remove(directory + "/" + project_configuration_file)
+        save_to_pickle(this_project_configuration, directory + "/" + project_configuration_file)
+
+
 def fix_file_info(path):
     """
     """
@@ -932,7 +964,139 @@ def accuracy_multiple_configurations(
     extensive_accuracy_printing(model_directory_path)
 
 
+def main_pipeline(project_configuration, model_directory_path):
+    """
+    Main function to run the entire pipeline
+    """
+
+    """
+    ===============
+    Set File Paths
+    ===============
+    """
+
+    # Create directory to store configurations and results
+    create_directories_along_path(model_directory_path + "Processed_Data/")
+
+    processed_shhs_path = model_directory_path + "Processed_Data/shhs_data.pkl"
+    processed_gif_path = model_directory_path + "Processed_Data/gif_data.pkl"
+
+
+    """
+    ==========================
+    Set Project Configuration
+    ==========================
+    """
+
+    check_project_configuration(project_configuration)
+
+    if os.path.isfile(model_directory_path + project_configuration_file):
+        os.remove(model_directory_path + project_configuration_file)
+    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
+
+    del project_configuration
+
+    """
+    ==============================
+    Training Neural Network Model
+    ==============================
+    """
+
+    run_model_training(
+        path_to_model_directory = model_directory_path,
+        path_to_processed_shhs = processed_shhs_path,
+        path_to_processed_gif = processed_gif_path,
+    )
+
+    """
+    ===========================
+    Evaluate Model Performance
+    ===========================
+    """
+
+    run_model_performance_evaluation(
+        path_to_model_directory = model_directory_path,
+        path_to_processed_shhs = processed_shhs_path,
+        path_to_processed_gif = processed_gif_path,
+    )
+
+
 if True:
+    # fix_project_configuration_3()
+    # print_project_configuration()
+    # raise SystemExit("Testing configurations...")
+
+    # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
+    sleep_data_manager_parameters = {
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        "MAD_inlier_interval": [None, None],
+        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+    }
+    sleep_data_manager_parameters["SLP_predicted_frequency"] = sleep_data_manager_parameters["SLP_frequency"]
+
+    # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
+    split_data_parameters = {
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": None,
+        "shuffle": True,
+        "join_splitted_parts": False,
+        "stratify": False
+    }
+
+    # transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
+    dataset_class_transform_parameters = {
+        "feature_transform": ToTensor(),
+        "target_transform": None,
+    }
+
+    # parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
+    # function in dataset_processing.py
+    window_reshape_parameters = {
+        "reshape_to_overlapping_windows": False, # whether to reshape the signals to overlapping windows
+    }
+
+    project_configuration = dict()
+    project_configuration.update(sleep_data_manager_parameters)
+    project_configuration.update(window_reshape_parameters)
+    project_configuration.update(split_data_parameters)
+    project_configuration.update(dataset_class_transform_parameters)
+    project_configuration.update(neural_network_model_parameters)
+
+    # pre preprocess
+    project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    project_configuration["signal_length_seconds"] = 120
+    project_configuration["wanted_shift_length_seconds"] = 120
+    project_configuration["absolute_shift_deviation_seconds"] = 10
+    project_configuration["join_splitted_parts"] = True
+
+    # final preprocess
+    project_configuration["normalize_rri"] = True
+    project_configuration["normalize_mad"] = True
+    project_configuration["normalization_max"] = 1
+    project_configuration["normalization_min"] = 0
+    project_configuration["normalization_mode"] = "local"
+
+    # nn
+    project_configuration["neural_network_model"] = SleepStageModelNew
+    project_configuration["number_sleep_stages"] = 4
+    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
+    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
+    project_configuration["number_window_learning_features"] = 128
+    project_configuration["rri_convolutional_channels"] = [1, 8, 16, 32, 64]
+    project_configuration["mad_convolutional_channels"] = [1, 8, 16, 32, 64]
+    project_configuration["window_learning_dilations"] = [2, 4, 8, 16, 32]
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "SSM_Original",
+    )
+
+
+if False:
     name_addition = "_NEW"
     project_configuration_change = {
         "RRI_inlier_interval": [None, None],
