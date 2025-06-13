@@ -1110,6 +1110,9 @@ if True:
     project_configuration.update(dataset_class_transform_parameters)
     project_configuration.update(neural_network_model_parameters)
 
+    neural_network_hyperparameters_shhs["batch_size"] = 150 # 5h for 120s data
+    neural_network_hyperparameters_gif["batch_size"] = 30 # 1h for 120s data
+
     # pre preprocess
     project_configuration["RRI_inlier_interval"] = [0.3, 2]
     project_configuration["signal_length_seconds"] = 120
@@ -1133,6 +1136,9 @@ if True:
         project_configuration = project_configuration,
         model_directory_path = "Short_Time_Norm_120/",
     )
+
+    neural_network_hyperparameters_shhs["batch_size"] = 600 # 5h for 30s data
+    neural_network_hyperparameters_gif["batch_size"] = 120 # 1h for 30s data
 
     # pre preprocess
     project_configuration["RRI_inlier_interval"] = [0.3, 2]
