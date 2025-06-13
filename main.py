@@ -102,9 +102,10 @@ neural_network_model_parameters = {
     "neural_network_model": SleepStageModel,
     # parameters necessary for neural network models based on whole night signals AND short time signals
     "number_sleep_stages": 4,
-    "number_window_learning_features": 128,
     "rri_convolutional_channels": [1, 8, 16, 32, 64],
     "mad_convolutional_channels": [1, 8, 16, 32, 64],
+    "max_pooling_layers": 5,
+    "number_window_learning_features": 128,
     "window_learning_dilations": [2, 4, 8, 16, 32],
     # parameters necessary for neural network models only based on whole night signals (do not append if using a model based on short time signals)
     "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),

@@ -85,6 +85,7 @@ def fix_project_configuration_3(directory = ""):
                     if key in this_project_configuration:
                         del this_project_configuration[key]
             this_project_configuration["reshape_to_overlapping_windows"] = True
+            this_project_configuration["max_pooling_layers"] = 5
             if "transform" in this_project_configuration:
                 this_project_configuration["feature_transform"] = this_project_configuration["transform"]
                 del this_project_configuration["transform"]
@@ -1026,6 +1027,39 @@ if True:
     # print_project_configuration()
     # raise SystemExit("Testing configurations...")
 
+    project_configuration = dict()
+    project_configuration.update(sleep_data_manager_parameters)
+    project_configuration.update(window_reshape_parameters)
+    project_configuration.update(signal_normalization_parameters)
+    project_configuration.update(split_data_parameters)
+    project_configuration.update(dataset_class_transform_parameters)
+    project_configuration.update(neural_network_model_parameters)
+
+    project_configuration["neural_network_model"] = YaoModel
+    del project_configuration["rri_datapoints"]
+    del project_configuration["mad_datapoints"]
+    
+    project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    
+    project_configuration["normalize_rri"] = True
+    project_configuration["normalize_mad"] = True
+    project_configuration["normalization_max"] = 1
+    project_configuration["normalization_min"] = 0
+    project_configuration["normalization_mode"] = "local"
+
+    project_configuration["random_state"] = 0
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Test_Yao_Local_Original/",
+    )
+
+    """
+    ==============================
+    Default Project Configuration
+    ==============================
+    """
+
     # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
     sleep_data_manager_parameters = {
         "RRI_frequency": 4,
@@ -1041,7 +1075,7 @@ if True:
         "train_size": 0.8,
         "validation_size": 0.2,
         "test_size": None,
-        "random_state": None,
+        "random_state": 0,
         "shuffle": True,
         "join_splitted_parts": False,
         "stratify": False
@@ -1057,6 +1091,16 @@ if True:
     # function in dataset_processing.py
     window_reshape_parameters = {
         "reshape_to_overlapping_windows": False, # whether to reshape the signals to overlapping windows
+    }
+
+    neural_network_model_parameters = {
+        # parameters necessary for neural network models based on whole night signals AND short time signals
+        "number_sleep_stages": 4,
+        "rri_convolutional_channels": [1, 8, 16, 32, 64],
+        "mad_convolutional_channels": [1, 8, 16, 32, 64],
+        "max_pooling_layers": 5,
+        "number_window_learning_features": 128,
+        "window_learning_dilations": [2, 4, 8, 16, 32],
     }
 
     project_configuration = dict()
@@ -1081,18 +1125,37 @@ if True:
     project_configuration["normalization_mode"] = "local"
 
     # nn
-    project_configuration["neural_network_model"] = SleepStageModelNew
-    project_configuration["number_sleep_stages"] = 4
+    project_configuration["neural_network_model"] = LocalIntervalModel
     project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
     project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
-    project_configuration["number_window_learning_features"] = 128
-    project_configuration["rri_convolutional_channels"] = [1, 8, 16, 32, 64]
-    project_configuration["mad_convolutional_channels"] = [1, 8, 16, 32, 64]
-    project_configuration["window_learning_dilations"] = [2, 4, 8, 16, 32]
 
     main_pipeline(
         project_configuration = project_configuration,
-        model_directory_path = "SSM_Original",
+        model_directory_path = "Short_Time_Norm_120/",
+    )
+
+    # pre preprocess
+    project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    project_configuration["signal_length_seconds"] = 30
+    project_configuration["wanted_shift_length_seconds"] = 30
+    project_configuration["absolute_shift_deviation_seconds"] = 1
+    project_configuration["join_splitted_parts"] = True
+
+    # final preprocess
+    project_configuration["normalize_rri"] = True
+    project_configuration["normalize_mad"] = True
+    project_configuration["normalization_max"] = 1
+    project_configuration["normalization_min"] = 0
+    project_configuration["normalization_mode"] = "local"
+
+    # nn
+    project_configuration["neural_network_model"] = LocalIntervalModel
+    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
+    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Short_Time_Norm_30/",
     )
 
 

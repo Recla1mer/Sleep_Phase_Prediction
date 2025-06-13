@@ -247,6 +247,77 @@ Implementing Neural Networks
 """
 
 
+def calculate_pooling_layer_start(
+        rri_datapoints: int,
+        mad_datapoints: int,
+        rri_convolutional_channels: list,
+        mad_convolutional_channels: list,
+        max_pooling_layers: int
+    ):
+    """
+    Function designed for the very specific case of our network structure and data.
+    Only works if rri_datapoints = 2**n * mad_datapoints (n being an integer), convolution with padding "same"
+    and pooling chosen so that it halves the number of datapoints.
+    
+    At the beginning of the network, the RRI branch and MAD branch are processed separately, both however with
+    the same structure (convolutional layers, activation functions, pooling layers).
+
+    To ensure both branches result in the same structured output, the rri structure must include more pooling layers.
+    This function calculates the number of needed pooling layers and when the pooling layers are integrated into
+    the structure mentioned above for RRI and MAD branches.
+    """
+
+    rri_mad_ratio = rri_datapoints / mad_datapoints / 2
+    if int(rri_mad_ratio) != rri_mad_ratio:
+        raise ValueError("Ratio of RRI to MAD datapoints divided by two must be an integer.")
+    rri_mad_ratio = int(rri_mad_ratio)
+
+    if rri_convolutional_channels[0] != 1:
+        rri_convolutional_channels.insert(0, 1) # Ensure first channel is 1
+    if mad_convolutional_channels[0] != 1:
+        mad_convolutional_channels.insert(0, 1) # Ensure first channel is 1
+
+    if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
+        raise ValueError(f"Number of channels in last convolutional layer of RRI and MAD branch must be equal. Last number of RRI channels: {rri_convolutional_channels[-1]}, Last number of MAD channels: {mad_convolutional_channels[-1]}.")
+    if len(mad_convolutional_channels) < 2 or len(rri_convolutional_channels) < 2:
+        raise ValueError(f"Number of convolutional layers (corresponds to channels disregarding first '1' at the start) in RRI and MAD branch must be at least 1. Current number of RRI channels: {len(rri_convolutional_channels)-1}, MAD channels: {len(mad_convolutional_channels)-1}.")
+    if len(rri_convolutional_channels) < rri_mad_ratio + 1:
+        raise ValueError(f"Number of convolutional layers (corresponds to channels disregarding first '1' at the start) in RRI branch must be at least {rri_mad_ratio + 1} (RRI to MAD datapoints ratio divided by two) to ensure that the number of datapoints after Signal Learning is equal for RRI and MAD branch. Current number of RRI convolutional layers: {len(rri_convolutional_channels)-1}.")
+    if max_pooling_layers < rri_mad_ratio + 1:
+        raise ValueError(f"Number of pooling layers must be at least {rri_mad_ratio} (RRI to MAD datapoints ratio divided by two) to ensure that the number of datapoints after Signal Learning is equal for RRI and MAD branch. Current number of maximum pooling layers: {max_pooling_layers}.")
+    
+    # check how many times the number of datapoints can be divided by two:
+    mad_divisable_by_two = 0
+    rri_divisable_by_two = 0
+
+    while True:
+        this_mad_ratio = mad_datapoints / (2 ** mad_divisable_by_two)
+        if int(this_mad_ratio) != this_mad_ratio:
+            mad_divisable_by_two -= 1
+            break
+        mad_divisable_by_two += 1
+
+    while True:
+        this_rri_ratio = rri_datapoints / (2 ** rri_divisable_by_two)
+        if int(this_rri_ratio) != this_rri_ratio:
+            rri_divisable_by_two -= 1
+            break
+        rri_divisable_by_two += 1
+    
+    if rri_divisable_by_two < rri_mad_ratio + 1:
+        raise ValueError(f"RRI datapoints dividable by two must be at least {rri_mad_ratio + 1} (RRI to MAD datapoints ratio) to ensure that the number of datapoints after Signal Learning is equal for RRI and MAD branch. Current RRI datapoints dividable by two: {rri_divisable_by_two}.")
+    
+    # calculate the maximum number of pooling layers that can be applied:
+    rri_poolings = min(mad_divisable_by_two + rri_mad_ratio, rri_divisable_by_two, len(rri_convolutional_channels) - 1, len(mad_convolutional_channels) - 1 + rri_mad_ratio)
+    rri_poolings = min(rri_poolings, max_pooling_layers)
+    mad_start_pooling = len(mad_convolutional_channels) - (rri_poolings - rri_mad_ratio)
+    rri_start_pooling = len(rri_convolutional_channels) - rri_poolings
+
+    print(f"\nThe given settings allow for {rri_poolings} pooling layers in RRI branch and {rri_poolings - rri_mad_ratio} pooling layers in MAD branch.\nPooling starts at layer {rri_start_pooling} in RRI branch and at layer {mad_start_pooling} in MAD branch, corresponding to the transition from {rri_convolutional_channels[rri_start_pooling-1]} input to {rri_convolutional_channels[rri_start_pooling]} output channels and {mad_convolutional_channels[mad_start_pooling-1]} input to {mad_convolutional_channels[mad_start_pooling]} output channels, respectively.\n")
+
+    return rri_poolings, rri_start_pooling, mad_start_pooling
+
+
 class Window_Learning(nn.Module):
     """
     Window Learning part for YaoModel. 
@@ -385,51 +456,50 @@ class YaoModel(nn.Module):
     """
     def __init__(
             self, 
-            datapoints_per_rri_window: int, 
+            datapoints_per_rri_window: int,
             datapoints_per_mad_window: int,
             windows_per_signal: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each batch, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != datapoints_per_rri_window / datapoints_per_mad_window:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(YaoModel, self).__init__()
 
@@ -470,7 +540,8 @@ class YaoModel(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
             # Batch normalization:
             rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
 
@@ -495,7 +566,7 @@ class YaoModel(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
             # Batch normalization:
             mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
@@ -511,27 +582,18 @@ class YaoModel(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -694,51 +756,50 @@ class YaoModelNew(nn.Module):
     """
     def __init__(
             self, 
-            datapoints_per_rri_window: int, 
+            datapoints_per_rri_window: int,
             datapoints_per_mad_window: int,
             windows_per_signal: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each batch, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != datapoints_per_rri_window / datapoints_per_mad_window:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(YaoModelNew, self).__init__()
 
@@ -781,7 +842,8 @@ class YaoModelNew(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
         self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
 
@@ -806,7 +868,7 @@ class YaoModelNew(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
         self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
@@ -820,27 +882,18 @@ class YaoModelNew(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -994,51 +1047,50 @@ class SleepStageModel(nn.Module):
     """
     def __init__(
             self, 
-            datapoints_per_rri_window: int, 
+            datapoints_per_rri_window: int,
             datapoints_per_mad_window: int,
             windows_per_signal: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each signal, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != datapoints_per_rri_window / datapoints_per_mad_window:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(SleepStageModel, self).__init__()
 
@@ -1079,7 +1131,8 @@ class SleepStageModel(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
             # Batch normalization:
             rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
 
@@ -1104,7 +1157,7 @@ class SleepStageModel(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
             # Batch normalization:
             mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
@@ -1120,27 +1173,18 @@ class SleepStageModel(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -1293,51 +1337,50 @@ class SleepStageModelNew(nn.Module):
     """
     def __init__(
             self, 
-            datapoints_per_rri_window: int, 
+            datapoints_per_rri_window: int,
             datapoints_per_mad_window: int,
             windows_per_signal: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each signal, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if datapoints_per_rri_window % 2**(len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != datapoints_per_rri_window / datapoints_per_mad_window:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(SleepStageModelNew, self).__init__()
 
@@ -1380,7 +1423,8 @@ class SleepStageModelNew(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
         self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
 
@@ -1405,7 +1449,7 @@ class SleepStageModelNew(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
         self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
@@ -1419,27 +1463,18 @@ class SleepStageModelNew(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -1565,15 +1600,6 @@ class SleepStageModelNew(nn.Module):
 
         return output
 
-        """
-        # Reshape for fully connected layers
-        combined_features = combined_features.view(batch_size, -1)  # Combine windows and features dimensions
-
-        # Fully connected layers
-        output = self.fc(combined_features)
-        return output
-        """
-
 
 # conv, relu, conv, relu, pool
 class DemoWholeNightModel(nn.Module):
@@ -1591,48 +1617,47 @@ class DemoWholeNightModel(nn.Module):
             datapoints_per_rri_window: int,
             datapoints_per_mad_window: int,
             windows_per_signal: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each signal, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if datapoints_per_rri_window % 2 ** (len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if datapoints_per_mad_window % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != datapoints_per_rri_window / datapoints_per_mad_window:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(DemoWholeNightModel, self).__init__()
 
@@ -1673,7 +1698,8 @@ class DemoWholeNightModel(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
             # Batch normalization:
             rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
 
@@ -1698,7 +1724,7 @@ class DemoWholeNightModel(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
             # Batch normalization:
             mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
@@ -1714,27 +1740,18 @@ class DemoWholeNightModel(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = datapoints_per_mad_window * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -1896,47 +1913,44 @@ class DemoLocalIntervalModel(nn.Module):
             self, 
             rri_datapoints: int,
             mad_datapoints: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each signal, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        if len(mad_convolutional_channels) % 2 != 1 or len(mad_convolutional_channels) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if rri_datapoints % 2**(len(rri_convolutional_channels)-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if mad_datapoints % 2 ** ((len(rri_convolutional_channels)-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(rri_convolutional_channels) - 1) / 2**((len(mad_convolutional_channels) - 1) / 2) != rri_datapoints / mad_datapoints:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
 
         self.datapoints_per_rri_window = rri_datapoints
         self.datapoints_per_mad_window = mad_datapoints
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = rri_datapoints,
+            mad_datapoints = mad_datapoints,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(DemoLocalIntervalModel, self).__init__()
 
@@ -1949,8 +1963,6 @@ class DemoLocalIntervalModel(nn.Module):
 
         mad_branch_convolutional_kernel_size = 3
         mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
 
         """
         ========================
@@ -1979,7 +1991,8 @@ class DemoLocalIntervalModel(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+            if num_channel_pos >= rri_start_pooling:  # Last two layers have pooling
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
         self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
 
@@ -2004,7 +2017,7 @@ class DemoLocalIntervalModel(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
         self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
@@ -2018,27 +2031,18 @@ class DemoLocalIntervalModel(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = rri_datapoints * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = mad_datapoints * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = rri_datapoints * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -2188,56 +2192,44 @@ class LocalIntervalModel(nn.Module):
             self, 
             rri_datapoints: int,
             mad_datapoints: int,
-            number_window_learning_features: int,
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            number_window_learning_features: int,
             window_learning_dilations: list,
             number_sleep_stages: int
             ):
         """
         ARGUMENTS:
         ------------------------------
-        datapoints_per_rri_window : int, optional
-            Number of data points in each RRI window, by default 480
-        datapoints_per_mad_window : int, optional
-            Number of data points in each MAD window, by default 120
-        windows_per_signal : int, optional
-            Number of windows in each signal, by default 1197
-        number_window_learning_features : int, optional
-            Number of features learned from Signal Learning, by default 128
-        rri_convolutional_channels : list, optional
-            Number of channels to process RRI signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        mad_convolutional_channels : list, optional
-            Number of channels to process MAD signal by 1D-convolution, by default [1, 8, 16, 32, 64]
-        window_learning_dilations : list, optional
-            dilations for convolutional layers during Window Learning, by default [2, 4, 6, 8]
-        number_sleep_stages : int, optional
-            Number of predictable sleep stages, by default 4
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        number_window_learning_features: int
+            Number of features learned from Signal Learning
+        window_learning_dilations: list
+            dilations for subsequent convolutional layers during Window Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
         """
-
-        # check parameters:
-        rri_mad_ratio = rri_datapoints / mad_datapoints
-        if int(rri_mad_ratio) != rri_mad_ratio:
-            raise ValueError("Ratio of RRI to MAD datapoints must be an integer.")
-        rri_mad_ratio = int(rri_mad_ratio)
-
-        if rri_convolutional_channels[0] != 1:
-            rri_convolutional_channels.insert(0, 1)  # Ensure first channel is 1
-        if mad_convolutional_channels[0] != 1:
-            mad_convolutional_channels.insert(0, 1)
-
-        if len(rri_convolutional_channels) < rri_mad_ratio + 1:
-            raise ValueError("Number of RRI convolutional channels (corresponds to layers) must be bigger than the ratio of RRI to MAD datapoints.")
-        if rri_convolutional_channels[-1] != mad_convolutional_channels[-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if len(mad_convolutional_channels) < 2 or len(rri_convolutional_channels) < 2:
-            raise ValueError("Number of convolutional channels (corresponds to layers) in RRI and MAD branch must be at least 1.")
-        
-        self.mad_start_pooling = len(rri_convolutional_channels) - rri_mad_ratio - len(mad_convolutional_channels) + 1
-        
 
         self.datapoints_per_rri_window = rri_datapoints
         self.datapoints_per_mad_window = mad_datapoints
+
+        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = rri_datapoints,
+            mad_datapoints = mad_datapoints,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
 
         super(LocalIntervalModel, self).__init__()
 
@@ -2250,8 +2242,6 @@ class LocalIntervalModel(nn.Module):
 
         mad_branch_convolutional_kernel_size = 3
         mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
 
         """
         ========================
@@ -2280,7 +2270,7 @@ class LocalIntervalModel(nn.Module):
             # Activation function:
             rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos >= len(rri_convolutional_channels) - 2:  # Last two layers have pooling
+            if num_channel_pos >= rri_start_pooling:  # Last two layers have pooling
                 rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
         self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
@@ -2306,7 +2296,7 @@ class LocalIntervalModel(nn.Module):
             # Activation function:
             mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             # Pooling layer:
-            if num_channel_pos % 2 == 0:
+            if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
         self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
@@ -2320,27 +2310,18 @@ class LocalIntervalModel(nn.Module):
         # Calculating number of remaining values after each branch: 
 
         # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the 
-        # last conv layer
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
 
         # MaxPooling is chosen so that the size of the data is halved
-        # MaxPooling is applied after each convolutional layer in RRI branch and after every second 
-        # convolutional layer in MAD branch
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied)
-        # -> datapoints after mad branch must be divided by (2 ** (number of pooling layers applied / 2))
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
 
-        remaining_rri_branch_values = rri_datapoints * rri_convolutional_channels[-1] // (2 ** (len(rri_convolutional_channels)-1))
-        remaining_mad_branch_values = mad_datapoints * mad_convolutional_channels[-1] // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        remaining_feature_branch_values = rri_datapoints * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
 
-        if int(remaining_rri_branch_values) != remaining_rri_branch_values:
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
             raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-        if int(remaining_mad_branch_values) != remaining_mad_branch_values:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        
-        remaining_rri_branch_values = int(remaining_rri_branch_values)
-        remaining_mad_branch_values = int(remaining_mad_branch_values)
-        
-        remaining_values_after_signal_learning = remaining_rri_branch_values + remaining_mad_branch_values
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
 
         self.flatten = nn.Flatten()
 
@@ -2411,22 +2392,15 @@ class LocalIntervalModel(nn.Module):
         Signal Feature Learning
         ========================
         """
-
-        print(f"RRI input signal: {rri_signal.size()}")  # Debugging line
         
         # Process RRI Signal
         rri_features = self.rri_signal_learning(rri_signal)
-        print(f"RRI features: {rri_features.size()}")  # Debugging line
-
-        print(f"MAD input signal: {mad_signal.size() if mad_signal is not None else 'None'}")  # Debugging line
 
         # Process MAD Signal or create 0 tensor if MAD signal is not provided
         if mad_signal is None:
             mad_features = torch.zeros(batch_size, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
         else:
             mad_features = self.mad_signal_learning(mad_signal)
-
-        print(f"MAD features: {mad_features.size()}")  # Debugging line
         
         """
         =======================
@@ -2436,11 +2410,9 @@ class LocalIntervalModel(nn.Module):
 
         # Concatenate features
         window_features = torch.cat((rri_features, mad_features), dim=-1)
-        print(f"Window features (RRI and MAD concatenated): {window_features.size()}")  # Debugging line
 
         # Flatten features
         window_features = self.flatten(window_features)
-        print(f"Flattened window features: {window_features.size()}")  # Debugging line
 
         """
         ========================
@@ -2450,22 +2422,17 @@ class LocalIntervalModel(nn.Module):
 
         # Fully connected layer
         output = self.linear(window_features)
-        print(f"Output after linear layer: {output.size()}")
 
         # Reshape for convolutional layers
         output = output.unsqueeze(1)
-        print(f"Output reshaped for convolutional layers: {output.size()}")  # Debugging line
 
         # Convolutional layers
         output = self.window_feature_learning(output)
-        print(f"Output after window feature learning: {output.size()}")  # Debugging line
 
         # Reshape for final fully connected layer
         output = output.squeeze(1)
-        print(f"Output reshaped for final layer: {output.size()}")
         
         output = self.final(output)
-        print(f"Output after final layer: {output.size()}")
 
         return output
 
@@ -2880,9 +2847,10 @@ if __name__ == "__main__":
         datapoints_per_rri_window = 480, 
         datapoints_per_mad_window = 120,
         windows_per_signal = 1197,
-        number_window_learning_features = 128,
         rri_convolutional_channels = [1, 8, 16, 32, 64],
         mad_convolutional_channels = [1, 8, 16, 32, 64],
+        max_pooling_layers = 5,
+        number_window_learning_features = 128,
         window_learning_dilations = [2, 4, 8, 16, 32],
         number_sleep_stages = 4
         ) # SleepStageModel, YaoModel, SleepStageModelNew
@@ -2914,9 +2882,10 @@ if __name__ == "__main__":
     DCNN = DemoLocalIntervalModel(
         rri_datapoints = 120,
         mad_datapoints = 30,
+        rri_convolutional_channels = [1, 8, 16, 32, 64],
+        mad_convolutional_channels = [1, 8, 16, 32, 64],
+        max_pooling_layers = 5,
         number_window_learning_features = 128,
-        rri_convolutional_channels = [1, 16, 32],
-        mad_convolutional_channels = [1, 16, 32],
         window_learning_dilations = [2, 4, 8, 16, 32],
         number_sleep_stages = 4
         )
