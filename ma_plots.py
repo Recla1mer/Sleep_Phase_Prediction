@@ -109,7 +109,7 @@ def plot_length_distribution(
 
 def plot_sleep_stages_distribution(
     pickle_name = "shhs_gif_plot.pkl",
-    sleep_labels = ["Wake", "LS", "DS", "REM", "Artefect"],
+    sleep_labels = ["Wake", "LS", "DS", "REM", "Artifact"],
     stat = "percentage", # "count" or "percentage"
     **kwargs
     ):
@@ -375,13 +375,13 @@ fig_ratio = 4 / 3
 if __name__ == "__main__":
     matplotlib.rcParams.update(tex_look)
     # linewidth*=0.3
-    linewidth*=0.48
-    # linewidth*=0.5
+    # linewidth*=0.48
+    linewidth*=0.5
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
     # data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5")
-    plot_length_distribution(binwidth = 0.5)
+    plot_length_distribution(binwidth = 0.25)
     
     # plot_length_distribution(yscale = "log", ylim = [1, 10000], binwidth = 0.5, xlim = [0, 16])
 
-    plot_sleep_stages_distribution(stat="percentage", yscale="linear")
+    # plot_sleep_stages_distribution(stat="percentage", yscale="linear")

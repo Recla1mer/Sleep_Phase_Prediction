@@ -40,7 +40,26 @@ def final_data_preprocessing(
     """
     Final preprocessing transformations (Normalization, Reshaping) applied to the data before it is being
     passed to the neural network.
+
+    Attention:  Most keyword arguments are not assigned a default value here because there existence is only
+                required if the corresponding preprocessing transformation should be applied in the first place.
     """
+
+    # set default values for necessary keyword arguments:
+    kwargs.setdefault("normalization_mode", "local")
+
+    # collect normalization parameters:
+    normalization_params = dict()
+    for key in ["normalization_mode", "normalization_technique", "normalization_max", "normalization_min"]:
+        if key in kwargs:
+            normalization_params[key] = kwargs[key]
+
+    # apply normalization prior to window segmentation if global normalization is requested:
+    if kwargs["normalization_mode"] == "global" and normalize:
+        signal = signal_normalization(
+            signal = copy.deepcopy(signal), # type: ignore
+            **normalization_params,
+        )
 
     # reshape signal into overlapping windows if requested:
     if reshape_to_overlapping_windows:
@@ -63,13 +82,11 @@ def final_data_preprocessing(
             # take label with highest count
             signal = np.array([different_labels[np.argmax(label_counts)]])
 
-    # normalize signal if requested:
-    if normalize:
-        signal = unity_based_normalization(
+    # apply normalization after window segmentation if local normalization is requested:
+    if kwargs["normalization_mode"] == "local" and normalize:
+        signal = signal_normalization(
             signal = copy.deepcopy(signal), # type: ignore
-            normalization_max = kwargs["normalization_max"],
-            normalization_min = kwargs["normalization_min"],
-            normalization_mode = kwargs["normalization_mode"]
+            **normalization_params,
         )
     
     # convert signal to correct data type:
@@ -136,18 +153,25 @@ class CustomSleepDataset(Dataset):
         priority_order: list
             The order in which labels should be prioritized in case of a tie. Only relevant if signal_type = 'target
         
-        ### Parameters for unity_based_normalization function in dataset_processing.py ###
+        ### Parameters for signal_normalization function in dataset_processing.py ###
 
-        normalization_max: float
-            The new maximum value.
-        normalization_min: float
-            The new minimum value.
+        normalization_technique: str
+            The normalization technique to be used.
+            if "z-score":   Standardizes the signal to have a mean of 0 and a standard deviation of 1.
+            if "min-max":   Scales the signal to a specified range, typically [0, 1] or [-1, 1], based on the
+                            maximum and minimum values. (Range adjustable via normalization_max and normalization_min)
         normalization_mode: str
             The normalization mode.
             if "global":    Scales all elements in the entire multi-dimensional array relative to the global
                             maximum and minimum values across all arrays.
             if "local":     Normalizes each sub-array independently, scaling the elements within relative to its
                             own maximum and minimum values.
+        normalization_max: float
+            The new maximum value for "min-max" normalization.
+            If not specified, defaults to 1.0.
+        normalization_min: float
+            The new minimum value for "min-max" normalization.
+            If not specified, defaults to 0.0.
         """
         
         # access data file and sampling frequencies:
@@ -2705,7 +2729,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
 
     test_loss /= num_batches
     correct /= total_number_predictions
-    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}")
 
     return test_loss, correct
 

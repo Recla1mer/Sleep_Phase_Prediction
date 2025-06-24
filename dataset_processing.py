@@ -71,14 +71,14 @@ def remove_outliers(
     return cleaned_signal
 
 
-def unity_based_normalization(
+def signal_normalization(
         signal: list,
-        normalization_max: float = 1,
-        normalization_min: float = 0,
+        normalization_technique: str = "z-score", # "z_score" or "min-max"
         normalization_mode: str = "global", # "global" or "local"
+        **kwargs,
     ) -> np.ndarray: # type: ignore
     """
-    Normalize the signal into range: (normalization_min, normalization_max) using the unity based normalization method.
+    Normalize the single- or multidimensional-signal
 
     RETURNS:
     ------------------------------
@@ -89,49 +89,85 @@ def unity_based_normalization(
     ------------------------------
     signal: np.ndarray
         The signal to be normalized.
-    normalization_max: float
-        The new maximum value.
-    normalization_min: float
-        The new minimum value.
+    normalization_technique: str
+        The normalization technique to be used.
+        if "z-score":   Standardizes the signal to have a mean of 0 and a standard deviation of 1.
+        if "min-max":   Scales the signal to a specified range, typically [0, 1] or [-1, 1].
     normalization_mode: str
         The normalization mode.
         if "global":    Scales all elements in the entire multi-dimensional array relative to the global
                         maximum and minimum values across all arrays.
         if "local":     Normalizes each sub-array independently, scaling the elements within relative to its
                         own maximum and minimum values.
+    
+    KEYWORD ARGUMENTS:
+    ------------------------------
+    normalization_max: float
+        The new maximum value for "min-max" normalization.
+        If not specified, defaults to 1.0.
+    normalization_min: float
+        The new minimum value for "min-max" normalization.
+        If not specified, defaults to 0.0.
     """
 
-    if normalization_max <= normalization_min:
-        raise ValueError("'new_max' must be larger than 'new_min'.")
+    # Define default values
+    kwargs.setdefault("normalization_max", 1.0)
+    kwargs.setdefault("normalization_min", 0.0)
+
+    if kwargs["normalization_max"] <= kwargs["normalization_min"]:
+        raise ValueError("The new maximum must be larger than the new minimum, obviously...")
 
     signal = np.array(signal, dtype=float) # type: ignore
 
     dimension = signal.ndim # type: ignore
 
     if dimension == 1 or normalization_mode == "global":
-        old_max = np.max(signal)
-        old_min = np.min(signal)
+        if normalization_technique == "z-score":
+            mean = np.mean(signal)
+            std_dev = np.std(signal)
 
-        if old_max == old_min:
-            return np.full_like(signal, (normalization_max - normalization_min) / 2 + normalization_min, dtype=float)
+            if std_dev == 0:
+                return np.full_like(signal, 0.0, dtype=float)
 
-        return (signal - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
-
-    elif dimension == 2 and normalization_mode == "local":
-        for i in range(len(signal)):
-            old_max = np.max(signal[i])
-            old_min = np.min(signal[i])
+            return (signal - mean) / std_dev # type: ignore
+        
+        elif normalization_technique == "min-max":
+            old_max = np.max(signal)
+            old_min = np.min(signal)
 
             if old_max == old_min:
-                signal[i] = np.full_like(signal[i], (normalization_max - normalization_min) / 2 + normalization_min, dtype=float)
-            else:
-                signal[i] = (signal[i] - old_min) / (old_max - old_min) * (normalization_max - normalization_min) + normalization_min
+                return np.full_like(signal, (kwargs["normalization_max"] - kwargs["normalization_min"]) / 2 + kwargs["normalization_min"], dtype=float)
 
-        return np.array(signal)
+            return (signal - old_min) / (old_max - old_min) * (kwargs["normalization_max"] - kwargs["normalization_min"]) + kwargs["normalization_min"]
+
+    elif dimension == 2 and normalization_mode == "local":
+        if normalization_technique == "z-score":
+            for i in range(len(signal)):
+                mean = np.mean(signal[i])
+                std_dev = np.std(signal[i])
+
+                if std_dev == 0:
+                    signal[i] = np.full_like(signal[i], 0.0, dtype=float)
+                else:
+                    signal[i] = (signal[i] - mean) / std_dev
+
+            return np.array(signal)
+        
+        elif normalization_technique == "min-max":
+            for i in range(len(signal)):
+                old_max = np.max(signal[i])
+                old_min = np.min(signal[i])
+
+                if old_max == old_min:
+                    signal[i] = np.full_like(signal[i], (kwargs["normalization_max"] - kwargs["normalization_min"]) / 2 + kwargs["normalization_min"], dtype=float)
+                else:
+                    signal[i] = (signal[i] - old_min) / (old_max - old_min) * (kwargs["normalization_max"] - kwargs["normalization_min"]) + kwargs["normalization_min"]
+
+            return np.array(signal)
     
     elif dimension > 2 and normalization_mode == "local":
         for i in range(len(signal)):
-            signal[i] = unity_based_normalization(signal[i], normalization_max, normalization_min, normalization_mode)
+            signal[i] = signal_normalization(signal[i], normalization_technique, normalization_mode, **kwargs)
 
         return np.array(signal)
 

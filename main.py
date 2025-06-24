@@ -63,7 +63,7 @@ split_data_parameters = {
     "test_size": None,
     "random_state": None,
     "shuffle": True,
-    "join_splitted_parts": False,
+    "join_splitted_parts": True,
     "stratify": False
 }
 
@@ -87,14 +87,16 @@ window_reshape_parameters = {
     "pad_target_with": 0
 }
 
-# parameters that are used to normalize the data, see unity_based_normalization function in dataset_processing.py
+# parameters that are used to normalize the data, see signal_normalization function in dataset_processing.py
 signal_normalization_parameters = {
     "normalize_rri": False, # whether to normalize the RRI signal
     "normalize_mad": False, # whether to normalize the MAD signal
-    # following parameters are not required if 'normalize_rri' and 'normalize_mad' are False
+    # following parameters are not required if 'normalize_rri' AND 'normalize_mad' are False
+    "normalization_technique": "z-score", # "z-score" or "min-max"
+    "normalization_mode": "local", # "local" or "global"
+    # following parameters are not required if 'normalize_technique' is not "min-max"
     "normalization_max": 1,
     "normalization_min": 0,
-    "normalization_mode": "global"
 }
 
 # neural network model parameters, see DemoWholeNightModel and DemoLocalSleepStageModel class in neural_network_model.py
@@ -189,32 +191,45 @@ def check_project_configuration(parameters: dict):
     if parameters["stratify"] and parameters["signal_length_seconds"] > 900:
         raise ValueError("Stratification only makes sense for short signals ('signal_length_seconds' <= 900). Set 'stratify' to False or 'signal_length_seconds' to a smaller value.")
 
-    # Check if all parameters for the neural network model are provided
-    try:
-        neural_network_model = parameters["neural_network_model"]
-        nnm_params = {key: parameters[key] for key in parameters if key in neural_network_model_parameters and key != "neural_network_model"}
-        neural_network_model = neural_network_model(**nnm_params)
-    except:
-        raise ValueError("Neural network model parameters are not provided correctly. Check 'neural_network_model_parameters' in 'main.py' and compare parameters to corresponding model class in 'neural_network_model.py'.")
+    # Check if all parameters for the neural network model are correctly provided
+    neural_network_model = parameters["neural_network_model"]
+    nnm_params = {key: parameters[key] for key in parameters if key in neural_network_model_parameters and key != "neural_network_model"}
+    neural_network_model = neural_network_model(**nnm_params)
     
     # Check if all necessary parameters for reshaping the signal to overlapping windows are provided
+    required_keys = [
+        "reshape_to_overlapping_windows", "signal_length_seconds", "windows_per_signal",
+        "window_duration_seconds", "overlap_seconds", "priority_order", 
+        "pad_feature_with", "pad_target_with"
+    ]
     if parameters["reshape_to_overlapping_windows"]:
-        required_keys = [
-            "reshape_to_overlapping_windows", "signal_length_seconds", "windows_per_signal",
-            "window_duration_seconds", "overlap_seconds", "priority_order", 
-            "pad_feature_with", "pad_target_with"
-        ]
         for key in required_keys:
             if key not in parameters:
                 raise ValueError(f"Parameter '{key}' is missing. Check 'window_reshape_parameters' in 'main.py'.")
+    else:
+        for key in ["windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order", "pad_feature_with", "pad_target_with"]:
+            if key in parameters:
+                raise ValueError(f"Parameter '{key}' is not needed if 'reshape_to_overlapping_windows' is False. Check 'window_reshape_parameters' in 'main.py'.")
     
     # Check if all necessary parameters for normalizing the signal are provided
-    required_keys = ["normalization_max", "normalization_min", "normalization_mode"]
+    required_keys = ["normalization_technique", "normalization_mode"]
     if parameters["normalize_rri"] or parameters["normalize_mad"]:
         for key in required_keys:
             if key not in parameters:
                 raise ValueError(f"Parameter '{key}' is missing. Check 'signal_normalization_parameters' in 'main.py'.")
-    
+        if parameters["normalization_technique"] == "min-max":
+            for key in ["normalization_max", "normalization_min"]:
+                if key not in parameters:
+                    raise ValueError(f"Parameter '{key}' is missing. Check 'signal_normalization_parameters' in 'main.py'.")
+        else:
+            for key in ["normalization_max", "normalization_min"]:
+                if key in parameters:
+                    raise ValueError(f"Parameter '{key}' is not needed if 'normalization_technique' is not 'min-max'. Check 'signal_normalization_parameters' in 'main.py'.")
+    else:
+        for key in required_keys + ["normalization_max", "normalization_min"]:
+            if key in parameters:
+                raise ValueError(f"Parameter '{key}' is not needed if 'normalize_rri' and 'normalize_mad' are False. Check 'signal_normalization_parameters' in 'main.py'.")
+                
     # Check if all necessary parameters for the dataset class transformations are provided
     required_keys = ["feature_transform", "target_transform"]
     for key in required_keys:
@@ -253,18 +268,6 @@ def check_project_configuration(parameters: dict):
             if window_overlap != check_overlap:
                 raise ValueError("Overlap does not match the number of windows and datapoints per window. Check parameters.")
     
-    # Neural Network Model Parameters
-        if len(parameters["mad_convolutional_channels"]) % 2 != 1 or len(parameters["mad_convolutional_channels"]) < 3:
-            raise ValueError("Number of convolutional channels in MAD branch must be odd and more than 2.")
-        if parameters["datapoints_per_rri_window"] % 2**(len(parameters["rri_convolutional_channels"])-1) != 0:
-            raise ValueError("Number of RRI datapoints per window must be dividable by 2^(number of RRI convolutional layers - 1) without rest.")
-        if parameters["datapoints_per_mad_window"] % 2 ** ((len(parameters["rri_convolutional_channels"])-1)/2) != 0:
-            raise ValueError("Number of MAD datapoints per window must be dividable by 2^((number of MAD convolutional layers - 1)/2) without rest.")
-        if parameters["rri_convolutional_channels"][-1] != parameters["mad_convolutional_channels"][-1]:
-            raise ValueError("Number of channels in last convolutional layer of RRI and MAD branch must be equal.")
-        if 2**(len(parameters["rri_convolutional_channels"]) - 1) / 2**((len(parameters["mad_convolutional_channels"]) - 1) / 2) != parameters["datapoints_per_rri_window"] / parameters["datapoints_per_mad_window"]:
-            raise ValueError("Number of remaining values after Signal Learning must be equal for RRI and MAD branch. Adjust number of convolutional channels accordingly.")
-        
     # check if number sleep stages matches the sleep stage label
     sleep_stages = []
     for key in parameters["sleep_stage_label"]:
@@ -573,29 +576,30 @@ Training And Applying Neural Network Model
 
 def main_model_training(
         neural_network_hyperparameters: dict = neural_network_hyperparameters_shhs,
-        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
+        path_to_processed_training_data: str = "Processed_Data/shhs_data_training_pid.pkl",
         path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
         path_to_model_state = None,
         path_to_updated_model_state: str = "Neural_Network/Model_State.pth",
+        paths_to_processed_validation_data: list = ["Processed_Data/shhs_data_validation_pid.pkl", "Processed_Data/gif_data_validation_pid.pkl"],
         path_to_loss_per_epoch: str = "Neural_Network/Loss_per_Epoch_SHHS.pkl",
     ):
     """
     Full implementation of project, with ability to easily change most important parameters to test different
     neural network architecture configurations. Some Parameters are hardcoded by design.
 
-    The Data is accessed using the CustomSleepDataset class from neural_network_model.py. Before returning 
-    the data, this class reshapes the data into windows. Adjustments can be made using the 
-    parameters this function accesses from "path_to_project_configuration".
+    The Data is accessed using the CustomSleepDataset class from neural_network_model.py. Data preprocessing
+    adjustments performed through this class can be made using the parameters this function accesses from
+    "path_to_project_configuration".
 
     Afterwards the neural network model is trained and tested. The accuracy and loss are saved in a pickle file
     for every epoch. The final model state dictionary is saved in a .pth file.
 
-    The accuracy values are saved in a dictionary with the following format:
+    The performance values are saved in a dictionary with the following format:
     {
         "train_accuracy": train_accuracy for each epoch (list),
         "train_avg_loss": train_avg_loss for each epoch (list),
-        "test_accuracy": test_accuracy for each epoch (list),
-        "test_avg_loss": test_avg_loss for each epoch (list),
+        "{validation_file_name_without_extension}_accuracy": accuracy for each epoch (list) (multiple entries like this for each file in paths_to_processed_validation_data),
+        "{validation_file_name_without_extension}_avg_loss": average loss for each epoch (list) (multiple entries like this for each file in paths_to_processed_validation_data),
     }
 
     
@@ -609,10 +613,8 @@ def main_model_training(
     neural_network_hyperparameters: dict
         the hyperparameters for the neural network model training
         (batch_size, number_epochs, lr_scheduler_parameters)
-    path_to_processed_data: str
-        the path to the processed dataset 
-        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
-        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    path_to_processed_training_data: str
+        the path to the processed dataset containing the training data
     path_to_project_configuration: str
         the path to all signal processing parameters 
         (not all are needed here)
@@ -621,20 +623,11 @@ def main_model_training(
         if None, the model will be trained from scratch
     path_to_updated_model_state: str
         the path to save the model state dictionary
+    paths_to_processed_validation_data: list (of str)
+        list of paths to the processed datasets containing the validation data (might be multiple)
     path_to_loss_per_epoch: str
         the path to save the accuracy values
     """
-    
-    """
-    ------------------
-    Accessing Dataset
-    ------------------
-    """
-
-    # paths to access the training, validation, and test datasets
-    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
-    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
-    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
 
     """
     --------------------------------
@@ -670,9 +663,8 @@ def main_model_training(
     # add transform parameters
     CustomDatasetKeywords.update({key: project_configuration[key] for key in dataset_class_transform_parameters})
     
-    training_data = CustomSleepDataset(path_to_data = training_data_path, **CustomDatasetKeywords)
-    validation_data = CustomSleepDataset(path_to_data = validation_data_path, **CustomDatasetKeywords)
-    # test_data = CustomSleepDataset(path_to_data = test_data_path, **CustomDatasetKeywords)
+    training_dataset = CustomSleepDataset(path_to_data = path_to_processed_training_data, **CustomDatasetKeywords)
+    validation_datasets = [CustomSleepDataset(path_to_data = path, **CustomDatasetKeywords) for path in paths_to_processed_validation_data]
     
     del CustomDatasetKeywords, project_configuration
     
@@ -696,11 +688,9 @@ def main_model_training(
     ---------------------------------------------
     """
 
-    train_dataloader = DataLoader(training_data, batch_size = batch_size, shuffle=True)
-    validation_dataloader = DataLoader(validation_data, batch_size = batch_size, shuffle=True)
+    train_dataloader = DataLoader(training_dataset, batch_size = batch_size, shuffle=True)
+    validation_dataloaders = [DataLoader(validation_dataset, batch_size = batch_size, shuffle=True) for validation_dataset in validation_datasets]
     # test_dataloader = DataLoader(test_data, batch_size = batch_size, shuffle=True)
-    
-    del training_data_path, validation_data_path, test_data_path
 
     """
     ---------------
@@ -745,15 +735,24 @@ def main_model_training(
     Training Neural Network
     ------------------------
     """
+    # clearing sequence to remove progress bars of previous epoch
+    clearing_sequence = "\033[2K"
+    for _ in range(6+6*len(paths_to_processed_validation_data)):
+        clearing_sequence += "\033[F" # Move cursor up
+        clearing_sequence += "\033[2K" # Clear line
 
     # variables to store accuracy progress
     train_accuracy = []
     train_avg_loss = []
 
-    test_accuracy = []
-    test_avg_loss = []
+    test_accuracy = [[] for _ in range(len(paths_to_processed_validation_data))]
+    test_avg_loss = [[] for _ in range(len(paths_to_processed_validation_data))]
 
     for t in range(number_epochs):
+        # clearing previous epoch progress bars
+        if t > 0:
+            print(clearing_sequence, end='')
+
         print(f"\nEpoch {t+1}:")
         print("-"*130)
 
@@ -770,35 +769,19 @@ def main_model_training(
         train_avg_loss.append(train_results[0])
         train_accuracy.append(train_results[1])
 
-        test_results = test_loop(
-            dataloader = validation_dataloader,
-            model = neural_network_model,
-            device = device,
-            loss_fn = loss_function,
-            batch_size = batch_size
-        )
+        for i, validation_dataloader in enumerate(validation_dataloaders):
+            validation_results = test_loop(
+                dataloader = validation_dataloader,
+                model = neural_network_model,
+                device = device,
+                loss_fn = loss_function,
+                batch_size = batch_size
+            )
 
-        test_avg_loss.append(test_results[0])
-        test_accuracy.append(test_results[1])
+            test_avg_loss[i].append(validation_results[0])
+            test_accuracy[i].append(validation_results[1])
 
     
-    """
-    -----------------------
-    Saving Accuracy Values
-    -----------------------
-    """
-
-    create_directories_along_path(path_to_loss_per_epoch)
-
-    accuracy_values = {
-        "train_accuracy": train_accuracy,
-        "train_avg_loss": train_avg_loss,
-        "test_accuracy": test_accuracy,
-        "test_avg_loss": test_avg_loss
-    }
-
-    save_to_pickle(accuracy_values, path_to_loss_per_epoch)
-
     """
     ----------------------------------
     Saving Neural Network Model State
@@ -808,6 +791,26 @@ def main_model_training(
     create_directories_along_path(path_to_updated_model_state)
     
     torch.save(neural_network_model.state_dict(), path_to_updated_model_state)
+
+    
+    """
+    --------------------------
+    Saving Performance Values
+    --------------------------
+    """
+
+    create_directories_along_path(path_to_loss_per_epoch)
+
+    performance_values = {
+        "train_accuracy": train_accuracy,
+        "train_avg_loss": train_avg_loss,
+    }
+    for i, path in enumerate(paths_to_processed_validation_data):
+        file_name_without_extension = os.path.splitext(os.path.basename(path))[0]
+        performance_values[f"{file_name_without_extension}_accuracy"] = test_accuracy[i]
+        performance_values[f"{file_name_without_extension}_avg_loss"] = test_avg_loss[i]
+
+    save_to_pickle(performance_values, path_to_loss_per_epoch)
 
 
 """
@@ -1518,38 +1521,6 @@ def run_model_training(
             )
     
     """
-    ------------------------------
-    Training Network on SHHS Data
-    ------------------------------
-    """
-
-    # check if model state already exists
-    user_response = "y"
-    if os.path.exists(path_to_model_directory + model_state_after_shhs_file):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are attempting to train the neural network on SHHS data and save its " +
-                "final model state to an existing path. The existing model may have been used for further " +
-                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
-                "from it. Do you want to overwrite? (y/n)", 
-            allowed_responses = ["y", "n"]
-        )
-
-        if user_response == "y":
-            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file])
-
-    # train neural network on SHHS data
-    if user_response == "y":
-        main_model_training(
-            neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-            path_to_processed_data = path_to_processed_shhs,
-            path_to_project_configuration = path_to_model_directory + project_configuration_file,
-            path_to_model_state = None,
-            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
-            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
-            )
-    
-    """
     -----------------------
     Preprocessing GIF Data
     -----------------------
@@ -1577,6 +1548,54 @@ def run_model_training(
             path_to_save_processed_data = path_to_processed_gif,
             path_to_project_configuration = path_to_model_directory + project_configuration_file
             )
+    
+    """
+    -------------------
+    Accessing Datasets
+    -------------------
+    """
+
+    # paths to access the training, validation, and test datasets
+    shhs_training_data_path = path_to_processed_shhs[:-4] + "_training_pid.pkl"
+    shhs_validation_data_path = path_to_processed_shhs[:-4] + "_validation_pid.pkl"
+    shhs_test_data_path = path_to_processed_shhs[:-4] + "_test_pid.pkl"
+
+    gif_training_data_path = path_to_processed_gif[:-4] + "_training_pid.pkl"
+    gif_validation_data_path = path_to_processed_gif[:-4] + "_validation_pid.pkl"
+    gif_test_data_path = path_to_processed_gif[:-4] + "_test_pid.pkl"
+    
+    """
+    ------------------------------
+    Training Network on SHHS Data
+    ------------------------------
+    """
+
+    # check if model state already exists
+    user_response = "y"
+    if os.path.exists(path_to_model_directory + model_state_after_shhs_file):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are attempting to train the neural network on SHHS data and save its " +
+                "final model state to an existing path. The existing model may have been used for further " +
+                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
+                "from it. Do you want to overwrite? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file])
+
+    # train neural network on SHHS data
+    if user_response == "y":
+        main_model_training(
+            neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+            path_to_processed_training_data = shhs_training_data_path,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = None,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
+            paths_to_processed_validation_data = [shhs_validation_data_path, gif_validation_data_path],
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
+            )
 
     """
     -----------------------------
@@ -1603,10 +1622,11 @@ def run_model_training(
     if user_response == "y":
         main_model_training(
             neural_network_hyperparameters = neural_network_hyperparameters_gif,
-            path_to_processed_data = path_to_processed_gif,
+            path_to_processed_training_data = gif_training_data_path,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            paths_to_processed_validation_data = [shhs_validation_data_path, gif_validation_data_path],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
             )
 

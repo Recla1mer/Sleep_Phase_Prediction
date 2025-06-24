@@ -119,850 +119,11 @@ def fix_file_info(path):
     os.rename(working_file_path, path)
 
 
-def ask_to_override_files(file_paths: list):
-    """
-    Asks the user if they want to override files.
-
-    ARGUMENTS:
-    ------------------------------
-    file_paths: list
-        list of file paths to ask for
-    
-    RETURNS:
-    ------------------------------
-    str
-        "y" if the user wants to override the files, "n" otherwise
-    """
-
-    for file_path in file_paths:
-        file_exists = False
-        if os.path.exists(file_path):
-            file_exists = True
-            break
-    
-    if file_exists:
-        while True:
-            print("At least one of the following files already exists:")
-            print(file_paths)
-            answer = input("\nDo you want to override all of them? (y/n): ")
-            if answer == "y":
-                for file_path in file_paths:
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                return "y"
-            elif answer == "n":
-                return "n"
-            else:
-                print("Please enter 'y' or 'n'.")
-
-
-def predictions_for_model_accuracy_evaluation(
-        path_to_model_state: str = "Neural_Network/Model_State.pth",
-        path_to_processed_data: str = "Processed_Data/shhs_data.pkl",
-        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
-        path_to_save_results: str = "Neural_Network/Model_Accuracy.pkl",
-    ):
-    """
-    Applies the trained neural network model to the processed data (training and validation datasets), for
-    the purpose of evaluating the model accuracy.
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    neural_network_model
-        the neural network model to use
-    path_to_model_state: str
-        the path to load the model state dictionary
-        if None, the model will be trained from scratch
-    path_to_processed_data: str
-        the path to the processed dataset 
-        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
-        [after removing '.pkl'] accesses the training, validation, and test datasets)
-    path_to_project_configuration: str
-        the path to all signal processing parameters 
-        (not all are needed here)
-    path_to_save_results: str
-        If actual results exist, predicted and actual results will be saved to this path
-    """
-
-    # paths to access the training, validation, and test datasets
-    training_data_path = path_to_processed_data[:-4] + "_training_pid.pkl"
-    validation_data_path = path_to_processed_data[:-4] + "_validation_pid.pkl"
-    test_data_path = path_to_processed_data[:-4] + "_test_pid.pkl"
-
-    training_pid_results_path = path_to_save_results[:-4] + "_Training_Pid.pkl"
-    validation_pid_results_path = path_to_save_results[:-4] + "_Validation_Pid.pkl"
-
-    user_answer = ask_to_override_files([training_pid_results_path, validation_pid_results_path])
-    if user_answer == "n":
-        return
-
-    # make predictions for the relevant files
-    main_model_predicting(
-        path_to_model_state = path_to_model_state,
-        path_to_processed_data = training_data_path,
-        path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = training_pid_results_path,
-    )
-
-    main_model_predicting(
-        path_to_model_state = path_to_model_state,
-        path_to_processed_data = validation_data_path,
-        path_to_project_configuration = path_to_project_configuration,
-        path_to_save_results = validation_pid_results_path,
-    )
-
-
 """
 ===============
 Model Training
 ===============
 """
-
-def train_multiple_configurations(
-        name_addition: str = "",
-        global_project_configuration_change: dict = dict(),
-    ):
-
-    """
-    ---------------------------------------------------------------------
-    Testing Original Idea: Overlapping Windows and artifect = wake stage
-    ---------------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_original.pkl"
-    processed_gif_path = "Processed_Data" + name_addition + "/gif_data_original.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(signal_normalization_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-    project_configuration.update(global_project_configuration_change)
-
-    check_project_configuration(project_configuration)
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Original" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = SleepStageModel
-    project_configuration["neural_network_model"] = SleepStageModelNew
-
-    # if os.path.isfile(model_directory_path + project_configuration_file):
-    #     os.remove(model_directory_path + project_configuration_file)
-    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Preprocess SHHS Data
-    # Process_SHHS_Dataset(
-    #     path_to_shhs_dataset = original_shhs_data_path,
-    #     path_to_save_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     )
-
-    # Training Network on SHHS Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-    #     path_to_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = None,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-    #     )
-
-    # Preprocess GIF Data
-    # Process_GIF_Dataset(
-    #     path_to_gif_dataset = original_gif_data_path,
-    #     path_to_save_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file
-    #     )
-
-    # Training Network on GIF Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
-    #     path_to_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-    #     )
-
-    """
-    Using YaoModel
-    """
-
-    model_directory_path = "Yao_Original" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = YaoModel
-    project_configuration["neural_network_model"] = YaoModelNew
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-
-    """
-    ---------------------------------------------------------------
-    Testing with non-overlapping windows and artifect = wake stage
-    ---------------------------------------------------------------
-    """
-
-    # Set File Paths
-    # processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_no_overlap.pkl"
-    # processed_gif_path = "Processed_Data" + name_addition + "/gif_data_no_overlap.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(signal_normalization_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-    project_configuration.update(global_project_configuration_change)
-
-    project_configuration["overlap_seconds"] = 0
-    project_configuration["number_windows"] = 300
-    project_configuration["windows_per_signal"] = 300
-
-    check_project_configuration(project_configuration)
-
-    # Using SleepStageModel
-
-    model_directory_path = "SSM_no_overlap" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = SleepStageModel
-    project_configuration["neural_network_model"] = SleepStageModelNew
-
-    # if os.path.isfile(model_directory_path + project_configuration_file):
-    #     os.remove(model_directory_path + project_configuration_file)
-    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-    #     path_to_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = None,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-    #     )
-
-    # Training Network on GIF Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
-    #     path_to_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-    #     )
-
-    # Using YaoModel
-
-    model_directory_path = "Yao_no_overlap" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = YaoModel
-    project_configuration["neural_network_model"] = YaoModelNew
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-
-    """
-    -------------------------------------------------------------------
-    Testing with Overlapping windows but artifect being a unique stage
-    -------------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_artifect.pkl"
-    processed_gif_path = "Processed_Data" + name_addition + "/gif_data_artifect.pkl"
-
-    # Set Signal Processing Parameters
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(signal_normalization_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-    project_configuration.update(global_project_configuration_change)
-
-    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
-    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
-    project_configuration["number_sleep_stages"] = 5
-
-    check_project_configuration(project_configuration)
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Artifect" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = SleepStageModel
-    project_configuration["neural_network_model"] = SleepStageModelNew
-
-    # if os.path.isfile(model_directory_path + project_configuration_file):
-    #     os.remove(model_directory_path + project_configuration_file)
-    # save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Preprocess SHHS Data
-    # Process_SHHS_Dataset(
-    #     path_to_shhs_dataset = original_shhs_data_path,
-    #     path_to_save_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     )
-
-    # Training Network on SHHS Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-    #     path_to_processed_data = processed_shhs_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = None,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-    #     )
-
-    # Preprocess GIF Data
-    # Process_GIF_Dataset(
-    #     path_to_gif_dataset = original_gif_data_path,
-    #     path_to_save_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file
-    #     )
-
-    # Training Network on GIF Data
-    # main_model_training(
-    #     neural_network_hyperparameters = neural_network_hyperparameters_gif,
-    #     path_to_processed_data = processed_gif_path,
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     path_to_model_state = model_directory_path + model_state_after_shhs_file,
-    #     path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-    #     path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-    #     )
-
-    """
-    Using YaoModel
-    """
-
-    model_directory_path = "Yao_Artifect" + name_addition + "/"
-    create_directories_along_path(model_directory_path)
-
-    # project_configuration["neural_network_model"] = YaoModel
-    project_configuration["neural_network_model"] = YaoModelNew
-
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
-
-    # Training Network on SHHS Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
-        )
-
-    # Training Network on GIF Data
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
-        )
-
-
-def predict_multiple_configurations(
-        name_addition: str = "",
-    ):
-    """
-    ==============
-    Model Testing
-    ==============
-    """
-
-    """
-    ---------------------------------------------------------------------
-    Testing Original Idea: Overlapping Windows and artifect = wake stage
-    ---------------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_original.pkl"
-    processed_gif_path = "Processed_Data" + name_addition + "/gif_data_original.pkl"
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Original" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-    """
-    Using YaoModel
-    """
-
-    model_directory_path = "Yao_Original" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-    """
-    ---------------------------------------------------------------
-    Testing with non-overlapping windows and artifect = wake stage
-    ---------------------------------------------------------------
-    """
-
-    # Set File Paths
-    # processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_no_overlap.pkl"
-    # processed_gif_path = "Processed_Data" + name_addition + "/gif_data_no_overlap.pkl"
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_no_overlap" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-    """
-    Using YaoModel
-    """
-
-    model_directory_path = "Yao_no_overlap" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-    """
-    -------------------------------------------------------------------
-    Testing with Overlapping windows but artifect being a unique stage
-    -------------------------------------------------------------------
-    """
-
-    # Set File Paths
-    processed_shhs_path = "Processed_Data" + name_addition + "/shhs_data_artifect.pkl"
-    processed_gif_path = "Processed_Data" + name_addition + "/gif_data_artifect.pkl"
-
-    """
-    Using SleepStageModel
-    """
-
-    model_directory_path = "SSM_Artifect" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-    """
-    Using YaoModel
-    """
-
-    model_directory_path = "Yao_Artifect" + name_addition + "/"
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_shhs_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl",
-    )
-
-    predictions_for_model_accuracy_evaluation(
-        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        path_to_processed_data = processed_gif_path,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_save_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl",
-    )
-
-
-def extensive_accuracy_printing(model_directory_path: str):
-    """
-    Prining accuracy results for a specific model directory
-    """
-
-    """
-    SHHS Data
-    """
-    
-    path_to_save_shhs_results = model_directory_path + model_performance_file[:-4] + "_SHHS.pkl"
-    shhs_training_pid_results_path = path_to_save_shhs_results[:-4] + "_Training_Pid.pkl"
-    shhs_validation_pid_results_path = path_to_save_shhs_results[:-4] + "_Validation_Pid.pkl"
-
-    # message = "Accuracy of SHHS Training and Validation Data in windows:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted_in_windows",
-    #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    # message = "Accuracy of SHHS Training and Validation Data reshaped to original signal structure:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [shhs_training_pid_results_path, shhs_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    # message = "Accuracy of SHHS Validation Data in windows:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [shhs_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted_in_windows",
-    #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    message = "Accuracy of SHHS Validation Data reshaped to original signal structure:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
-
-    print_model_performance(
-        paths_to_pkl_files = [shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        additional_score_function_args = {"zero_division": np.nan},
-        number_of_decimals = 3
-    )
-
-    """
-    GIF Data
-    """
-
-    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
-    gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
-    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
-    
-    # message = "Accuracy of GIF Training and Validation Data in windows:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted_in_windows",
-    #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    # message = "Accuracy of GIF Training and Validation Data reshaped to original signal structure:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [gif_training_pid_results_path, gif_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted",
-    #     actual_result_key = "Actual",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    # message = "Accuracy of GIF Validation Data in windows:"
-    # print()
-    # print("-"*len(message))
-    # print(message)
-    # print("-"*len(message))
-
-    # print_model_performance(
-    #     paths_to_pkl_files = [gif_validation_pid_results_path],
-    #     path_to_project_configuration = model_directory_path + project_configuration_file,
-    #     prediction_result_key = "Predicted_in_windows",
-    #     actual_result_key = "Actual_in_windows",
-    #     additional_score_function_args = {"zero_division": np.nan},
-    #     number_of_decimals = 3
-    # )
-
-    message = "Accuracy of GIF Validation Data reshaped to original signal structure:"
-    print()
-    print("-"*len(message))
-    print(message)
-    print("-"*len(message))
-
-    print_model_performance(
-        paths_to_pkl_files = [gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        prediction_result_key = "Predicted",
-        actual_result_key = "Actual",
-        additional_score_function_args = {"zero_division": np.nan},
-        number_of_decimals = 3
-    )
-
-
-def accuracy_multiple_configurations(
-        name_addition: str = "",
-    ):
-    """
-    Printing accuracy results for different configurations
-    """
-
-    """
-    ---------------------------------------------------------------------
-    Testing Original Idea: Overlapping Windows and artifect = wake stage
-    ---------------------------------------------------------------------
-    """
-
-    message = "Original Idea: Overlapping Windows and artifect = wake stage:"
-    print("="*len(message))
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-    print("="*len(message))
-
-    """
-    Using SleepStageModel
-    """
-
-    message = "SleepStageModel (directory: 'SSM_Original'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "SSM_Original" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
-
-    """
-    Using YaoModel
-    """
-
-    message = "YaoModel (directory: 'Yao_Original'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "Yao_Original" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
-
-    """
-    -------------------------------------------------------------------
-    Testing with Overlapping windows but artifect being a unique stage
-    -------------------------------------------------------------------
-    """
-
-    message = "Overlapping windows but artifect being a unique stage:"
-    print("\n")
-    print("="*len(message))
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-    print("="*len(message))
-
-    """
-    Using SleepStageModel
-    """
-
-    message = "SleepStageModel (directory: 'SSM_Artifect'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "SSM_Artifect" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
-
-    """
-    Using YaoModel
-    """
-
-    message = "YaoModel (directory: 'Yao_Artifect'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "Yao_Artifect" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
-
-    """
-    ---------------------------------------------------------------
-    Testing with non-overlapping windows and artifect = wake stage
-    ---------------------------------------------------------------
-    """
-
-    message = "Non-Overlapping windows and artifect = wake stage:"
-    print("\n")
-    print("="*len(message))
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-    print("="*len(message))
-
-    """
-    Using SleepStageModel
-    """
-
-    message = "SleepStageModel (directory: 'SSM_no_overlap'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "SSM_no_overlap" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
-
-    """
-    Using YaoModel
-    """
-
-    message = "YaoModel (directory: 'Yao_no_overlap'):"
-    print()
-    print("="*len(message))
-    print(message)
-    print("="*len(message))
-
-    model_directory_path = "Yao_no_overlap" + name_addition + "/"
-
-    extensive_accuracy_printing(model_directory_path)
 
 
 def main_pipeline(project_configuration, model_directory_path):
@@ -1022,7 +183,398 @@ def main_pipeline(project_configuration, model_directory_path):
     )
 
 
+def advanced_pipeline(
+        name_addition: str = "",
+        project_configuration: dict = dict()
+    ):
+    
+    print_headline("SleepStageModel (BatchAfterActivation)", "-")
+
+    project_configuration["neural_network_model"] = SleepStageModelNew
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "SSM_BAA" + name_addition + "/",
+    )
+
+    print_headline("YaoModel", "-")
+
+    project_configuration["neural_network_model"] = YaoModel
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Yao" + name_addition + "/",
+    )
+
+    print_headline("YaoModel (BatchAfterActivation)", "-")
+
+    project_configuration["neural_network_model"] = YaoModelNew
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Yao_BAA" + name_addition + "/",
+    )
+
+
 if True:
+
+    """
+    ======================================================
+    Default Project Configuration for Whole Night Signals
+    ======================================================
+    """
+
+    # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
+    sleep_data_manager_parameters = {
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        "RRI_inlier_interval": [None, None],
+        "MAD_inlier_interval": [None, None],
+        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+        "signal_length_seconds": 36000,
+        "wanted_shift_length_seconds": 5400,
+        "absolute_shift_deviation_seconds": 1800,
+    }
+    sleep_data_manager_parameters["SLP_predicted_frequency"] = sleep_data_manager_parameters["SLP_frequency"]
+
+    # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
+    split_data_parameters = {
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": 0,
+        "shuffle": True,
+        "join_splitted_parts": True,
+        "stratify": False
+    }
+
+    # transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
+    dataset_class_transform_parameters = {
+        "feature_transform": ToTensor(),
+        "target_transform": None,
+    }
+
+    # parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
+    # function in dataset_processing.py
+    window_reshape_parameters = {
+        "reshape_to_overlapping_windows": True, # whether to reshape the signals to overlapping windows
+        # following parameters are not required if 'reshape_to_overlapping_windows' is False
+        "signal_length_seconds": sleep_data_manager_parameters["signal_length_seconds"], # 'nn_signal_duration_seconds' in 'reshape_signal_to_overlapping_windows' function
+        "windows_per_signal": 1197, # 'number_windows' in 'reshape_signal_to_overlapping_windows' function
+        "window_duration_seconds": 120,
+        "overlap_seconds": 90,
+        "priority_order": [3, 2, 1, 0],
+        "pad_feature_with": 0,
+        "pad_target_with": 0
+    }
+
+    # parameters that are used to normalize the data, see signal_normalization function in dataset_processing.py
+    signal_normalization_parameters = {
+        "normalize_rri": False, # whether to normalize the RRI signal
+        "normalize_mad": False, # whether to normalize the MAD signal
+    }
+
+    # neural network model parameters, see DemoWholeNightModel and DemoLocalSleepStageModel class in neural_network_model.py
+    neural_network_model_parameters = {
+        "neural_network_model": SleepStageModel,
+        # parameters necessary for neural network models based on whole night signals AND short time signals
+        "number_sleep_stages": 4,
+        "rri_convolutional_channels": [1, 8, 16, 32, 64],
+        "mad_convolutional_channels": [1, 8, 16, 32, 64],
+        "max_pooling_layers": 5,
+        "number_window_learning_features": 128,
+        "window_learning_dilations": [2, 4, 8, 16, 32],
+        # parameters necessary for neural network models only based on whole night signals (do not append if using a model based on short time signals)
+        "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
+        "datapoints_per_mad_window": int(sleep_data_manager_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
+        "windows_per_signal": window_reshape_parameters["windows_per_signal"],
+        # parameters necessary for neural network models only based on short time signals (do not append if using a model based on whole night signals)
+        "rri_datapoints": int(sleep_data_manager_parameters["RRI_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
+        "mad_datapoints": int(sleep_data_manager_parameters["MAD_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
+    }
+
+    # neural network hyperparameters, see main_model_training function in this file
+    neural_network_hyperparameters_shhs = {
+        "batch_size": 8,
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 10,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 5 * 1e-5
+        }
+    }
+
+    neural_network_hyperparameters_gif = {
+        "batch_size": 8,
+        "number_epochs": 100,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 25,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 1 * 1e-5
+        }
+    }
+
+    default_project_configuration = dict()
+    default_project_configuration.update(sleep_data_manager_parameters)
+    default_project_configuration.update(window_reshape_parameters)
+    default_project_configuration.update(signal_normalization_parameters)
+    default_project_configuration.update(split_data_parameters)
+    default_project_configuration.update(dataset_class_transform_parameters)
+    default_project_configuration.update(neural_network_model_parameters)
+
+    """
+    ====
+    RAW
+    ====
+    """
+
+    print_headline("RAW Data Processing", "=")
+
+    """
+    ---------------------------------
+    Window Overlap, Artifact as Wake
+    ---------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    
+    print_headline("Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_ArtifactAsWake_RAW",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ------------------------------------
+    No Window Overlap, Artifact as Wake
+    ------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["overlap_seconds"] = 0
+    project_configuration["number_windows"] = 300
+    project_configuration["windows_per_signal"] = 300
+
+    print_headline("No Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_NoOverlap_ArtifactAsWake_RAW",
+        project_configuration = project_configuration,
+    )
+
+    """
+    -----------------------------------------
+    Window Overlap, Artifact as Unique Stage
+    -----------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
+    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
+    project_configuration["number_sleep_stages"] = 5
+
+    print_headline("Window Overlap, Artifact as Unique Stage", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_FullClass_RAW",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ================
+    Remove Outliers
+    ================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+
+    """
+    ---------------------------------
+    Window Overlap, Artifact as Wake
+    ---------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    
+    print_headline("Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_ArtifactAsWake_Cleaned",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ------------------------------------
+    No Window Overlap, Artifact as Wake
+    ------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["overlap_seconds"] = 0
+    project_configuration["number_windows"] = 300
+    project_configuration["windows_per_signal"] = 300
+
+    print_headline("No Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_NoOverlap_ArtifactAsWake_Cleaned",
+        project_configuration = project_configuration,
+    )
+
+    """
+    -----------------------------------------
+    Window Overlap, Artifact as Unique Stage
+    -----------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
+    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
+    project_configuration["number_sleep_stages"] = 5
+
+    print_headline("Window Overlap, Artifact as Unique Stage", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_FullClass_Cleaned",
+        project_configuration = project_configuration,
+    )
+
+    """
+    =====================================
+    Remove Outliers & Normalize Globally
+    =====================================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    default_project_configuration["normalize_rri"] = True
+    default_project_configuration["normalize_mad"] = True
+    default_project_configuration["normalization_technique"] = "z-score" # "z-score" or "min-max"
+    default_project_configuration["normalization_mode"] = "global" # "local" or "global"
+    # default_project_configuration["normalization_max"] = 1
+    # default_project_configuration["normalization_min"] = 0
+
+    """
+    ---------------------------------
+    Window Overlap, Artifact as Wake
+    ---------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    
+    print_headline("Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_ArtifactAsWake_GlobalNorm",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ------------------------------------
+    No Window Overlap, Artifact as Wake
+    ------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["overlap_seconds"] = 0
+    project_configuration["number_windows"] = 300
+    project_configuration["windows_per_signal"] = 300
+
+    print_headline("No Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_NoOverlap_ArtifactAsWake_GlobalNorm",
+        project_configuration = project_configuration,
+    )
+
+    """
+    -----------------------------------------
+    Window Overlap, Artifact as Unique Stage
+    -----------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
+    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
+    project_configuration["number_sleep_stages"] = 5
+
+    print_headline("Window Overlap, Artifact as Unique Stage", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_FullClass_GlobalNorm",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ====================================
+    Remove Outliers & Normalize Locally
+    ====================================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    default_project_configuration["normalize_rri"] = True
+    default_project_configuration["normalize_mad"] = True
+    default_project_configuration["normalization_technique"] = "z-score" # "z-score" or "min-max"
+    default_project_configuration["normalization_mode"] = "local" # "local" or "global"
+    # default_project_configuration["normalization_max"] = 1
+    # default_project_configuration["normalization_min"] = 0
+
+    """
+    ---------------------------------
+    Window Overlap, Artifact as Wake
+    ---------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    
+    print_headline("Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_ArtifactAsWake_LocalNorm",
+        project_configuration = project_configuration,
+    )
+
+    """
+    ------------------------------------
+    No Window Overlap, Artifact as Wake
+    ------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["overlap_seconds"] = 0
+    project_configuration["number_windows"] = 300
+    project_configuration["windows_per_signal"] = 300
+
+    print_headline("No Window Overlap, Artifact as Wake", "= ")
+
+    advanced_pipeline(
+        name_addition = "_NoOverlap_ArtifactAsWake_LocalNorm",
+        project_configuration = project_configuration,
+    )
+
+    """
+    -----------------------------------------
+    Window Overlap, Artifact as Unique Stage
+    -----------------------------------------
+    """
+
+    project_configuration = copy.deepcopy(default_project_configuration)
+    project_configuration["sleep_stage_label"] = {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifect": 0}
+    project_configuration["priority_order"] = [4, 3, 2, 1, 0]
+    project_configuration["number_sleep_stages"] = 5
+
+    print_headline("Window Overlap, Artifact as Unique Stage", "= ")
+
+    advanced_pipeline(
+        name_addition = "_Overlap_FullClass_LocalNorm",
+        project_configuration = project_configuration,
+    )
+
+
+if False:
     # fix_project_configuration_3()
     # print_project_configuration()
     # raise SystemExit("Testing configurations...")
