@@ -126,7 +126,12 @@ Model Training
 """
 
 
-def main_pipeline(project_configuration, model_directory_path):
+def main_pipeline(
+        project_configuration, 
+        model_directory_path,
+        neural_network_hyperparameters_shhs: dict,
+        neural_network_hyperparameters_gif: dict,
+        ):
     """
     Main function to run the entire pipeline
     """
@@ -168,6 +173,8 @@ def main_pipeline(project_configuration, model_directory_path):
         path_to_model_directory = model_directory_path,
         path_to_processed_shhs = processed_shhs_path,
         path_to_processed_gif = processed_gif_path,
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
 
     """
@@ -185,7 +192,9 @@ def main_pipeline(project_configuration, model_directory_path):
 
 def advanced_pipeline(
         name_addition: str = "",
-        project_configuration: dict = dict()
+        project_configuration: dict = dict(),
+        neural_network_hyperparameters_shhs: dict = dict(),
+        neural_network_hyperparameters_gif: dict = dict()
     ):
     
     print_headline("SleepStageModel (BatchAfterActivation)", "-")
@@ -195,6 +204,8 @@ def advanced_pipeline(
     main_pipeline(
         project_configuration = project_configuration,
         model_directory_path = "SSM_BAA" + name_addition + "/",
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
 
     print_headline("YaoModel", "-")
@@ -204,6 +215,8 @@ def advanced_pipeline(
     main_pipeline(
         project_configuration = project_configuration,
         model_directory_path = "Yao" + name_addition + "/",
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
 
     print_headline("YaoModel (BatchAfterActivation)", "-")
@@ -213,10 +226,241 @@ def advanced_pipeline(
     main_pipeline(
         project_configuration = project_configuration,
         model_directory_path = "Yao_BAA" + name_addition + "/",
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
 
 
+def advanced_pipeline_short_time(
+        name_addition: str = "",
+        project_configuration: dict = dict(),
+    ):
+
+    """
+    SHHS Data 
+    """
+
+    """
+    ===========================
+    Local Interval Model (30s)
+    ===========================
+    """
+    
+    print_headline("30s", "-")
+
+    project_configuration["signal_length_seconds"] = 30
+    project_configuration["wanted_shift_length_seconds"] = 30
+    project_configuration["absolute_shift_deviation_seconds"] = 1
+
+    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
+    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
+
+    neural_network_hyperparameters_shhs = {
+        "batch_size": 1024, # 8.5h for 30s data -> 
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 10,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 5 * 1e-5
+        }
+    }
+
+    neural_network_hyperparameters_gif = {
+        "batch_size": 120, # 1h for 30s data
+        "number_epochs": 100,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 25,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 1 * 1e-5
+        }
+    }
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Local_30s" + name_addition + "/",
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+    )
+
+    """
+    ============================
+    Local Interval Model (120s)
+    ============================
+    """
+    
+    print_headline("120s", "-")
+
+    project_configuration["signal_length_seconds"] = 120
+    project_configuration["wanted_shift_length_seconds"] = 120
+    project_configuration["absolute_shift_deviation_seconds"] = 10
+
+    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
+    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
+
+    neural_network_hyperparameters_shhs = {
+        "batch_size": 8,
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 10,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 5 * 1e-5
+        }
+    }
+
+    neural_network_hyperparameters_gif = {
+        "batch_size": 8,
+        "number_epochs": 100,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 25,
+            "start_learning_rate": 2.5 * 1e-5,
+            "max_learning_rate": 1 * 1e-4,
+            "end_learning_rate": 1 * 1e-5
+        }
+    }
+
+    main_pipeline(
+        project_configuration = project_configuration,
+        model_directory_path = "Local_120s" + name_addition + "/",
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+    )
+
 if True:
+    """
+    =========================================================
+    Default Project Configuration for Local Short-Time Models
+    =========================================================
+    """
+
+    # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
+    sleep_data_manager_parameters = {
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        "RRI_inlier_interval": [None, None],
+        "MAD_inlier_interval": [None, None],
+        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+    }
+    sleep_data_manager_parameters["SLP_predicted_frequency"] = sleep_data_manager_parameters["SLP_frequency"]
+
+    # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
+    split_data_parameters = {
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": 0,
+        "shuffle": True,
+        "join_splitted_parts": True,
+        "stratify": False
+    }
+
+    # transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
+    dataset_class_transform_parameters = {
+        "feature_transform": ToTensor(),
+        "target_transform": None,
+    }
+
+    # parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
+    # function in dataset_processing.py
+    window_reshape_parameters = {
+        "reshape_to_overlapping_windows": False, # whether to reshape the signals to overlapping windows
+    }
+
+    # parameters that are used to normalize the data, see signal_normalization function in dataset_processing.py
+    signal_normalization_parameters = {
+        "normalize_rri": False, # whether to normalize the RRI signal
+        "normalize_mad": False, # whether to normalize the MAD signal
+    }
+
+    # neural network model parameters, see DemoWholeNightModel and DemoLocalSleepStageModel class in neural_network_model.py
+    neural_network_model_parameters = {
+        "neural_network_model": LocalIntervalModel,
+        # parameters necessary for neural network models based on whole night signals AND short time signals
+        "number_sleep_stages": 4,
+        "rri_convolutional_channels": [1, 8, 16, 32, 64],
+        "mad_convolutional_channels": [1, 8, 16, 32, 64],
+        "max_pooling_layers": 5,
+        "number_window_learning_features": 128,
+        "window_learning_dilations": [2, 4, 8, 16, 32],
+    }
+
+    default_project_configuration = dict()
+    default_project_configuration.update(sleep_data_manager_parameters)
+    default_project_configuration.update(window_reshape_parameters)
+    default_project_configuration.update(signal_normalization_parameters)
+    default_project_configuration.update(split_data_parameters)
+    default_project_configuration.update(dataset_class_transform_parameters)
+    default_project_configuration.update(neural_network_model_parameters)
+
+    """
+    ====
+    RAW
+    ====
+    """
+
+    print_headline("RAW Data Processing", "=")
+
+    advanced_pipeline_short_time(
+        name_addition = "_RAW",
+        project_configuration = default_project_configuration,
+    )
+
+    """
+    ================
+    Remove Outliers
+    ================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+
+    advanced_pipeline_short_time(
+        name_addition = "_Cleaned",
+        project_configuration = default_project_configuration,
+    )
+
+    """
+    =====================================
+    Remove Outliers & Normalize Globally
+    =====================================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    default_project_configuration["normalize_rri"] = True
+    default_project_configuration["normalize_mad"] = True
+    default_project_configuration["normalization_technique"] = "z-score" # "z-score" or "min-max"
+    default_project_configuration["normalization_mode"] = "global" # "local" or "global"
+    # default_project_configuration["normalization_max"] = 1
+    # default_project_configuration["normalization_min"] = 0
+
+    advanced_pipeline_short_time(
+        name_addition = "_GlobalNorm",
+        project_configuration = default_project_configuration,
+    )
+
+    """
+    ====================================
+    Remove Outliers & Normalize Locally
+    ====================================
+    """
+
+    default_project_configuration["RRI_inlier_interval"] = [0.3, 2]
+    default_project_configuration["normalize_rri"] = True
+    default_project_configuration["normalize_mad"] = True
+    default_project_configuration["normalization_technique"] = "z-score" # "z-score" or "min-max"
+    default_project_configuration["normalization_mode"] = "local" # "local" or "global"
+    # default_project_configuration["normalization_max"] = 1
+    # default_project_configuration["normalization_min"] = 0
+
+    advanced_pipeline_short_time(
+        name_addition = "_LocalNorm",
+        project_configuration = default_project_configuration,
+    )
+
+
+if False:
 
     """
     ======================================================
@@ -289,9 +533,6 @@ if True:
         "datapoints_per_rri_window": int(sleep_data_manager_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
         "datapoints_per_mad_window": int(sleep_data_manager_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
         "windows_per_signal": window_reshape_parameters["windows_per_signal"],
-        # parameters necessary for neural network models only based on short time signals (do not append if using a model based on whole night signals)
-        "rri_datapoints": int(sleep_data_manager_parameters["RRI_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
-        "mad_datapoints": int(sleep_data_manager_parameters["MAD_frequency"] * sleep_data_manager_parameters["signal_length_seconds"]),
     }
 
     # neural network hyperparameters, see main_model_training function in this file
@@ -579,201 +820,6 @@ if False:
     # print_project_configuration()
     # raise SystemExit("Testing configurations...")
 
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(signal_normalization_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-
-    project_configuration["neural_network_model"] = YaoModel
-    del project_configuration["rri_datapoints"]
-    del project_configuration["mad_datapoints"]
-    
-    project_configuration["RRI_inlier_interval"] = [0.3, 2]
-    
-    project_configuration["normalize_rri"] = True
-    project_configuration["normalize_mad"] = True
-    project_configuration["normalization_max"] = 1
-    project_configuration["normalization_min"] = 0
-    project_configuration["normalization_mode"] = "local"
-
-    project_configuration["random_state"] = 0
-
-    main_pipeline(
-        project_configuration = project_configuration,
-        model_directory_path = "Test_Yao_Local_Original/",
-    )
-
-    """
-    ==============================
-    Default Project Configuration
-    ==============================
-    """
-
-    # parameters that are used to keep data uniform, see SleepDataManager class in dataset_processing.py
-    sleep_data_manager_parameters = {
-        "RRI_frequency": 4,
-        "MAD_frequency": 1,
-        "SLP_frequency": 1/30,
-        "MAD_inlier_interval": [None, None],
-        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
-    }
-    sleep_data_manager_parameters["SLP_predicted_frequency"] = sleep_data_manager_parameters["SLP_frequency"]
-
-    # parameters that set train, validation, and test sizes and how data is shuffled, see separate_train_test_validation
-    split_data_parameters = {
-        "train_size": 0.8,
-        "validation_size": 0.2,
-        "test_size": None,
-        "random_state": 0,
-        "shuffle": True,
-        "join_splitted_parts": False,
-        "stratify": False
-    }
-
-    # transformations applied to the data, see CustomSleepDataset class in neural_network_model.py
-    dataset_class_transform_parameters = {
-        "feature_transform": ToTensor(),
-        "target_transform": None,
-    }
-
-    # parameters that alter the way the data is reshaped into windows, see reshape_signal_to_overlapping_windows 
-    # function in dataset_processing.py
-    window_reshape_parameters = {
-        "reshape_to_overlapping_windows": False, # whether to reshape the signals to overlapping windows
-    }
-
-    neural_network_model_parameters = {
-        # parameters necessary for neural network models based on whole night signals AND short time signals
-        "number_sleep_stages": 4,
-        "rri_convolutional_channels": [1, 8, 16, 32, 64],
-        "mad_convolutional_channels": [1, 8, 16, 32, 64],
-        "max_pooling_layers": 5,
-        "number_window_learning_features": 128,
-        "window_learning_dilations": [2, 4, 8, 16, 32],
-    }
-
-    project_configuration = dict()
-    project_configuration.update(sleep_data_manager_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(split_data_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-
-    neural_network_hyperparameters_shhs["batch_size"] = 150 # 5h for 120s data
-    neural_network_hyperparameters_gif["batch_size"] = 30 # 1h for 120s data
-
-    # pre preprocess
-    project_configuration["RRI_inlier_interval"] = [0.3, 2]
-    project_configuration["signal_length_seconds"] = 120
-    project_configuration["wanted_shift_length_seconds"] = 120
-    project_configuration["absolute_shift_deviation_seconds"] = 10
-    project_configuration["join_splitted_parts"] = True
-
-    # final preprocess
-    project_configuration["normalize_rri"] = True
-    project_configuration["normalize_mad"] = True
-    project_configuration["normalization_max"] = 1
-    project_configuration["normalization_min"] = 0
-    project_configuration["normalization_mode"] = "local"
-
-    # nn
-    project_configuration["neural_network_model"] = LocalIntervalModel
-    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
-    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
-
-    main_pipeline(
-        project_configuration = project_configuration,
-        model_directory_path = "Short_Time_Norm_120/",
-    )
-
-    neural_network_hyperparameters_shhs["batch_size"] = 600 # 5h for 30s data
-    neural_network_hyperparameters_gif["batch_size"] = 120 # 1h for 30s data
-
-    # pre preprocess
-    project_configuration["RRI_inlier_interval"] = [0.3, 2]
-    project_configuration["signal_length_seconds"] = 30
-    project_configuration["wanted_shift_length_seconds"] = 30
-    project_configuration["absolute_shift_deviation_seconds"] = 1
-    project_configuration["join_splitted_parts"] = True
-
-    # final preprocess
-    project_configuration["normalize_rri"] = True
-    project_configuration["normalize_mad"] = True
-    project_configuration["normalization_max"] = 1
-    project_configuration["normalization_min"] = 0
-    project_configuration["normalization_mode"] = "local"
-
-    # nn
-    project_configuration["neural_network_model"] = LocalIntervalModel
-    project_configuration["rri_datapoints"] = int(sleep_data_manager_parameters["RRI_frequency"] * project_configuration["signal_length_seconds"])
-    project_configuration["mad_datapoints"] = int(sleep_data_manager_parameters["MAD_frequency"] * project_configuration["signal_length_seconds"])
-
-    main_pipeline(
-        project_configuration = project_configuration,
-        model_directory_path = "Short_Time_Norm_30/",
-    )
-
-
-if False:
-    name_addition = "_NEW"
-    project_configuration_change = {
-        "RRI_inlier_interval": [None, None],
-        "normalize_rri": False,
-        "normalize_mad": False,
-    }
-    train_multiple_configurations(name_addition, project_configuration_change)
-    predict_multiple_configurations(name_addition)
-
-    name_addition = "_rm_outliers_NEW"
-    project_configuration_change = {
-        "RRI_inlier_interval": [0.3, 2],
-        "normalize_rri": False,
-        "normalize_mad": False,
-        "normalization_mode": "global",
-    }
-
-    train_multiple_configurations(name_addition, project_configuration_change)
-    predict_multiple_configurations(name_addition)
-
-    name_addition = "_norm_global_NEW"
-    project_configuration_change = {
-        "RRI_inlier_interval": [0.3, 2],
-        "normalize_rri": True,
-        "normalize_mad": False,
-        "normalization_mode": "global",
-    }
-
-    train_multiple_configurations(name_addition, project_configuration_change)
-    predict_multiple_configurations(name_addition)
-
-    name_addition = "_norm_local_NEW"
-    project_configuration_change = {
-        "RRI_inlier_interval": [0.3, 2],
-        "normalize_rri": True,
-        "normalize_mad": False,
-        "normalization_mode": "local",
-    }
-
-    # train_multiple_configurations(name_addition, project_configuration_change)
-    # predict_multiple_configurations(name_addition)
-
-    name_addition = ""
-    accuracy_multiple_configurations(name_addition)
-
-    name_addition = "_rm_outliers"
-    accuracy_multiple_configurations(name_addition)
-
-    name_addition = "_norm_global"
-    accuracy_multiple_configurations(name_addition)
-
-    name_addition = "_norm_local"
-    accuracy_multiple_configurations(name_addition)
-
-
-if False:
     # fix_project_configuration_2()
     # print_project_configuration()
     

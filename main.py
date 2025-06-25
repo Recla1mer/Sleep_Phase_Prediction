@@ -1465,6 +1465,8 @@ def run_model_training(
         path_to_model_directory: str,
         path_to_processed_shhs: str,
         path_to_processed_gif: str,
+        neural_network_hyperparameters_shhs: dict,
+        neural_network_hyperparameters_gif: dict,
     ):
     """
     Corresponds to the 1st main functionality: Processing datasets and training the neural network model.
@@ -1489,6 +1491,10 @@ def run_model_training(
         the path to the file where the processed SHHS data is stored
     path_to_processed_gif: str
         the path to the file where the processed GIF data is stored
+    neural_network_hyperparameters_shhs: dict
+        the hyperparameters for the neural network model trained on SHHS data
+    neural_network_hyperparameters_gif: dict
+        the hyperparameters for the neural network model trained on GIF data
     """
 
     """
@@ -1910,7 +1916,11 @@ if __name__ == "__main__":
     project_configuration.update(dataset_class_transform_parameters)
     project_configuration.update(neural_network_model_parameters)
 
-    check_project_configuration(project_configuration)
+    # check_project_configuration(project_configuration)
+
+    project_configuration["signal_length_seconds"] = 30
+    project_configuration["wanted_shift_length_seconds"] = 30
+    project_configuration["absolute_shift_deviation_seconds"] = 1
 
     if os.path.isfile(model_directory_path + project_configuration_file):
         os.remove(model_directory_path + project_configuration_file)
@@ -1926,8 +1936,10 @@ if __name__ == "__main__":
 
     run_model_training(
         path_to_model_directory = model_directory_path,
-        path_to_processed_shhs = processed_shhs_path,
-        path_to_processed_gif = processed_gif_path,
+        path_to_processed_shhs = model_directory_path + processed_shhs_path,
+        path_to_processed_gif = model_directory_path + processed_gif_path,
+        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
 
     """

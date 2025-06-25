@@ -536,8 +536,7 @@ def calculate_optimal_shift_length(
 def split_long_signal(
         signal: list, 
         sampling_frequency: int,
-        target_frequency: int,
-        nn_signal_duration_seconds: int = 10*3600,
+        signal_length_seconds: int = 10*3600,
         wanted_shift_length_seconds: int = 3600,
         absolute_shift_deviation_seconds: int = 1800,
         use_shift_length_seconds: int = 0
@@ -563,12 +562,10 @@ def split_long_signal(
 
     sampling_frequency: int
         The frequency of the input signal.
-    target_frequency: int
-        The frequency to resample the signal to. Frequency of signal in the neural network.
     signal_type: str
         The type of signal. Either 'feature' or 'target'.
     
-    nn_signal_duration_seconds: int
+    signal_length_seconds: int
         The duration of the signal that will be passed to the neural network.
     wanted_shift_length_seconds: int
         The shift length that is desired by user.
@@ -589,19 +586,17 @@ def split_long_signal(
         raise ValueError("The absolute shift deviation must be smaller than the wanted shift length.")
     if absolute_shift_deviation_seconds < 0:
         raise ValueError("The absolute shift deviation must be a positive number.")
-    if sampling_frequency != target_frequency:
-        raise ValueError("Signal must be resampled to target frequency before splitting.")
 
     signal = np.array(signal) # type: ignore
         
     # Calculate number of datapoints from signal length in seconds
-    number_nn_datapoints = int(nn_signal_duration_seconds * target_frequency)
+    number_nn_datapoints = int(signal_length_seconds * sampling_frequency)
 
     # Check if signal is shorter than those that will be passed to the neural network
     if len(signal) <= number_nn_datapoints:
         raise ValueError("Signal is shorter than the desired signal length. Splitting unnecessary.")
     
-    optimal_shift_length = int(use_shift_length_seconds * target_frequency)
+    optimal_shift_length = int(use_shift_length_seconds * sampling_frequency)
     
     splitted_signals = list() # type: ignore
     
@@ -620,11 +615,9 @@ def split_long_signal(
 def split_signals_within_dictionary(
         data_dict: dict,
         id_key: str,
-        valid_signal_keys: list,
+        signal_keys: list,
         signal_frequencies: list,
-        signal_target_frequencies: list,
-        all_signal_frequencies: list,
-        nn_signal_duration_seconds: int,
+        signal_length_seconds: int,
         wanted_shift_length_seconds: int,
         absolute_shift_deviation_seconds: int
     ):
@@ -650,15 +643,11 @@ def split_signals_within_dictionary(
         The dictionary containing the signals.
     id_key: str
         The key of the ID in the dictionary.
-    valid_signal_keys: list
-        The keys of the signals that should be split.
+    signal_keys: list
+        The keys of all signals that should be split.
     signal_frequencies: list
         The frequencies of the above signals.
-    signal_target_frequencies: list
-        The target frequencies of the above signals.
-    all_signal_frequencies: list
-        The frequencies of all signals in the database
-    nn_signal_duration_seconds: int
+    signal_length_seconds: int
         The duration of the signal that will be passed to the neural network.
     wanted_shift_length_seconds: int
         The shift length that is desired by user.
@@ -667,25 +656,30 @@ def split_signals_within_dictionary(
     """
 
     splitted_signals = list()
+    for key_index in range(len(signal_keys)):
+        if signal_keys[key_index] in data_dict:
+            current_signal_length_seconds = len(data_dict[signal_keys[key_index]]) / signal_frequencies[key_index]
+            break
 
     # Calculate optimal shift length
     use_shift_length_seconds = calculate_optimal_shift_length(
-        signal_length_seconds = len(data_dict[valid_signal_keys[0]]) / signal_target_frequencies[0],
-        desired_length_seconds = nn_signal_duration_seconds,
+        signal_length_seconds = current_signal_length_seconds,
+        desired_length_seconds = signal_length_seconds,
         wanted_shift_length_seconds = wanted_shift_length_seconds,
         absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
-        all_signal_frequencies = all_signal_frequencies
+        all_signal_frequencies = signal_frequencies
         )
 
     # split signals if they are too long
-    for signal_key_index in range(0, len(valid_signal_keys)):
-        signal_key = valid_signal_keys[signal_key_index]
+    for signal_key_index in range(0, len(signal_keys)):
+        signal_key = signal_keys[signal_key_index]
+        if signal_key not in data_dict:
+            continue
 
         this_splitted_signal = split_long_signal(
             signal = copy.deepcopy(data_dict[signal_key]), # type: ignore
             sampling_frequency = copy.deepcopy(signal_frequencies[signal_key_index]),
-            target_frequency = signal_target_frequencies[signal_key_index],
-            nn_signal_duration_seconds = nn_signal_duration_seconds,
+            signal_length_seconds = signal_length_seconds,
             wanted_shift_length_seconds = wanted_shift_length_seconds,
             absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
             use_shift_length_seconds = use_shift_length_seconds
@@ -698,27 +692,29 @@ def split_signals_within_dictionary(
     new_dictionaries_for_splitted_signals = list()
     
     identifier = data_dict[id_key]
-    present_signal_keys = [key for key in data_dict if key in valid_signal_keys]
-    additional_keys = {key: data_dict[key] for key in data_dict if key != id_key and key not in valid_signal_keys}
+    present_signal_keys = [key for key in data_dict if key in signal_keys]
+    additional_keys = {key: data_dict[key] for key in data_dict if key != id_key and key not in signal_keys}
     
     # create and append first dictionary (additionally contains the shift length and other common keys)
     first_dict = {
         id_key: identifier,
-        "shift_length_seconds": use_shift_length_seconds
+        "shift_length_seconds": use_shift_length_seconds,
+        "shift": 0
     }
     for key in present_signal_keys:
-        first_dict[key] = np.array(splitted_signals[valid_signal_keys.index(key)][0])
+        first_dict[key] = np.array(splitted_signals[signal_keys.index(key)][0])
     first_dict.update(additional_keys)
     new_dictionaries_for_splitted_signals.append(first_dict)
     del first_dict
 
     # append remaining dictionaries
-    identifier += "_shift_x"
+    identifier += "*"
     for i in range(1, len(splitted_signals[0])):
         splitted_data_dict = dict()
-        splitted_data_dict[id_key] = identifier + str(i)
+        splitted_data_dict[id_key] = identifier
+        splitted_data_dict["shift"] = i
         for key in present_signal_keys:
-            splitted_data_dict[key] = np.array(splitted_signals[valid_signal_keys.index(key)][i])
+            splitted_data_dict[key] = np.array(splitted_signals[signal_keys.index(key)][i])
 
         new_dictionaries_for_splitted_signals.append(splitted_data_dict)
     
@@ -727,8 +723,9 @@ def split_signals_within_dictionary(
 
 def fuse_splitted_signals(
         signals: list,
-        shift_length: int,
-        signal_type: str = "feature"
+        shift_lengths: list,
+        signal_type: str = "feature",
+        summarize_overlapping_entries: bool = True
     ):
     """
     Reverse Operation to 'split_long_signal'.
@@ -742,15 +739,21 @@ def fuse_splitted_signals(
     ------------------------------
     signals: list
         The splitted signals.
-    shift_length: int
-        shift length used to split the signals.
-    original_signal_length: int
-        The length of the original signal.
+    shift_lengths: list
+        Shift length of starting point to corresponding signal in amount of datapoints.
     signal_type: str
         The type of signal. Either 'feature' or 'target'.
         If 'feature':   The signals will be fused by taking the mean of the overlapping entries.
-        If 'target':    The signals will be fused by collecting the overlapping entries into a list.
+        If 'target':    The signals will be fused by taking the majority of the overlapping entries.
+    summarize_overlapping_entries: bool
+        If True, the overlapping entries will be summarized by taking the mean or majority of the entries, depending on signal type.
+        If False, the overlapping entries will be collected into a list.
     """
+
+    # calculate original signal length
+    max_shift_length = max(shift_lengths)
+    last_splitted_signal_index = shift_lengths.index(max_shift_length)
+    original_signal_length = len(signals[last_splitted_signal_index]) + max_shift_length
 
     # choose return data type
     data_types = [np.array(i).dtype for i in signals]
@@ -761,23 +764,26 @@ def fuse_splitted_signals(
             break
 
     # initialize fused signal
-    fused_signal = [[i] for i in signals[0]]
+    fused_signal = [[] for _ in range(original_signal_length)]
 
     # fuse signals (collect duplicate entries into list)
-    for signal_index in range(1, len(signals)):
-        signal_length = len(signals[signal_index])
-        for i in range(signal_index*shift_length, len(fused_signal)):
-            fused_signal[i].append(signals[signal_index][i-signal_index*shift_length])
-        for entry in signals[signal_index][signal_length-shift_length:]:
-            fused_signal.append([entry])
+    for signal_index in range(len(signals)):
+        this_signal = signals[signal_index]
+        this_shift_length = shift_lengths[signal_index]
+
+        for i in range(0, len(this_signal)):
+            fused_signal[i + this_shift_length].append(this_signal[i])
     
     # mean collected entries or return them
-    if signal_type == "feature":
-        if isinstance(fused_signal[0][0], list):
-            return np.array([np.array(i).sum(axis=0) / len(i) for i in fused_signal], dtype=use_data_type)
-        return np.array([sum(i) / len(i) for i in fused_signal], dtype=use_data_type)
-    elif signal_type == "target":
-        return fused_signal
+    if summarize_overlapping_entries:
+        if signal_type == "feature":
+            if isinstance(fused_signal[0][0], list):
+                return np.array([np.array(i).sum(axis=0) / len(i) for i in fused_signal], dtype=use_data_type)
+            return np.array([sum(i) / len(i) for i in fused_signal], dtype=use_data_type)
+        elif signal_type == "target":
+            if isinstance(fused_signal[0][0], list):
+                raise ValueError("This should not exist.")
+            return np.array([max(set(i), key=i.count) for i in fused_signal], dtype=use_data_type)
 
 
 def fuse_splitted_signals_within_dictionaries(
@@ -809,30 +815,39 @@ def fuse_splitted_signals_within_dictionaries(
     # initialize restored dictionary and extract original ID
     restored_dictionary = dict()
     for data_dict in data_dictionaries:
-        if "shift" not in data_dict["ID"]:
+        if "*" != data_dict["ID"][-1]:
             restored_dictionary["ID"] = data_dict["ID"]
             shift_length_seconds = data_dict["shift_length_seconds"]
-            additional_keys = {key: data_dict[key] for key in data_dict if key != "ID" and key != "shift_length_seconds"}
+            additional_keys = {key: data_dict[key] for key in data_dict if key not in ["ID", "shift_length_seconds"].extend(valid_signal_keys)}
 
-    # Iterate over different signals, refuse and store them
+    # Iterate over different signals, fuse and store them
     for signal_key_index in range(0, len(valid_signal_keys)):
+        # check if signal key is present, skip if not
         signal_key = valid_signal_keys[signal_key_index]
+        if signal_key not in data_dictionaries[0]:
+            continue
+
         signal_frequency = valid_signal_frequencies[signal_key_index]
-
-        signals = [data_dict[signal_key] for data_dict in data_dictionaries]
-
-        signal_type = "feature"
-        if signal_key == "SLP_predicted":
-            signal_type = "target"
         
         shift_length = shift_length_seconds * signal_frequency
         if shift_length != int(shift_length):
             raise ValueError("Shift length must be an integer number of datapoints.")
+        
+        signals = [data_dict[signal_key] for data_dict in data_dictionaries]
+        shift_lengths = [data_dict["shift"] * shift_length for data_dict in data_dictionaries]
+        
+        signal_type = "feature"
+        summarize_overlapping_entries = True
+        if signal_key in ["SLP_predicted", "SLP"]:
+            signal_type = "target"
+        if signal_key == "SLP_predicted":
+            summarize_overlapping_entries = False
 
         fused_signal = fuse_splitted_signals(
             signals = signals,
-            shift_length = int(shift_length),
-            signal_type = signal_type
+            shift_lengths = shift_lengths,
+            signal_type = signal_type,
+            summarize_overlapping_entries = summarize_overlapping_entries
         )
 
         restored_dictionary[signal_key] = fused_signal
@@ -1535,7 +1550,7 @@ Signal Checking
 
 def check_signal_length(
         data_point: dict,
-        file_info: dict,
+        database_configuration: dict,
         signal_keys: list,
         signal_frequency_keys: list,
         tolerance: float = 0.05
@@ -1551,7 +1566,7 @@ def check_signal_length(
     ------------------------------
     data_point: dict
         Dictionary that stores signals that need to be checked
-    file_info: dict
+    database_configuration: dict
         Dictionary that holds information on signal frequencies
     signal_keys: list
         List of signal keys (strings) that access the signals in data_point
@@ -1567,7 +1582,7 @@ def check_signal_length(
         signal_key = signal_keys[signal_key_index]
         signal_frequency_key = signal_frequency_keys[signal_key_index]
         if signal_key in data_point:
-            temporary_signal_length_seconds.append(len(data_point[signal_key]) / file_info[signal_frequency_key])
+            temporary_signal_length_seconds.append(len(data_point[signal_key]) / database_configuration[signal_frequency_key])
 
     if len(temporary_signal_length_seconds) > 1:
         temporary_signal_length_seconds = np.array(temporary_signal_length_seconds)
@@ -1583,38 +1598,28 @@ Data Manager Class
 
 class SleepDataManager:
     # Define class variables
-    signal_keys = ["RRI", "MAD", "SLP"]
-    signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency"] # same order is important
-    signal_window_keys = ["RRI_windows", "MAD_windows", "SLP_windows"] # same order is important
-
-    predicted_signal_keys = ["SLP_predicted", "SLP_predicted_probability"]
-    predicted_signal_frequency_keys = ["SLP_predicted_frequency", "SLP_predicted_frequency"] # same order is important
+    signal_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
+    signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_frequency", "SLP_frequency"] # same order is important
     
-    file_info = dict()
-    file_info["RRI_frequency"] = 4
-    file_info["MAD_frequency"] = 1
-    file_info["SLP_frequency"] = 1/30
-
-    file_info["SLP_predicted_frequency"] = 1/30
+    database_configuration = dict()
+    database_configuration["RRI_frequency"] = 4
+    database_configuration["MAD_frequency"] = 1
+    database_configuration["SLP_frequency"] = 1/30
     
-    file_info["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
-    file_info["MAD_inlier_interval"] = [None, None] # No MAD values are altered
-    file_info["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+    # database_configuration["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
+    # database_configuration["MAD_inlier_interval"] = [None, None] # No MAD values are altered
+    # database_configuration["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
 
-    file_info["signal_length_seconds"] = 36000
-    file_info["wanted_shift_length_seconds"] = 5400
-    file_info["absolute_shift_deviation_seconds"] = 1800
+    database_configuration["signal_length_seconds"] = None
+    database_configuration["wanted_shift_length_seconds"] = None
+    database_configuration["absolute_shift_deviation_seconds"] = None
 
-    file_info["signal_split_reversed"] = False
+    database_configuration["number_datapoints"] = None
 
-    file_info["train_val_test_split_applied"] = False
-    file_info["main_file_path"] = "unassigned"
-    file_info["train_file_path"] = "unassigned"
-    file_info["validation_file_path"] = "unassigned"
-    file_info["test_file_path"] = "unassigned"
+    database_configuration["train_val_test_split_applied"] = False
 
 
-    def __init__(self, file_path):
+    def __init__(self, directory_path: str):
         """
         Initialize the SleepDataManager class.
 
@@ -1624,58 +1629,42 @@ class SleepDataManager:
 
         ARGUMENTS:
         ------------------------------
-        file_path: str
-            path to the pickle file
+        directory_path: str
+            path to the directory which will store all data in appropriate files
         """
 
-        self.file_path = file_path
+        self.directory_path = directory_path
+        self.configuration_path = directory_path + "configuration.pkl"
+        self.main_file_path = directory_path + "data.pkl"
+        self.train_file_path = directory_path + "training_pid.pkl"
+        self.validation_file_path = directory_path + "validation_pid.pkl"
+        self.test_file_path = directory_path + "test_pid.pkl"
 
         # load general information from file
-        file_generator = load_from_pickle(self.file_path)
-        self.file_info = next(file_generator)
-        del file_generator
-
-        # edit some general information
-        if self.file_info["main_file_path"] == "unassigned":
-            self.file_info["main_file_path"] = self.file_path
-            self.file_info["train_file_path"] = self.file_path[:-4] + "_training_pid.pkl"
-            self.file_info["validation_file_path"] = self.file_path[:-4] + "_validation_pid.pkl"
-            self.file_info["test_file_path"] = self.file_path[:-4] + "_test_pid.pkl"
-
+        with open(self.configuration_path, "rb") as f:
+            self.database_configuration = pickle.load(f)
 
     # Getter and setter for file_path
     @property
-    def file_path(self):
-        return self._file_path
+    def directory_path(self):
+        return self._directory_path
 
-    @file_path.setter
-    def file_path(self, value):
-        # check if file is a pickle file
-        if value[-4:] != ".pkl":
-            raise ValueError("File must be a pickle file.")
+    @directory_path.setter
+    def directory_path(self, value):
 
         create_directories_along_path(value)
 
-        self._file_path = value
+        self._directory_path = value
 
         # Check if file exists, if not create it and save default file information
-        if not os.path.exists(self._file_path):
+        if not os.path.exists(self.configuration_path):
             # Check if the parameters ensure correct signal processing
-            all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-            all_signal_frequency_keys.append("SLP_predicted_frequency")
-            all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
-            minimum_signal_frequency = min(all_signal_frequencies)
+            signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
+            minimum_signal_frequency = min(signal_frequencies)
             if minimum_signal_frequency <= 0:
                 raise ValueError("Signal Frequencies must be larger than 0!")
             
-            # Check if signals can be split and fused correctly
-            retrieve_possible_shift_lengths(
-                min_shift_seconds = max(self.file_info["wanted_shift_length_seconds"]-self.file_info["absolute_shift_deviation_seconds"], 1),
-                max_shift_seconds = self.file_info["wanted_shift_length_seconds"]+self.file_info["absolute_shift_deviation_seconds"],
-                all_signal_frequencies = all_signal_frequencies
-            )
-            
-            save_to_pickle(data = self.file_info, file_name = self._file_path)
+            save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
     def _correct_datapoint(self, new_data):
@@ -1710,14 +1699,22 @@ class SleepDataManager:
         if "ID" not in new_data:
             raise ValueError("The ID key: \"ID\" must be provided in the datapoint.")
         
-        valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability", "SLP_predicted_frequency"]
+        valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability"]
         
         # Check if ID key is misleading
         if new_data["ID"] in valid_datapoint_keys:
             raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
-        if "shift" in new_data["ID"]:
-            if len(self._collect_splitted_datapoint_ids(new_data["ID"])) == 1:
-                raise ValueError("Value for ID key: \"ID\" must not contain the string: \"shift\"!")
+        if "*" == new_data["ID"][-1]:
+            file_generator = load_from_pickle(self.main_file_path)
+            found_id = False
+            for existing_data in file_generator:
+                if existing_data["ID"] == new_data["ID"]:
+                    found_id = True
+                    break
+            del file_generator
+
+            if not found_id:
+                raise ValueError("Value for ID key: \"ID\" must not end with the character: \"*\"!")
         
         # Check if key in new_data is unknown
         for new_data_key in new_data:
@@ -1730,27 +1727,10 @@ class SleepDataManager:
             signal_frequency_key = self.signal_frequency_keys[signal_key_index]
             if signal_key in new_data and signal_frequency_key not in new_data:
                 raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
-            if signal_frequency_key in new_data and signal_key not in new_data:
-                raise ValueError(f"What sense does it make to provide a sampling frequency \"{signal_frequency_key}\" without the corresponding signal \"{signal_key}\" ?")
-        
+            
         # Check if declaration of sleep stage labels was provided when SLP signal is provided
         if "SLP" in new_data and "sleep_stage_label" not in new_data:
             raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
-        if "sleep_stage_label" in new_data and "SLP" not in new_data:
-            raise ValueError("What sense does it make to provide sleep stage labels without the corresponding SLP signal?")
-        
-        # Check if predicted frequency matches the one in the file
-        if "SLP_predicted_frequency" in new_data and new_data["SLP_predicted_frequency"] != self.file_info["SLP_predicted_frequency"]:
-            raise ValueError("Predicted frequency must match the one in the file!")
-        
-        # Check if predicted frequency keys are provided if predicted signal keys are provided
-        for signal_key_index in range(0, len(self.predicted_signal_keys)):
-            signal_key = self.predicted_signal_keys[signal_key_index]
-            signal_frequency_key = self.predicted_signal_frequency_keys[signal_key_index]
-            if signal_key in new_data and signal_frequency_key not in new_data:
-                raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
-            if signal_frequency_key in new_data and signal_key not in new_data:
-                raise ValueError(f"What sense does it make to provide a sampling frequency \"{signal_frequency_key}\" without the corresponding signal \"{signal_key}\" ?")
         
         """
         -------------------------------
@@ -1765,100 +1745,65 @@ class SleepDataManager:
         for signal_key in self.signal_keys:
             if signal_key in new_data:
                 new_data[signal_key] = np.array(new_data[signal_key])
-                if signal_key == "RRI":
-                    new_data[signal_key] = remove_outliers(new_data[signal_key], self.file_info["RRI_inlier_interval"])
-                elif signal_key == "MAD":
-                    new_data[signal_key] = remove_outliers(new_data[signal_key], self.file_info["MAD_inlier_interval"])
-        
-        for pred_signal_key in self.predicted_signal_keys:
-            if pred_signal_key in new_data:
-                new_data[pred_signal_key] = np.array(new_data[pred_signal_key])
 
         # make sure sampling frequency matches the one in the file, rescale signal if necessary
         for signal_key_index in range(0, len(self.signal_keys)):
             signal_key = self.signal_keys[signal_key_index]
             signal_frequency_key = self.signal_frequency_keys[signal_key_index]
-            if signal_key in new_data and new_data[signal_frequency_key] != self.file_info[signal_frequency_key]:
+            if signal_key in new_data and new_data[signal_frequency_key] != self.database_configuration[signal_frequency_key]:
                 this_signal_type = "classification" if signal_key == "SLP" else "continuous"
                 new_data[signal_key] = scale_signal(
                     signal = new_data[signal_key],
                     signal_frequency = new_data[signal_frequency_key],
-                    target_frequency = self.file_info[signal_frequency_key],
+                    target_frequency = self.database_configuration[signal_frequency_key],
                     signal_type = this_signal_type
                     )
                 del this_signal_type
-                new_data[signal_frequency_key] = self.file_info[signal_frequency_key]
-        
-        # make sure sleep stage labels match the ones in the file
-        if "SLP" in new_data:
-            new_data["SLP"] = alter_slp_labels(
-                slp_labels = new_data["SLP"],
-                current_labels = new_data["sleep_stage_label"],
-                desired_labels = self.file_info["sleep_stage_label"]
-                )
-        
-        # Remove sleep stage label key from new_data (label should match the one in the file, saving it is unnecessary)
-        if "sleep_stage_label" in new_data:
-            del new_data["sleep_stage_label"]
+                new_data[signal_frequency_key] = self.database_configuration[signal_frequency_key]
         
         # check if signal length is uniform in new data point (in case ID does not exist in database)
         check_signal_length(
             data_point = new_data,
-            file_info = self.file_info,
+            database_configuration = self.database_configuration,
             signal_keys = self.signal_keys,
             signal_frequency_keys = self.signal_frequency_keys,
         )
-
-        # make sure signal length is not longer than the one in the file
-            # check if signal is too long
-        split_signals_needed = False
-        for signal_key_index in range(0, len(self.signal_keys)):
-            signal_key = self.signal_keys[signal_key_index]
-            signal_frequency_key = self.signal_frequency_keys[signal_key_index]
-            if signal_key in new_data:   
-                if len(new_data[signal_key]) > np.ceil(self.file_info["signal_length_seconds"] * self.file_info[signal_frequency_key]):
-                    split_signals_needed = True
-                    break
-                
-            # split signals in dictionary and create new data dictionaries with unique ID, pass each 
-            # dictionary again to save_data
-        if split_signals_needed:
-            signal_keys_in_new_data = [key for key in self.signal_keys if key in new_data]
-            signal_frequency_keys_in_new_data = [key for key in self.signal_frequency_keys if key in new_data]
-            corresponding_frequencies = [new_data[key] for key in signal_frequency_keys_in_new_data]
-            corresponding_target_frequencies = [self.file_info[key] for key in signal_frequency_keys_in_new_data]
-
-            all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-            all_signal_frequency_keys.append("SLP_predicted_frequency")
-            all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
         
         # Remove frequency keys from new_data (frequency should match the one in the file, saving it is unnecessary)
         for signal_frequency_key in self.signal_frequency_keys:
             if signal_frequency_key in new_data:
                 del new_data[signal_frequency_key]
-        for pred_signal_frequency_key in self.predicted_signal_frequency_keys:
-            if pred_signal_frequency_key in new_data:
-                del new_data[pred_signal_frequency_key]
-
+        
+        # if datapoints in database were split, also split the new datapoint
+        split_signals_needed = False
+        if self.database_configuration["signal_length_seconds"] is not None:
+            # make sure signal length is not longer than requested
+            for signal_key_index in range(0, len(self.signal_keys)):
+                signal_key = self.signal_keys[signal_key_index]
+                signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                if signal_key in new_data:   
+                    if len(new_data[signal_key]) > np.ceil(self.database_configuration["signal_length_seconds"] * self.database_configuration[signal_frequency_key]):
+                        split_signals_needed = True
+                        break
+            
+        # split signals in dictionary and create new data dictionaries with ID that marks them as splits
         if split_signals_needed:
             splitted_data_dictionaries = split_signals_within_dictionary(
                 data_dict = new_data,
                 id_key = "ID",
-                valid_signal_keys = signal_keys_in_new_data,
-                signal_frequencies = corresponding_frequencies,
-                signal_target_frequencies = corresponding_target_frequencies,
-                all_signal_frequencies = all_signal_frequencies,
-                nn_signal_duration_seconds = self.file_info["signal_length_seconds"],
-                wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"],
-                absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
+                signal_keys = self.signal_keys,
+                signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
+                signal_length_seconds = self.database_configuration["signal_length_seconds"],
+                wanted_shift_length_seconds = self.database_configuration["wanted_shift_length_seconds"],
+                absolute_shift_deviation_seconds = self.database_configuration["absolute_shift_deviation_seconds"]
                 ) # returns a list of dictionaries
-
+            
             return splitted_data_dictionaries
-        else:
-            return [new_data]
+        
+        return [new_data]
     
 
-    def _save_datapoint(self, new_data, unique_id = False, overwrite_id = True):
+    def _save_datapoint(self, new_data, unique_id = False, number_new_datapoints = 1):
         """
         Save single datapoint to the file. If the ID already exists in the file, the existing data will be overwritten
         with new values, if allowed.
@@ -1879,68 +1824,68 @@ class SleepDataManager:
         unique_id: bool
             If True, the ID will be expected to be unique and directly appended to the file.
             if False, current files will be checked to see if the ID already exists.
-        overwrite_id: bool
-            If True, the existing data will be overwritten with new values if the ID already exists in the file.
-            If False, the data will not be saved if the ID already exists in the file.
+        number_new_datapoints: int
+            The number of splitted parts the datapoint was split into. If 0, the datapoint was not split.
         """
         
         if unique_id:
-            # Append new data point to the file
-            append_to_pickle(data = new_data, file_name = self.file_path)
-        else:
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
+            self.database_configuration["number_datapoints"] += number_new_datapoints
+            save_to_pickle(self.database_configuration, self.configuration_path)
             
+            # Append new data point to the file
+            append_to_pickle(data = new_data, file_name = self.main_file_path)
+
+        else:
             # Create temporary file to save data in progress
-            working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+            working_file_path = self.directory_path + "save_in_progress"
             working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+            working_file = open(working_file_path, "ab")
 
-            # save file information to working file
-            save_to_pickle(data = next(file_generator), file_name = working_file_path)
+            # save database configuration
+            if self.database_configuration["number_datapoints"] is None:
+                self.database_configuration["number_datapoints"] = number_new_datapoints
+            else:
+                self.database_configuration["number_datapoints"] += number_new_datapoints
+            save_to_pickle(self.database_configuration, self.configuration_path)
 
-            overwrite_denied = False
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.main_file_path)
+
+            # Check if ID already exists in the data file, then overwrite keys
             not_appended = True
-
-            # Check if ID already exists in the data file, then overwrite keys if allowed
             for data_point in file_generator:
                 if data_point["ID"] == new_data["ID"]:
+                    print(f"ID \'{new_data['ID']}\' already exists in the data file. Existing keys will be overwritten with new values.")
                     not_appended = False
 
-                    # overwrite signals in datapoint if possible
-                    if overwrite_id:
-                        for key in new_data:
-                            data_point[key] = new_data[key]
+                    for key in new_data:
+                        data_point[key] = new_data[key]
                         
-                        # check if signal length is uniform with new signals
-                        check_signal_length(
-                            data_point = data_point,
-                            file_info = self.file_info,
-                            signal_keys = self.signal_keys,
-                            signal_frequency_keys = self.signal_frequency_keys,
-                        )
-                    else:
-                        overwrite_denied = True
+                    # check if signal length is uniform with new signals
+                    check_signal_length(
+                        data_point = data_point,
+                        database_configuration = self.database_configuration,
+                        signal_keys = self.signal_keys,
+                        signal_frequency_keys = self.signal_frequency_keys,
+                    )
                 
                 # Append data point to the working file
-                append_to_pickle(data = data_point, file_name = working_file_path)
+                pickle.dump(data_point, working_file)
             
             # Append new data point if ID was not found
             if not_appended:
-                append_to_pickle(data = new_data, file_name = working_file_path)
+                pickle.dump(data_point, working_file)
+            
+            # close the working file
+            working_file.close()
             
             # Remove the old file and rename the working file
-            try:
-                os.remove(self.file_path)
-            except:
-                pass
-
-            os.rename(working_file_path, self.file_path)
-
-            if overwrite_denied:
-                raise ValueError("ID already existed in the data file and Overwrite was denied. Data was not saved.")
+            if os.path.exists(self.main_file_path):
+                os.remove(self.main_file_path)
+            os.rename(working_file_path, self.main_file_path)
     
 
-    def save(self, data_dict, unique_id = False, overwrite_id = True):
+    def save(self, data_dict, unique_id = False):
         """
         Save data to the file. If the ID already exists in the file, the existing data will be overwritten
         with new values, if allowed.
@@ -1979,10 +1924,6 @@ class SleepDataManager:
             if False, current files will be checked to see if the ID already exists.
         """
 
-        # prevent running this function if signal split was reversed
-        if self.file_info["signal_split_reversed"]:
-            raise ValueError("This function can not be called after the signal split was reversed.")
-
         # prevent runnning this function from secondary files (train, validation, test)
         if self.file_path != self.file_info["main_file_path"]:
             raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
@@ -1993,7 +1934,7 @@ class SleepDataManager:
 
         corrected_data_dicts = self._correct_datapoint(copy.deepcopy(data_dict))
         # only first dictionary needs to be checked if present in database, as appending id's containing "shift" will not be allowed
-        self._save_datapoint(corrected_data_dicts[0], unique_id, overwrite_id)
+        self._save_datapoint(corrected_data_dicts[0], unique_id)
 
         # append all other dictionaries at once
         with open(self.file_path, "ab") as f:
@@ -2060,7 +2001,7 @@ class SleepDataManager:
 
         # check if key_id_index is an id, a key, or an index
         load_keys = False
-        valid_keys = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]
+        valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
         load_id = False
         load_index = False
 
@@ -2117,43 +2058,97 @@ class SleepDataManager:
         del file_generator
     
 
-    def _collect_splitted_datapoint_ids(self, id):
+    def split_to_uniform_length(
+            self,
+            signal_length_seconds: int,
+            wanted_shift_length_seconds: int,
+            absolute_shift_deviation_seconds: int
+        ):
         """
-        Collect all IDs of the datapoints that resulted from splitting a datapoint with the ID 'id'.
-
-        RETURNS:
-        ------------------------------
-        ids: list
-            List of IDs of the splitted datapoints.
-        
-        ARGUMENTS:
-        ------------------------------
-        id: str
-            The ID of the datapoint that might have been split.
         """
 
-        for char_index in range(0, len(id)):
-            if "_shift" in id[char_index:]:
-                return self._collect_splitted_datapoint_ids(id[:char_index+1])
+        try:
+            # reverse signal split if it was applied
+            if self.file_info["signal_length_seconds"] is not None:
+                if signal_length_seconds == self.file_info["signal_length_seconds"] and wanted_shift_length_seconds == self.file_info["wanted_shift_length_seconds"] and absolute_shift_deviation_seconds == self.file_info["absolute_shift_deviation_seconds"]:
+                    print("\nSignals were already split into uniform length using current settings. No need to split again.")
+                    return
+                print("\nSignals were already split into uniform length. Reversing the split to apply new split.")
+                self.reverse_signal_split()
+            
+            # Check if signals can be split and fused correctly
+            retrieve_possible_shift_lengths(
+                min_shift_seconds = max(wanted_shift_length_seconds-absolute_shift_deviation_seconds, 1),
+                max_shift_seconds = wanted_shift_length_seconds+absolute_shift_deviation_seconds,
+                all_signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys]
+            )
+
+            # Create temporary file to save data in progress
+            working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+            working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+            # update and save file information to working file
+            self.file_info["signal_length_seconds"] = signal_length_seconds
+            self.file_info["wanted_shift_length_seconds"] = wanted_shift_length_seconds
+            self.file_info["absolute_shift_deviation_seconds"] = absolute_shift_deviation_seconds
+            self.file_info["number_datapoints"] = None # reset number of datapoints, as it will be updated after splitting
+            save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+            # Initialize progress bar
+            print(f"\nSplitting database entries into multiple ones to ensure the contained signals span at most across: {signal_length_seconds} seconds.")
+            progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
+
+            # Load data generator from the file
+            file_generator = load_from_pickle(self.file_path)
+
+            # skip file information
+            next(file_generator)
+
+            # iterate over database entries
+            for data_point in file_generator:
+                # make sure signal length is not longer than requested
+                split_signals_needed = False
+                for signal_key_index in range(0, len(self.signal_keys)):
+                    signal_key = self.signal_keys[signal_key_index]
+                    signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                    if signal_key in data_point:   
+                        if len(data_point[signal_key]) > np.ceil(signal_length_seconds * self.file_info[signal_frequency_key]):
+                            split_signals_needed = True
+                            break
+                    
+                # split signals in dictionary and create new data dictionaries with ID that marks them as splits
+                if split_signals_needed:
+            
+                    splitted_data_dictionaries = split_signals_within_dictionary(
+                        data_dict = data_point,
+                        id_key = "ID",
+                        signal_keys = self.signal_keys,
+                        signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys],
+                        signal_length_seconds = signal_length_seconds,
+                        wanted_shift_length_seconds = wanted_shift_length_seconds,
+                        absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
+                        ) # returns a list of dictionaries
+                    
+                    # append all other dictionaries at once
+                    with open(working_file_path, "ab") as f:
+                        for splitted_data_dict in splitted_data_dictionaries:
+                            pickle.dump(splitted_data_dict, f)
+                else:
+                    # Append data point to the working file
+                    append_to_pickle(data = data_point, file_name = working_file_path)
+                
+                # Update progress bar
+                progress_bar.update()
+            
+            # Remove the old file and rename the working file
+            if os.path.exists(self.file_path):
+                os.remove(self.file_path)
+            os.rename(working_file_path, self.file_path)
         
-        ids = [id]
-
-        common_string = id + "_shift"
-        common_string_length = len(common_string)
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # Skip file information
-        next(file_generator)
-
-        for data_point in file_generator:
-            if data_point["ID"][:common_string_length] == common_string:
-                ids.append(data_point["ID"])
-        
-        del file_generator
-
-        return ids
+        finally:
+            # remove working file if it still exists
+            if os.path.exists(working_file_path):
+                os.remove(working_file_path)
     
 
     def remove(self, key_id_index):
@@ -2177,34 +2172,7 @@ class SleepDataManager:
         """
 
         # check if key_id_index is an id, a key, or an index
-        remove_keys = False
         valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
-        remove_id = False
-
-        if isinstance(key_id_index, str):
-            if key_id_index in valid_keys:
-                remove_keys = True
-            else:
-                remove_id = True
-        elif isinstance(key_id_index, int):
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
-
-            count = -1
-            index_out_of_bounds = True
-            for data_point in file_generator:
-                if count == key_id_index:
-                    self.remove(data_point["ID"])
-                    index_out_of_bounds = False
-                count += 1
-            
-            if index_out_of_bounds:
-                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
-            
-            del file_generator
-            return
-        else:
-            raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2213,37 +2181,58 @@ class SleepDataManager:
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
-        # save file information to working file
-        save_to_pickle(data = next(file_generator), file_name = working_file_path)
+        # update and save file information to working file
+        current_file_info = next(file_generator)
+        current_file_info["number_datapoints"] = None
+        save_to_pickle(data = current_file_info, file_name = working_file_path)
 
-        # Remove data point from the working file
-        if remove_id:
-            ids_from_splitted_datapoints = self._collect_splitted_datapoint_ids(key_id_index)
-            id_found = False
+        if isinstance(key_id_index, str):
+            if key_id_index[-1] == "*":
+                key_id_index = key_id_index[:-1]  # remove trailing '*' if present
+
+            # remove all keys from the data points
+            if key_id_index in valid_keys:
+                # Load data generator from the file
+                with open(working_file_path, "ab") as f:
+                    for data_point in file_generator:
+                        if key_id_index in data_point:
+                            del data_point[key_id_index]
+                        pickle.dump(data_point, f)
+            else:
+                id_not_found = True
+                with open(working_file_path, "ab") as f:
+                    for data_point in file_generator:
+                        if data_point["ID"] == key_id_index or data_point["ID"] == key_id_index + "*":
+                            id_not_found = False
+                            continue
+                        pickle.dump(data_point, f)
+                
+                if id_not_found:
+                    raise ValueError(f"ID {key_id_index} not found in the data file.")
+                
+        elif isinstance(key_id_index, int):
+            count = 0
+            index_out_of_bounds = True
+
             for data_point in file_generator:
-                if data_point["ID"] in ids_from_splitted_datapoints:
-                    id_found = True
-                else:
-                    append_to_pickle(data = data_point, file_name = working_file_path)
+                if count == key_id_index:
+                    index_out_of_bounds = False
+                    self.remove(data_point["ID"])  # remove data point by ID
+                    break
+                count += 1
             
-            if not id_found:
-                raise ValueError(f"ID {key_id_index} not found in the data file.")
-        
-        elif remove_keys:
-            for data_point in file_generator:
-                if key_id_index in data_point:
-                    del data_point[key_id_index]
-                append_to_pickle(data = data_point, file_name = working_file_path)
+            if index_out_of_bounds:
+                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
 
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
+        else:
+            raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
 
         del file_generator
+
+        # Remove the old file and rename the working file
+        if os.path.exists(self.file_path):
+            os.remove(self.file_path)
+        os.rename(working_file_path, self.file_path)
     
 
     def reverse_signal_split(self):
@@ -2265,54 +2254,45 @@ class SleepDataManager:
         None
         """
 
-        # prevent running this function if it was already applied
-        if self.file_info["signal_split_reversed"]:
-            raise ValueError("This function was already applied to the data.")
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function should not be called for data you want to use for training and validating the neural network.")
+        # prevent running this function signals are not split
+        if self.file_info["signal_length_seconds"] is None:
+            print("\nData was not split yet. No need to reverse the split.")
+            return
 
         # load all data point ids
         all_ids = self.load("ID")
 
-        # find base ids of splitted signals
-        base_id_of_splitted_signals_list = list()
+        # put all ids that are part of a splitted signal into a list
+        split_ids = []
         for this_id in all_ids: # type: ignore
-            for char_index in range(0, len(this_id)):
-                if "_shift" == this_id[char_index:char_index+6]:
-                    base_id = this_id[:char_index]
-                    if base_id not in base_id_of_splitted_signals_list:
-                        base_id_of_splitted_signals_list.append(base_id)
-        
-        # collect all splitted signal ids for each base id into an individual list
-        splitted_signal_ids = [[base_id] for base_id in base_id_of_splitted_signals_list]
-        for this_id in all_ids: # type: ignore
-            for base_id_index in range(len(base_id_of_splitted_signals_list)):
-                base_id = base_id_of_splitted_signals_list[base_id_index]
-                if base_id + "_shift" == this_id[:len(base_id) + 6]:
-                    splitted_signal_ids[base_id_index].append(this_id)
-                    break
+            if "*" == this_id[-1]:
+                if this_id[:-1] not in split_ids:
+                    split_ids.append(this_id[:-1])
 
         # Create temporary files to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
-        self.file_info["signal_split_reversed"] = True
-
-        # save file information to working file
+        # update and save file information to working file
+        self.file_info["signal_length_seconds"] = None
+        self.file_info["wanted_shift_length_seconds"] = None
+        self.file_info["absolute_shift_deviation_seconds"] = None
+        self.file_info["number_datapoints"] = None # reset number of datapoints
         save_to_pickle(data = self.file_info, file_name = working_file_path)
+        working_file = open(working_file_path, "ab")
 
-        # create a separate file for each id list (massively reduces computation time)
+        # create a separate file for each splitted parts (massively reduces computation time)
         id_list_paths = list()
-        for i in range(len(splitted_signal_ids)):
-            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/splitted_signals_" + str(i)
+        for i in range(len(split_ids)):
+            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/_splitted_signals_" + str(i)
             id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
             id_list_paths.append(id_list_path)
 
+        open_files = [open(path, "ab") for path in id_list_paths]
+
         # Initialize progress bar
-        print("\nDistributing split data parts into individual files (Subprocess of Reversing Signal Split):")
-        progress_bar = DynamicProgressBar(total = len(all_ids)) # type: ignore
+        print("\nDistributing splitted data parts into individual files (Subprocess of Reversing Signal Split):")
+        progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
 
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
@@ -2324,18 +2304,22 @@ class SleepDataManager:
         for data_point in file_generator:
             this_id = data_point["ID"]
             appended = False
-            for id_list_index in range(len(splitted_signal_ids)):
-                if this_id in splitted_signal_ids[id_list_index]:
-                    append_to_pickle(data = data_point, file_name = id_list_paths[id_list_index])
+            for id_list_index in range(len(split_ids)):
+                if this_id == split_ids[id_list_index] or this_id == split_ids[id_list_index] + "*":
+                    pickle.dump(data_point, open_files[id_list_index])
                     appended = True
                     break
             if not appended:
-                append_to_pickle(data = data_point, file_name = working_file_path)
+                pickle.dump(data_point, working_file)
             
             # update progress bar
             progress_bar.update()
         
         del file_generator, progress_bar
+
+        # Close all open files
+        for open_file in open_files:
+            open_file.close()
 
         # Initialize progress bar
         print("\nMerging data points back into the main file and reversing the Signal Split:")
@@ -2355,26 +2339,15 @@ class SleepDataManager:
             
             del file_generator
 
-            # find valid signal keys and frequencies in data dictionaries
-            valid_signal_keys = copy.deepcopy(self.signal_keys)
-            valid_signal_keys.extend(self.predicted_signal_keys)
-            valid_signal_frequencies = copy.deepcopy(self.signal_frequency_keys)
-            valid_signal_frequencies.extend(self.predicted_signal_frequency_keys)
-            valid_signal_frequencies = [self.file_info[key] for key in valid_signal_frequencies]
-            for valid_signal_key_index in range(len(valid_signal_keys)-1, -1, -1):
-                if valid_signal_keys[valid_signal_key_index] not in splitted_data_dictionaries[0]:
-                    del valid_signal_keys[valid_signal_key_index]
-                    del valid_signal_frequencies[valid_signal_key_index]
-
             # fuse splitted data dictionaries
             fused_dictionary = fuse_splitted_signals_within_dictionaries(
                 data_dictionaries = splitted_data_dictionaries,
-                valid_signal_keys = valid_signal_keys,
-                valid_signal_frequencies = valid_signal_frequencies,
+                valid_signal_keys = self.signal_keys,
+                valid_signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys],
             )
 
             # append fused dictionary to working file
-            append_to_pickle(data = fused_dictionary, file_name = working_file_path)
+            pickle.dump(fused_dictionary, working_file)
 
             # remove file containing transferred data points
             os.remove(id_path)
@@ -2382,58 +2355,12 @@ class SleepDataManager:
             # update progress bar
             progress_bar.update()
         
+        # close working file
+        working_file.close()
+        
         # Remove the old file and rename the working file
-        try:
+        if os.path.exists(self.file_path):
             os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
-
-
-    def order_datapoints(self, custom_order = ["ID", "RRI", "RRI_windows", "MAD", "MAD_windows", "SLP", "SLP_windows", "SLP_predicted", "SLP_predicted_probability"]):
-        """
-        Order the keys in the datapoints of the database for better readability when printing.
-        Quite useless I know... But you know, maybe there is someone out there who appreciates this feature.
-
-        RETURNS:
-        ------------------------------
-        None
-
-        ARGUMENTS:
-        ------------------------------
-        custom_order: list
-            The order in which the keys should be ordered.
-        """
-
-        # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
-            raise ValueError("This function can only be called before data was split into training, validation, and test files.")
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-        
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # save file information to working file
-        save_to_pickle(data = next(file_generator), file_name = working_file_path)
-
-        # order keys in datapoints
-        for datapoint in file_generator:
-            ordered_datapoint = dict()
-            ordered_datapoint["ID"] = datapoint["ID"]
-            for key in custom_order:
-                if key in datapoint:
-                    ordered_datapoint[key] = datapoint[key]
-            append_to_pickle(data = ordered_datapoint, file_name = working_file_path)
-        
-        # delete old file and rename working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
         os.rename(working_file_path, self.file_path)
     
 
@@ -2444,8 +2371,8 @@ class SleepDataManager:
             test_size = None, 
             random_state = None, 
             shuffle = True,
-            join_splitted_parts = False,
-            stratify = False
+            join_splitted_parts = True,
+            equally_distribute_signal_durations = True,
         ):
         """
         Depending whether "test_size" = None/float: Separate the data in the file into training and validation 
@@ -2503,9 +2430,14 @@ class SleepDataManager:
         """
 
         # check arguments:
-        if join_splitted_parts and stratify:
-            stratify = False
-            print("Attention: Stratification does not make sense when 'join_splitted_parts' is True, as joining the splitted parts corresponds to distributing datapoints representing a 'whole night' of recording. Therefore, stratification will be disabled.")
+        if join_splitted_parts and self.file_info["signal_length_seconds"] is not None:
+            signal_length_seconds = self.file_info["signal_length_seconds"]
+            wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"]
+            absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
+            print("\nAttention: 'join_splitted_parts' is set to True, but the data was already split into uniform length. Depending on the number of datapoints, this could cause long computation times. Reversing signal split.")
+            self.reverse_signal_split()
+            self.separate_train_test_validation(train_size, validation_size, test_size, random_state, shuffle, join_splitted_parts, equally_distribute_signal_durations, stratify)
+            self.split_to_uniform_length(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
 
         if test_size == 0:
             test_size = None
@@ -2520,14 +2452,6 @@ class SleepDataManager:
         else:
             if train_size + validation_size + test_size != 1: # type: ignore
                 raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
-
-        # prevent running this function if signal split was reversed
-        if self.file_info["signal_split_reversed"]:
-            raise ValueError("This function can not be called after the signal split was reversed. The data can not be passed to the neural network model anymore. Splitting the data into training, validation, and test files is unnecessary.")
-
-        # prevent runnning this function from secondary files (train, validation, test)
-        if self.file_path != self.file_info["main_file_path"]:
-            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
 
         # Fuse data back together if train_val_test_split_applied is True
         if self.file_info["train_val_test_split_applied"]:
@@ -2572,99 +2496,27 @@ class SleepDataManager:
                 print(f"Attention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
         
         del id_with_rri_and_mad, id_with_rri
-        
-        # collect unique original datapoints and number of parts resulted from splitting
-        original_identifications = [id for id in consider_identifications if "_shift_" not in id]
-        splitted_data_ids = [id for id in consider_identifications if "_shift_" in id]
-        original_id_splits = [1 for _ in original_identifications]  # initialize with 1, will be filled later
 
-        for id in splitted_data_ids:
-            for id_index in range(len(id)):
-                if id[id_index:id_index+7] == "_shift_":
-                    base_id = id[:id_index]
-                    if base_id in original_identifications:
-                        original_id_splits[original_identifications.index(base_id)] += 1
-                    break
-        
-        del splitted_data_ids
+        """
+        To enable that the duration of the signals is equally distributed across the pids, we will assign
+        the duration as class label and enable stratification.
+        """
+        if equally_distribute_signal_durations:
+            # collect signal durations (we'll exploit just the rri length as this signal must be present) for each id
+            rri_signal_lengths = [0 for _ in range(len(consider_identifications))]
 
-        # ensure that each group has at least 2 (if test_size is None) or 3 datapoints (if test_size is not None)
-        if join_splitted_parts and len(original_identifications) < 2 and test_size is None:
-            raise ValueError("There are not enough originally saved data points to split into training and validation data. Either aquire more data or set 'join_splitted_parts' to False.")
-        if join_splitted_parts and len(original_identifications) < 3 and test_size is not None:
-            raise ValueError("There are not enough originally saved data points to split into training, validation, and test data. Either aquire more data or set 'join_splitted_parts' to False.")
-        if not join_splitted_parts and len(consider_identifications) < 2 and test_size is None:
-            raise ValueError("There are not enough data points to split into training and validation data. Aquire more data or consider splitting it into more parts by decreasing the signal length.")
-        if not join_splitted_parts and len(consider_identifications) < 3 and test_size is not None:
-            raise ValueError("There are not enough data points to split into training, validation, and test data. Aquire more data or consider splitting it into more parts by decreasing the signal length.")
-        
-        # Collect sleep stage labels if stratification is requested
-        if stratify:
-            # Load data generator from the file
             file_generator = load_from_pickle(self.file_path)
-
-            # skip file information
             next(file_generator)
-
-            # collect sleep stage label that appears the most often for each data point
-            majority_sleep_stage = [0 for _ in range(len(consider_identifications))]
             for data_point in file_generator:
                 if data_point["ID"] in consider_identifications:
-                    # collect unique labels and their counts
-                    different_labels, label_counts = np.unique(data_point["SLP"], return_counts=True)
-                    majority_sleep_stage[consider_identifications.index(data_point["ID"])] = different_labels[np.argmax(label_counts)]
-                    last_valid_datapoint = data_point
-            
-            # Warn user of stratification
-            if len(last_valid_datapoint["SLP"]) > 10:
-                print(f"WARNING: To enable stratification, every datapoint can only be represented by one sleep stage. Each of your datapoints currently contains {len(last_valid_datapoint['SLP'])} sleep stages. As usual, the most common sleep stage will be used to represent the datapoint. However, due to the number of sleep stages, this may not be representative of the actual sleep stage distribution in your data.")
-            
-            del file_generator, last_valid_datapoint
+                    # calculate signal duration in seconds
+                    rri_signal_lengths[consider_identifications.index(data_point["ID"])] = len(data_point["RRI"])
 
-        # prepare groups of ids with equal number of splits to draw from when splitting the data later (only needed if parts of original datapoint are supposed to end up in the same pid)
-        if join_splitted_parts:
-            # distribute ids into pods with equal number of splitted parts
-            unique_number_of_splits = np.sort(np.unique(np.array(copy.deepcopy(original_id_splits), dtype=np.float64)))
-            ids_with_equal_number_splits = list()
-
-            for splits in unique_number_of_splits:
-                ids_with_equal_number_splits.append([id for id, num_splits in zip(original_identifications, original_id_splits) if num_splits == splits])
-
-            # ensure that each group holds well splittable amount of datapoints (at least 10)
-            current_index = 0
-            while True:
-                if current_index == len(ids_with_equal_number_splits) - 1:
-                    break
-
-                for ids_index in range(current_index, len(ids_with_equal_number_splits)):
-                    # append ids with equal number of splits to the next or previous group (depending on difference in number of splits) if it has less than 10 ids
-                    if len(ids_with_equal_number_splits[ids_index]) < 10:
-                        if ids_index == 0:
-                            unique_number_of_splits[ids_index+1] = (unique_number_of_splits[ids_index+1]*len(ids_with_equal_number_splits[ids_index+1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index+1]) + len(ids_with_equal_number_splits[ids_index]))
-                            ids_with_equal_number_splits[ids_index+1].extend(ids_with_equal_number_splits[ids_index])
-                            del ids_with_equal_number_splits[ids_index]
-                            unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
-                            break
-                        if ids_index == len(ids_with_equal_number_splits) - 1:
-                            unique_number_of_splits[ids_index-1] = (unique_number_of_splits[ids_index-1]*len(ids_with_equal_number_splits[ids_index-1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index-1]) + len(ids_with_equal_number_splits[ids_index]))
-                            ids_with_equal_number_splits[ids_index-1].extend(ids_with_equal_number_splits[ids_index])
-                            del ids_with_equal_number_splits[ids_index]
-                            unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
-                            current_index = ids_index
-                            break
-
-                        if unique_number_of_splits[ids_index] - unique_number_of_splits[ids_index-1] < unique_number_of_splits[ids_index+1] - unique_number_of_splits[ids_index]:
-                            unique_number_of_splits[ids_index-1] = (unique_number_of_splits[ids_index-1]*len(ids_with_equal_number_splits[ids_index-1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index-1]) + len(ids_with_equal_number_splits[ids_index]))
-                            ids_with_equal_number_splits[ids_index-1].extend(ids_with_equal_number_splits[ids_index])
-                        else:
-                            unique_number_of_splits[ids_index+1] = (unique_number_of_splits[ids_index+1]*len(ids_with_equal_number_splits[ids_index+1]) + unique_number_of_splits[ids_index]*len(ids_with_equal_number_splits[ids_index])) / (len(ids_with_equal_number_splits[ids_index+1]) + len(ids_with_equal_number_splits[ids_index]))
-                            ids_with_equal_number_splits[ids_index+1].extend(ids_with_equal_number_splits[ids_index])
-                        
-                        del ids_with_equal_number_splits[ids_index]
-                        unique_number_of_splits = np.delete(unique_number_of_splits, ids_index)
-                        break
-
-                    current_index = ids_index
+            # round signal durations to next 0.5 hours
+            binwidth = self.file_info["RRI_frequency"]*1800 # 0.5 hour of RRI datapoints
+            rri_signal_lengths = np.array(rri_signal_lengths, dtype=np.float64)
+            rri_signal_lengths = np.round(rri_signal_lengths / binwidth)
+            rri_signal_lengths = rri_signal_lengths.astype(np.int64)
             
         # Create temporary file to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
@@ -2675,72 +2527,37 @@ class SleepDataManager:
 
         # save file information to working file
         save_to_pickle(data = self.file_info, file_name = working_file_path)
+        working_file = open(working_file_path, "ab")
 
         if test_size is None:
             """
             split into training and validation data based on the chosen distribution method
             """
 
-            if not join_splitted_parts:
-                if stratify:
-                    train_data_ids, validation_data_ids = train_test_split(
-                        copy.deepcopy(consider_identifications),
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle,
-                        stratify = majority_sleep_stage
-                    )
-
-                else:
-                    train_data_ids, validation_data_ids = train_test_split(
-                        copy.deepcopy(consider_identifications),
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle
-                    )
+            if equally_distribute_signal_durations:
+                train_data_ids, validation_data_ids = train_test_split(
+                    copy.deepcopy(consider_identifications),
+                    train_size = train_size,
+                    random_state = random_state,
+                    shuffle = shuffle,
+                    stratify = rri_signal_lengths
+                )
             
             else:                
-                # initialize training and validation data ids
-                train_data_ids = list()
-                validation_data_ids = list()
+                train_data_ids, validation_data_ids = train_test_split(
+                    copy.deepcopy(consider_identifications),
+                    train_size = train_size,
+                    random_state = random_state,
+                    shuffle = shuffle,
+                )
 
-                # distribute ids with equal number of splits into training and validation pids
-                for ids_index in range(len(ids_with_equal_number_splits)):
-                    this_train_data_ids, this_validation_data_ids = train_test_split(
-                        ids_with_equal_number_splits[ids_index],
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle
-                    )
-                    
-                    train_data_ids.extend(this_train_data_ids)
-                    validation_data_ids.extend(this_validation_data_ids)
-
-                # now add the splitted parts to the training and validation data ids
-                additional_train_data_ids = list()
-                additional_validation_data_ids = list()
-
-                for train_id in train_data_ids:
-                    number_splits = original_id_splits[original_identifications.index(train_id)]
-                    for i in range(1, number_splits):
-                        additional_train_data_ids.append(train_id + "_shift_x" + str(i))
-
-                for val_id in validation_data_ids:
-                    number_splits = original_id_splits[original_identifications.index(val_id)]
-                    for i in range(1, number_splits):
-                        additional_validation_data_ids.append(val_id + "_shift_x" + str(i))
-                
-                train_data_ids.extend(additional_train_data_ids)
-                validation_data_ids.extend(additional_validation_data_ids)
-
-            # Create files and save file information to it
+            # ensure files are empty before writing
             for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"]]:
-                try:
+                if os.path.exists(file_path):
                     os.remove(file_path)
-                except:
-                    pass
-                
-                save_to_pickle(data = self.file_info, file_name = file_path)
+            
+            # open files
+            open_files = [open(self.file_info["train_file_path"], "ab"), open(self.file_info["validation_file_path"], "ab")]
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:") # type: ignore
@@ -2755,11 +2572,11 @@ class SleepDataManager:
             # save each data point to corresponding file
             for data_point in file_generator:
                 if data_point["ID"] in train_data_ids:
-                    append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
+                    pickle.dump(data_point, open_files[0])
                 elif data_point["ID"] in validation_data_ids:
-                    append_to_pickle(data = data_point, file_name = self.file_info["validation_file_path"])
+                    pickle.dump(data_point, open_files[1])
                 else:
-                    append_to_pickle(data = data_point, file_name = working_file_path)
+                    pickle.dump(data_point, working_file)
                 
                 # print progress
                 progress_bar.update()
@@ -2769,104 +2586,43 @@ class SleepDataManager:
             split into training validation and test data
             """
 
-            if not join_splitted_parts:
-                if stratify:
-                    train_data_ids, rest_data_ids = train_test_split(
-                        copy.deepcopy(consider_identifications),
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle,
-                        stratify = majority_sleep_stage
-                    )
-                    validation_data_ids, test_data_ids = train_test_split(
-                        rest_data_ids,
-                        train_size = validation_size / (1 - train_size), # type: ignore
-                        random_state = random_state,
-                        shuffle = shuffle,
-                        stratify = [majority_sleep_stage[consider_identifications.index(id)] for id in rest_data_ids]
-                    )
+            if equally_distribute_signal_durations:
+                train_data_ids, rest_data_ids = train_test_split(
+                    copy.deepcopy(consider_identifications),
+                    train_size = train_size,
+                    random_state = random_state,
+                    shuffle = shuffle,
+                    stratify = rri_signal_lengths
+                )
+                validation_data_ids, test_data_ids = train_test_split(
+                    rest_data_ids,
+                    train_size = validation_size / (1 - train_size), # type: ignore
+                    random_state = random_state,
+                    shuffle = shuffle,
+                    stratify = [rri_signal_lengths[consider_identifications.index(id)] for id in rest_data_ids]
+                )
 
-                else:
-                    train_data_ids, rest_data_ids = train_test_split(
-                        copy.deepcopy(consider_identifications),
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle
-                    )
-                    validation_data_ids, test_data_ids = train_test_split(
-                        rest_data_ids,
-                        train_size = validation_size / (1 - train_size), # type: ignore
-                        random_state = random_state,
-                        shuffle = shuffle,
-                    )
-
-            
             else:                
-                # initialize training and validation data ids
-                train_data_ids = list()
-                validation_data_ids = list()
-                test_data_ids = list()
-
-                # distribute ids with equal number of splits into training and validation pids
-                for ids_index in range(len(ids_with_equal_number_splits)):
-                    this_train_data_ids, this_rest_data_ids = train_test_split(
-                        ids_with_equal_number_splits[ids_index],
-                        train_size = train_size,
-                        random_state = random_state,
-                        shuffle = shuffle
-                    )
-
-                    # ensure that there are enough datapoints left for validation and test
-                    while True:
-                        if len(this_rest_data_ids) < 2:
-                            this_rest_data_ids.append(this_train_data_ids[0])
-                            del this_train_data_ids[0]
-                        else:
-                            break
-
-                    this_validation_data_ids, this_test_data_ids = train_test_split(
-                        this_rest_data_ids,
-                        train_size = validation_size / (1 - train_size), # type: ignore
-                        random_state = random_state,
-                        shuffle = shuffle
-                    )
-                    
-                    train_data_ids.extend(this_train_data_ids)
-                    validation_data_ids.extend(this_validation_data_ids)
-                    test_data_ids.extend(this_test_data_ids)
-
-                # now add the splitted parts to the training and validation data ids
-                additional_train_data_ids = list()
-                additional_validation_data_ids = list()
-                additional_test_data_ids = list()
-
-                for train_id in train_data_ids:
-                    number_splits = original_id_splits[original_identifications.index(train_id)]
-                    for i in range(1, number_splits):
-                        additional_train_data_ids.append(train_id + "_shift_x" + str(i))
-
-                for val_id in validation_data_ids:
-                    number_splits = original_id_splits[original_identifications.index(val_id)]
-                    for i in range(1, number_splits):
-                        additional_validation_data_ids.append(val_id + "_shift_x" + str(i))
-
-                for test_id in test_data_ids:
-                    number_splits = original_id_splits[original_identifications.index(test_id)]
-                    for i in range(1, number_splits):
-                        additional_test_data_ids.append(test_id + "_shift_x" + str(i))
-                
-                train_data_ids.extend(additional_train_data_ids)
-                validation_data_ids.extend(additional_validation_data_ids)
-                test_data_ids.extend(additional_test_data_ids)
-
-            # Create files and save file information to it
+                train_data_ids, rest_data_ids = train_test_split(
+                    copy.deepcopy(consider_identifications),
+                    train_size = train_size,
+                    random_state = random_state,
+                    shuffle = shuffle,
+                )
+                validation_data_ids, test_data_ids = train_test_split(
+                    rest_data_ids,
+                    train_size = validation_size / (1 - train_size), # type: ignore
+                    random_state = random_state,
+                    shuffle = shuffle,
+                )
+            
+            # ensure files are empty before writing
             for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"], self.file_info["test_file_path"]]:
-                try:
+                if os.path.exists(file_path):
                     os.remove(file_path)
-                except:
-                    pass
-                
-                save_to_pickle(data = self.file_info, file_name = file_path)
+
+            # open files
+            open_files = [open(self.file_info["train_file_path"], "ab"), open(self.file_info["validation_file_path"], "ab"), open(self.file_info["test_file_path"], "ab")]
 
             # print progress
             print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:") # type: ignore
@@ -2881,16 +2637,21 @@ class SleepDataManager:
             # save each data point to corresponding file
             for data_point in file_generator:
                 if data_point["ID"] in train_data_ids:
-                    append_to_pickle(data = data_point, file_name = self.file_info["train_file_path"])
+                    pickle.dump(data_point, open_files[0])
                 elif data_point["ID"] in validation_data_ids:
-                    append_to_pickle(data = data_point, file_name = self.file_info["validation_file_path"])
+                    pickle.dump(data_point, open_files[1])
                 elif data_point["ID"] in test_data_ids:
-                    append_to_pickle(data = data_point, file_name = self.file_info["test_file_path"])
+                    pickle.dump(data_point, open_files[2])
                 else:
-                    append_to_pickle(data = data_point, file_name = working_file_path)
+                    pickle.dump(data_point, working_file)
                 
                 # print progress
                 progress_bar.update()
+        
+        # close all open files
+        for open_file in open_files:
+            open_file.close()
+        working_file.close()
         
         # Remove the old file and rename the working file
         if os.path.exists(self.file_path):
@@ -2922,60 +2683,49 @@ class SleepDataManager:
         # Create temporary file to save data in progress
         working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
+        working_file = open(working_file_path, "ab")
 
         # Append data points from main file
         main_file_generator = load_from_pickle(self.file_info["main_file_path"])
         next(main_file_generator)
         for data_point in main_file_generator:
-            append_to_pickle(data = data_point, file_name = working_file_path)
+            pickle.dump(data_point, working_file)
         
         # Remove main file
-        try:
+        if os.path.exists(self.file_info["main_file_path"]):
             os.remove(self.file_info["main_file_path"])
-        except:
-            pass
 
         # Append data points from training file
         training_file_generator = load_from_pickle(self.file_info["train_file_path"])
         next(training_file_generator)
         for data_point in training_file_generator:
-            append_to_pickle(data = data_point, file_name = working_file_path)
+            pickle.dump(data_point, working_file)
         
         # Remove training file
-        try:
+        if os.path.exists(self.file_info["train_file_path"]):
             os.remove(self.file_info["train_file_path"])
-        except:
-            pass
         
         # Append data points from validation file
         validation_file_generator = load_from_pickle(self.file_info["validation_file_path"])
         next(validation_file_generator)
         for data_point in validation_file_generator:
-            append_to_pickle(data = data_point, file_name = working_file_path)
+            pickle.dump(data_point, working_file)
         
         # Remove validation file
-        try:
+        if os.path.exists(self.file_info["validation_file_path"]):
             os.remove(self.file_info["validation_file_path"])
-        except:
-            pass
         
         # Append data points from test file if it exists
-        try:
+        if os.path.exists(self.file_info["test_file_path"]):
             test_file_generator = load_from_pickle(self.file_info["test_file_path"])
             next(test_file_generator)
             for data_point in test_file_generator:
-                append_to_pickle(data = data_point, file_name = working_file_path)
+                pickle.dump(data_point, working_file)
             
-            # Remove test file
-            try:
-                os.remove(self.file_info["test_file_path"])
-            except:
-                pass
-        except:
-            pass
+            os.remove(self.file_info["test_file_path"])
+        
+        # close working file
+        working_file.close()
         
         # Rename the working file
         os.rename(working_file_path, self.file_info["main_file_path"])
@@ -3059,6 +2809,9 @@ class SleepDataManager:
         None
         """
 
+        if self.file_info["number_datapoints"] is not None:
+            return self.file_info["number_datapoints"]
+        
         # Load data generator from the file
         file_generator = load_from_pickle(self.file_path)
 
@@ -3070,6 +2823,29 @@ class SleepDataManager:
             count += 1
         
         del file_generator
+
+        # Update file information
+        self.file_info["number_datapoints"] = count
+
+        # Save file information to the file
+        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # save file information to working file
+        save_to_pickle(data = self.file_info, file_name = working_file_path)
+
+        # Load data generator from the file
+        file_generator = load_from_pickle(self.file_path)
+
+        with open(working_file_path, "ab") as f:
+            for data_point in file_generator:
+                # Save data point to the working file
+                pickle.dump(data_point, f)
+        
+        # Remove the old file and rename the working file
+        if os.path.exists(self.file_path):
+            os.remove(self.file_path)
+        os.rename(working_file_path, self.file_path)
 
         return count
     
