@@ -1605,21 +1605,15 @@ class SleepDataManager:
     database_configuration["RRI_frequency"] = 4
     database_configuration["MAD_frequency"] = 1
     database_configuration["SLP_frequency"] = 1/30
-    
-    # database_configuration["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
-    # database_configuration["MAD_inlier_interval"] = [None, None] # No MAD values are altered
-    # database_configuration["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+    database_configuration["sleep_stage_label"] = None
 
     database_configuration["signal_length_seconds"] = None
     database_configuration["wanted_shift_length_seconds"] = None
     database_configuration["absolute_shift_deviation_seconds"] = None
 
-    database_configuration["number_datapoints"] = None
+    database_configuration["number_datapoints"] = [0, 0, 0, 0] # main, train, validation, test
 
-    database_configuration["train_val_test_split_applied"] = False
-
-
-    def __init__(self, directory_path: str):
+    def __init__(self, directory_path: str, pid: str = 'main'):
         """
         Initialize the SleepDataManager class.
 
@@ -1635,10 +1629,29 @@ class SleepDataManager:
 
         self.directory_path = directory_path
         self.configuration_path = directory_path + "configuration.pkl"
-        self.main_file_path = directory_path + "data.pkl"
-        self.train_file_path = directory_path + "training_pid.pkl"
-        self.validation_file_path = directory_path + "validation_pid.pkl"
-        self.test_file_path = directory_path + "test_pid.pkl"
+
+        self.pid_paths = [directory_path + file_name for file_name in ["data.pkl", "training_pid.pkl", "validation_pid.pkl", "test_pid.pkl"]]
+        self.main_pid = 0
+        self.training_pid = 1
+        self.validation_pid = 2
+        self.test_pid = 3
+
+        if pid == 'main':
+            self.current_pid = self.main_pid
+        elif pid == 'train':
+            self.current_pid = self.training_pid
+            if not os.path.exists(self.pid_paths[self.training_pid]):
+                raise ValueError("Training PID file does not exist. Distribute data to training, validation (and test) set first (see 'separate_train_test_validation' function).")
+        elif pid == 'validation':
+            self.current_pid = self.validation_pid
+            if not os.path.exists(self.pid_paths[self.validation_pid]):
+                raise ValueError("Validation PID file does not exist. Distribute data to training, validation (and test) set first (see 'separate_train_test_validation' function).")
+        elif pid == 'test':
+            self.current_pid = self.test_pid
+            if not os.path.exists(self.pid_paths[self.test_pid]):
+                raise ValueError("Test PID file does not exist. Distribute data to training, validation and test set first (see 'separate_train_test_validation' function).")
+        else:
+            raise ValueError("pid must be 'main', 'train', 'validation' or 'test'.")
 
         # load general information from file
         with open(self.configuration_path, "rb") as f:
@@ -1652,19 +1665,22 @@ class SleepDataManager:
     @directory_path.setter
     def directory_path(self, value):
 
+        if value[-1] != "/":
+            raise ValueError(f"The provided path: {value} is not a directory. (Path must end with a '/'.)")
+
         create_directories_along_path(value)
 
         self._directory_path = value
 
         # Check if file exists, if not create it and save default file information
-        if not os.path.exists(self.configuration_path):
+        if not os.path.exists(value + "configuration.pkl"):
             # Check if the parameters ensure correct signal processing
             signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
             minimum_signal_frequency = min(signal_frequencies)
             if minimum_signal_frequency <= 0:
                 raise ValueError("Signal Frequencies must be larger than 0!")
             
-            save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+            save_to_pickle(data = self.database_configuration, file_name = value + "configuration.pkl")
     
 
     def _correct_datapoint(self, new_data):
@@ -1690,6 +1706,9 @@ class SleepDataManager:
         Inspect New Datapoint
         ----------------------
         """
+        
+        # access main file path
+        main_file_path = self.pid_paths[self.main_pid]
 
         # Check if new_data is a dictionary
         if not isinstance(new_data, dict):
@@ -1705,7 +1724,7 @@ class SleepDataManager:
         if new_data["ID"] in valid_datapoint_keys:
             raise ValueError("Value for ID key: \"ID\" must not be the same as a key in the datapoint dictionary!")
         if "*" == new_data["ID"][-1]:
-            file_generator = load_from_pickle(self.main_file_path)
+            file_generator = load_from_pickle(main_file_path)
             found_id = False
             for existing_data in file_generator:
                 if existing_data["ID"] == new_data["ID"]:
@@ -1731,7 +1750,16 @@ class SleepDataManager:
         # Check if declaration of sleep stage labels was provided when SLP signal is provided
         if "SLP" in new_data and "sleep_stage_label" not in new_data:
             raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
-        
+
+        if "sleep_stage_label" in new_data:
+            # initialize sleep stage label if not set yet
+            if self.database_configuration["sleep_stage_label"] is None:
+                self.database_configuration["sleep_stage_label"] = new_data["sleep_stage_label"]
+                save_to_pickle(self.database_configuration, self.configuration_path)
+            if self.database_configuration["sleep_stage_label"] != new_data["sleep_stage_label"]:
+                raise ValueError("The sleep stage label in the new datapoint does not match the uniform one of your previously saved datapoints.")
+            del new_data["sleep_stage_label"]
+
         """
         -------------------------------
         Alter Entries In New Datapoint
@@ -1827,13 +1855,13 @@ class SleepDataManager:
         number_new_datapoints: int
             The number of splitted parts the datapoint was split into. If 0, the datapoint was not split.
         """
+
+        # access main file path
+        main_file_path = self.pid_paths[self.main_pid]
         
-        if unique_id:
-            self.database_configuration["number_datapoints"] += number_new_datapoints
-            save_to_pickle(self.database_configuration, self.configuration_path)
-            
+        if unique_id or not os.path.exists(main_file_path):
             # Append new data point to the file
-            append_to_pickle(data = new_data, file_name = self.main_file_path)
+            append_to_pickle(data = new_data, file_name = main_file_path)
 
         else:
             # Create temporary file to save data in progress
@@ -1841,50 +1869,56 @@ class SleepDataManager:
             working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
             working_file = open(working_file_path, "ab")
 
-            # save database configuration
-            if self.database_configuration["number_datapoints"] is None:
-                self.database_configuration["number_datapoints"] = number_new_datapoints
-            else:
-                self.database_configuration["number_datapoints"] += number_new_datapoints
-            save_to_pickle(self.database_configuration, self.configuration_path)
+            error_occurred = True
+            try:
+                # Load data generator from the file
+                file_generator = load_from_pickle(main_file_path)
 
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.main_file_path)
+                # Check if ID already exists in the data file, then overwrite keys
+                not_appended = True
+                for data_point in file_generator:
+                    if data_point["ID"] == new_data["ID"]:
+                        print(f"ID \'{new_data['ID']}\' already exists in the data file. Existing keys will be overwritten with new values.")
+                        not_appended = False
 
-            # Check if ID already exists in the data file, then overwrite keys
-            not_appended = True
-            for data_point in file_generator:
-                if data_point["ID"] == new_data["ID"]:
-                    print(f"ID \'{new_data['ID']}\' already exists in the data file. Existing keys will be overwritten with new values.")
-                    not_appended = False
-
-                    for key in new_data:
-                        data_point[key] = new_data[key]
-                        
-                    # check if signal length is uniform with new signals
-                    check_signal_length(
-                        data_point = data_point,
-                        database_configuration = self.database_configuration,
-                        signal_keys = self.signal_keys,
-                        signal_frequency_keys = self.signal_frequency_keys,
-                    )
+                        for key in new_data:
+                            data_point[key] = new_data[key]
+                            
+                        # check if signal length is uniform with new signals
+                        check_signal_length(
+                            data_point = data_point,
+                            database_configuration = self.database_configuration,
+                            signal_keys = self.signal_keys,
+                            signal_frequency_keys = self.signal_frequency_keys,
+                        )
+                    
+                    # Append data point to the working file
+                    pickle.dump(data_point, working_file)
                 
-                # Append data point to the working file
-                pickle.dump(data_point, working_file)
+                # Append new data point if ID was not found
+                if not_appended:
+                    pickle.dump(data_point, working_file)
+                
+                error_occurred = False
             
-            # Append new data point if ID was not found
-            if not_appended:
-                pickle.dump(data_point, working_file)
+            finally:
+                # close the working file
+                working_file.close()
             
-            # close the working file
-            working_file.close()
+                # if an error occured, clean up the working file
+                if error_occurred and os.path.exists(working_file_path):
+                    os.remove(working_file_path)
             
-            # Remove the old file and rename the working file
-            if os.path.exists(self.main_file_path):
-                os.remove(self.main_file_path)
-            os.rename(working_file_path, self.main_file_path)
-    
+            # if no error occured, replace the main file with the working file
+            if os.path.exists(main_file_path):
+                os.remove(main_file_path)
+            os.rename(working_file_path, main_file_path)
 
+        # save database configuration
+        self.database_configuration["number_datapoints"][self.main_pid] += number_new_datapoints
+        save_to_pickle(self.database_configuration, self.configuration_path)
+
+    
     def save(self, data_dict, unique_id = False):
         """
         Save data to the file. If the ID already exists in the file, the existing data will be overwritten
@@ -1924,20 +1958,20 @@ class SleepDataManager:
             if False, current files will be checked to see if the ID already exists.
         """
 
-        # prevent runnning this function from secondary files (train, validation, test)
-        if self.file_path != self.file_info["main_file_path"]:
-            raise ValueError("This function can only be called from the main file. Training-, Validation-, or Test- file data manager instances can only load data.")
+        # access main and train file path
+        main_file_path = self.pid_paths[self.main_pid]
+        train_file_path = self.pid_paths[self.training_pid]
 
         # Warn user that data will remain in main file and won't forwarded into training, validation, or test file automatically
-        if self.file_info["train_val_test_split_applied"]:
-            print("Attention: Data will remain in the main file and won't be forwarded into training, validation, or test file automatically. If you want to include this data, fuse files using 'fuse_train_test_validation' and resaparate again.")
+        if os.path.exists(train_file_path):
+            print("Attention: New Data will be added to the 'data.pkl' and won't be forwarded into training, validation, or test file automatically. Therefore, it will not be available for training or testing your network. You must run 'separate_train_test_validation' again to add the new data to the training, validation, or test file.")
 
         corrected_data_dicts = self._correct_datapoint(copy.deepcopy(data_dict))
         # only first dictionary needs to be checked if present in database, as appending id's containing "shift" will not be allowed
-        self._save_datapoint(corrected_data_dicts[0], unique_id)
+        self._save_datapoint(corrected_data_dicts[0], unique_id, len(corrected_data_dicts))
 
         # append all other dictionaries at once
-        with open(self.file_path, "ab") as f:
+        with open(main_file_path, "ab") as f:
             for corrected_data_dict in corrected_data_dicts[1:]:
                 pickle.dump(corrected_data_dict, f)
 
@@ -1955,7 +1989,14 @@ class SleepDataManager:
             List of IDs to be checked.
         """
 
-        ids_in_database = self.load("ID")
+        # collect ids in database
+        ids_in_database = list()
+        for path in self.pid_paths:
+            if os.path.exists(path):
+                file_generator = load_from_pickle(path)
+                for data_point in file_generator:
+                    ids_in_database.append(data_point["ID"])
+
         new_ids = list()
         multiple_ids = list()
         multiple_weird = list()
@@ -1968,15 +2009,15 @@ class SleepDataManager:
             new_ids.append(id)
         
         if len(multiple_ids) > 0:
-            print("Following IDs are not unique between your new ids and the database:")
+            print("\nFollowing ID's are not unique between your new ids and the database:")
             print(multiple_ids)
-            raise ValueError("IDs are not unique.")
+            raise ValueError("ID's are not unique.")
         if len(multiple_weird) > 0:
-            print("Following IDs are not unique in your new ids:")
+            print("\nFollowing ID's are not unique in your new ids:")
             print(multiple_weird)
-            raise ValueError("IDs are not unique.")
+            raise ValueError("ID's are not unique.")
         if len(multiple_ids) == 0 and len(multiple_weird) == 0:
-            print("All IDs are unique.")
+            print("\nAll ID's are unique.")
 
 
     def load(self, key_id_index):
@@ -1999,6 +2040,9 @@ class SleepDataManager:
             The ID, key, or index of the data to be loaded.
         """
 
+        # access current file path
+        current_file_path = self.pid_paths[self.current_pid]
+
         # check if key_id_index is an id, a key, or an index
         load_keys = False
         valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
@@ -2016,10 +2060,7 @@ class SleepDataManager:
             raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
 
         # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # Skip file information
-        next(file_generator)
+        file_generator = load_from_pickle(current_file_path)
 
         if load_id:
             id_found = False
@@ -2058,99 +2099,6 @@ class SleepDataManager:
         del file_generator
     
 
-    def split_to_uniform_length(
-            self,
-            signal_length_seconds: int,
-            wanted_shift_length_seconds: int,
-            absolute_shift_deviation_seconds: int
-        ):
-        """
-        """
-
-        try:
-            # reverse signal split if it was applied
-            if self.file_info["signal_length_seconds"] is not None:
-                if signal_length_seconds == self.file_info["signal_length_seconds"] and wanted_shift_length_seconds == self.file_info["wanted_shift_length_seconds"] and absolute_shift_deviation_seconds == self.file_info["absolute_shift_deviation_seconds"]:
-                    print("\nSignals were already split into uniform length using current settings. No need to split again.")
-                    return
-                print("\nSignals were already split into uniform length. Reversing the split to apply new split.")
-                self.reverse_signal_split()
-            
-            # Check if signals can be split and fused correctly
-            retrieve_possible_shift_lengths(
-                min_shift_seconds = max(wanted_shift_length_seconds-absolute_shift_deviation_seconds, 1),
-                max_shift_seconds = wanted_shift_length_seconds+absolute_shift_deviation_seconds,
-                all_signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys]
-            )
-
-            # Create temporary file to save data in progress
-            working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-            working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-            # update and save file information to working file
-            self.file_info["signal_length_seconds"] = signal_length_seconds
-            self.file_info["wanted_shift_length_seconds"] = wanted_shift_length_seconds
-            self.file_info["absolute_shift_deviation_seconds"] = absolute_shift_deviation_seconds
-            self.file_info["number_datapoints"] = None # reset number of datapoints, as it will be updated after splitting
-            save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-            # Initialize progress bar
-            print(f"\nSplitting database entries into multiple ones to ensure the contained signals span at most across: {signal_length_seconds} seconds.")
-            progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
-
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
-
-            # skip file information
-            next(file_generator)
-
-            # iterate over database entries
-            for data_point in file_generator:
-                # make sure signal length is not longer than requested
-                split_signals_needed = False
-                for signal_key_index in range(0, len(self.signal_keys)):
-                    signal_key = self.signal_keys[signal_key_index]
-                    signal_frequency_key = self.signal_frequency_keys[signal_key_index]
-                    if signal_key in data_point:   
-                        if len(data_point[signal_key]) > np.ceil(signal_length_seconds * self.file_info[signal_frequency_key]):
-                            split_signals_needed = True
-                            break
-                    
-                # split signals in dictionary and create new data dictionaries with ID that marks them as splits
-                if split_signals_needed:
-            
-                    splitted_data_dictionaries = split_signals_within_dictionary(
-                        data_dict = data_point,
-                        id_key = "ID",
-                        signal_keys = self.signal_keys,
-                        signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys],
-                        signal_length_seconds = signal_length_seconds,
-                        wanted_shift_length_seconds = wanted_shift_length_seconds,
-                        absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
-                        ) # returns a list of dictionaries
-                    
-                    # append all other dictionaries at once
-                    with open(working_file_path, "ab") as f:
-                        for splitted_data_dict in splitted_data_dictionaries:
-                            pickle.dump(splitted_data_dict, f)
-                else:
-                    # Append data point to the working file
-                    append_to_pickle(data = data_point, file_name = working_file_path)
-                
-                # Update progress bar
-                progress_bar.update()
-            
-            # Remove the old file and rename the working file
-            if os.path.exists(self.file_path):
-                os.remove(self.file_path)
-            os.rename(working_file_path, self.file_path)
-        
-        finally:
-            # remove working file if it still exists
-            if os.path.exists(working_file_path):
-                os.remove(working_file_path)
-    
-
     def remove(self, key_id_index):
         """
         Remove data from the file path. The data can be removed by ID, key, or index.
@@ -2171,68 +2119,202 @@ class SleepDataManager:
             The ID, key, or index of the data to be removed.
         """
 
+        # prevent running this function outside of the main file
+        if self.current_pid != self.main_pid:
+            raise ValueError("You can only remove data from the main file. If the desird datapoint is in the training, validation, or test file, remerge all datapoints into your main file ('fuse_train_test_validation' function) first.")
+
+        # access main file path
+        main_file_path = self.pid_paths[self.main_pid]
+
         # check if key_id_index is an id, a key, or an index
         valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
 
         # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        file_generator = load_from_pickle(main_file_path)
 
         # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
-        # update and save file information to working file
-        current_file_info = next(file_generator)
-        current_file_info["number_datapoints"] = None
-        save_to_pickle(data = current_file_info, file_name = working_file_path)
+        error_occurred = True
+        try:
+            if isinstance(key_id_index, str):
+                if key_id_index[-1] == "*":
+                    key_id_index = key_id_index[:-1]  # remove trailing '*' if present
 
-        if isinstance(key_id_index, str):
-            if key_id_index[-1] == "*":
-                key_id_index = key_id_index[:-1]  # remove trailing '*' if present
+                # remove all keys from the data points
+                if key_id_index in valid_keys:
+                    # Load data generator from the file
+                    with open(working_file_path, "ab") as f:
+                        for data_point in file_generator:
+                            if key_id_index in data_point:
+                                del data_point[key_id_index]
+                            pickle.dump(data_point, f)
+                else:
+                    count_deletions = 0
+                    with open(working_file_path, "ab") as f:
+                        for data_point in file_generator:
+                            if data_point["ID"] == key_id_index or data_point["ID"] == key_id_index + "*":
+                                count_deletions += 1
+                                continue
+                            pickle.dump(data_point, f)
+                    
+                    if count_deletions == 0:
+                        raise ValueError(f"ID {key_id_index} not found in the data file.")
+                    
+                    # update file information
+                    self.database_configuration["number_datapoints"][self.main_pid] -= count_deletions
+                    save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+                    
+            elif isinstance(key_id_index, int):
+                count = 0
+                index_out_of_bounds = True
 
-            # remove all keys from the data points
-            if key_id_index in valid_keys:
-                # Load data generator from the file
-                with open(working_file_path, "ab") as f:
-                    for data_point in file_generator:
-                        if key_id_index in data_point:
-                            del data_point[key_id_index]
-                        pickle.dump(data_point, f)
+                for data_point in file_generator:
+                    if count == key_id_index:
+                        index_out_of_bounds = False
+                        self.remove(data_point["ID"])  # remove data point by ID
+                        break
+                    count += 1
+                
+                if index_out_of_bounds:
+                    raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+
             else:
-                id_not_found = True
-                with open(working_file_path, "ab") as f:
-                    for data_point in file_generator:
-                        if data_point["ID"] == key_id_index or data_point["ID"] == key_id_index + "*":
-                            id_not_found = False
-                            continue
-                        pickle.dump(data_point, f)
-                
-                if id_not_found:
-                    raise ValueError(f"ID {key_id_index} not found in the data file.")
-                
-        elif isinstance(key_id_index, int):
-            count = 0
-            index_out_of_bounds = True
-
-            for data_point in file_generator:
-                if count == key_id_index:
-                    index_out_of_bounds = False
-                    self.remove(data_point["ID"])  # remove data point by ID
-                    break
-                count += 1
+                raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
             
-            if index_out_of_bounds:
-                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+            error_occurred = False
+        
+        finally:
+            del file_generator
 
-        else:
-            raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
+            # if an error occured, clean up the working file
+            if error_occurred and os.path.exists(working_file_path):
+                os.remove(working_file_path)
 
-        del file_generator
+        # if no error occured, replace the main file with the working file
+        if os.path.exists(main_file_path):
+            os.remove(main_file_path)
+        os.rename(working_file_path, main_file_path)
+    
 
-        # Remove the old file and rename the working file
-        if os.path.exists(self.file_path):
-            os.remove(self.file_path)
-        os.rename(working_file_path, self.file_path)
+    def split_to_uniform_length(
+            self,
+            signal_length_seconds: int,
+            wanted_shift_length_seconds: int,
+            absolute_shift_deviation_seconds: int
+        ):
+        """
+        """
+
+        # access train file path
+        train_file_path = self.pid_paths[self.training_pid]
+
+        if os.path.exists(train_file_path):
+            print(f"\nATTENTION: No matter in which pid you are calling this function, the data will be split in all of them.")
+
+        # reverse signal split if it was applied
+        if self.database_configuration["signal_length_seconds"] is not None:
+            if signal_length_seconds == self.database_configuration["signal_length_seconds"] and wanted_shift_length_seconds == self.database_configuration["wanted_shift_length_seconds"] and absolute_shift_deviation_seconds == self.database_configuration["absolute_shift_deviation_seconds"]:
+                print("\nSignals were already split into uniform length using current settings. No need to split again.")
+                return
+            print("\nSignals were already split into uniform length. Reversing the split to apply new split.")
+            self.reverse_signal_split()
+        
+        # Check if signals can be split and fused correctly
+        retrieve_possible_shift_lengths(
+            min_shift_seconds = max(wanted_shift_length_seconds-absolute_shift_deviation_seconds, 1),
+            max_shift_seconds = wanted_shift_length_seconds+absolute_shift_deviation_seconds,
+            all_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
+        )
+
+        # Create temporary file for every PID to save data in progress
+        working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress", file_type = "pkl") for _ in range(len(self.pid_paths))]
+        working_files = [open(path, "ab") for path in working_file_paths]
+        number_split_datapoints = [0 for _ in range(len(self.pid_paths))] # number of new datapoints that were created by splitting the signals
+
+        error_occurred = True
+        try:
+            for file_path_iteration in range(len(self.pid_paths)):
+                file_path = self.pid_paths[file_path_iteration]
+                working_file_path = working_file_paths[file_path_iteration]
+                working_file = working_files[file_path_iteration]
+
+                # skip file if it does not exist
+                if not os.path.exists(file_path):
+                    continue
+
+                # Initialize progress bar
+                print(f"\nSplitting entries within {file_path} into multiple ones to ensure the contained signals span at most across: {signal_length_seconds} seconds.")
+                progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
+
+                # Load data generator from the file
+                file_generator = load_from_pickle(file_path)
+
+                # iterate over database entries
+                for data_point in file_generator:
+                    # make sure signal length is not longer than requested
+                    split_signals_needed = False
+                    for signal_key_index in range(0, len(self.signal_keys)):
+                        signal_key = self.signal_keys[signal_key_index]
+                        signal_frequency_key = self.signal_frequency_keys[signal_key_index]
+                        if signal_key in data_point:   
+                            if len(data_point[signal_key]) > np.ceil(signal_length_seconds * self.database_configuration[signal_frequency_key]):
+                                split_signals_needed = True
+                                break
+                        
+                    # split signals in dictionary and create new data dictionaries with ID that marks them as splits
+                    if split_signals_needed:
+                        splitted_data_dictionaries = split_signals_within_dictionary(
+                            data_dict = data_point,
+                            id_key = "ID",
+                            signal_keys = self.signal_keys,
+                            signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
+                            signal_length_seconds = signal_length_seconds,
+                            wanted_shift_length_seconds = wanted_shift_length_seconds,
+                            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
+                            ) # returns a list of dictionaries
+                        
+                        # append all dictionaries at once and increment number of new datapoints
+                        with open(working_file_path, "ab") as f:
+                            for splitted_data_dict in splitted_data_dictionaries:
+                                pickle.dump(splitted_data_dict, f)
+                                number_split_datapoints[file_path_iteration] += 1
+                    else:
+                        # Append data point to the working file and increment number of new datapoints
+                        pickle.dump(data_point, working_file)
+                        number_split_datapoints[file_path_iteration] += 1
+
+                    # Update progress bar
+                    progress_bar.update()
+                
+                error_occurred = False
+            
+        finally:
+            # close the working files
+            for f in working_files:
+                f.close()
+
+            # if an error occured, clean up the working files
+            if error_occurred:
+                for f in working_file_paths:
+                    if os.path.exists(f):
+                        os.remove(f)
+
+        # if no error occured, replace the original files with the working files
+        for file_path_iteration in range(len(self.pid_paths)):
+            file_path = self.pid_paths[file_path_iteration]
+            working_file_path = working_file_paths[file_path_iteration]
+            if os.path.exists(working_file_path):
+                os.rename(working_file_path, file_path)
+
+        # if no error occured, update and save database configuration
+        for i in range(len(self.pid_paths)):
+            self.database_configuration["number_datapoints"][i] = number_split_datapoints[i]
+        self.database_configuration["signal_length_seconds"] = signal_length_seconds
+        self.database_configuration["wanted_shift_length_seconds"] = wanted_shift_length_seconds
+        self.database_configuration["absolute_shift_deviation_seconds"] = absolute_shift_deviation_seconds
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
     def reverse_signal_split(self):
@@ -2255,113 +2337,143 @@ class SleepDataManager:
         """
 
         # prevent running this function signals are not split
-        if self.file_info["signal_length_seconds"] is None:
+        if self.database_configuration["signal_length_seconds"] is None:
             print("\nData was not split yet. No need to reverse the split.")
             return
+        
+        # access main and train file path
+        main_file_path = self.pid_paths[self.main_pid]
+        train_file_path = self.pid_paths[self.training_pid]
+        
+        if os.path.exists(train_file_path):
+            raise ValueError("You can not reverse the signal split if your data was distributed into different pids, as the splitted parts of every datapoint might have not ended up in the same pid, depending on your settings during the distribution. Please fuse the pids before reversing the signal split.")
 
-        # load all data point ids
-        all_ids = self.load("ID")
-
-        # put all ids that are part of a splitted signal into a list
-        split_ids = []
-        for this_id in all_ids: # type: ignore
-            if "*" == this_id[-1]:
-                if this_id[:-1] not in split_ids:
-                    split_ids.append(this_id[:-1])
-
-        # Create temporary files to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        # Create temporary file for every PID to save data in progress
+        working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # update and save file information to working file
-        self.file_info["signal_length_seconds"] = None
-        self.file_info["wanted_shift_length_seconds"] = None
-        self.file_info["absolute_shift_deviation_seconds"] = None
-        self.file_info["number_datapoints"] = None # reset number of datapoints
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
         working_file = open(working_file_path, "ab")
 
-        # create a separate file for each splitted parts (massively reduces computation time)
-        id_list_paths = list()
-        for i in range(len(split_ids)):
-            id_list_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/_splitted_signals_" + str(i)
-            id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
-            id_list_paths.append(id_list_path)
+        number_original_datapoints = 0
 
-        open_files = [open(path, "ab") for path in id_list_paths]
-
-        # Initialize progress bar
-        print("\nDistributing splitted data parts into individual files (Subprocess of Reversing Signal Split):")
-        progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
-
-        # iterate over entries and append them to appropriate files
-        for data_point in file_generator:
-            this_id = data_point["ID"]
-            appended = False
-            for id_list_index in range(len(split_ids)):
-                if this_id == split_ids[id_list_index] or this_id == split_ids[id_list_index] + "*":
-                    pickle.dump(data_point, open_files[id_list_index])
-                    appended = True
-                    break
-            if not appended:
-                pickle.dump(data_point, working_file)
-            
-            # update progress bar
-            progress_bar.update()
-        
-        del file_generator, progress_bar
-
-        # Close all open files
-        for open_file in open_files:
-            open_file.close()
-
-        # Initialize progress bar
-        print("\nMerging data points back into the main file and reversing the Signal Split:")
-        progress_bar = DynamicProgressBar(total = len(id_list_paths))
-
-        # iterate over entries in database and reverse signal split
-        for id_path in id_list_paths:
-
-            # Load data generator from the file
-            file_generator = load_from_pickle(id_path)
-
-            # collect splitted data dictionaries
-            splitted_data_dictionaries = list()
-
-            for data_dict in file_generator:
-                splitted_data_dictionaries.append(data_dict)
-            
+        error_occurred = True
+        try:
+            # load all data point ids
+            all_ids = list()
+            total_files = 0
+            file_generator = load_from_pickle(main_file_path)
+            for data_point in file_generator:
+                all_ids.append(data_point["ID"])
+                total_files += 1
             del file_generator
 
-            # fuse splitted data dictionaries
-            fused_dictionary = fuse_splitted_signals_within_dictionaries(
-                data_dictionaries = splitted_data_dictionaries,
-                valid_signal_keys = self.signal_keys,
-                valid_signal_frequencies = [self.file_info[key] for key in self.signal_frequency_keys],
-            )
+            # put all ids that are part of a splitted signal into a list
+            split_ids = []
+            for this_id in all_ids: # type: ignore
+                if "*" == this_id[-1]:
+                    if this_id[:-1] not in split_ids:
+                        split_ids.append(this_id[:-1])
 
-            # append fused dictionary to working file
-            pickle.dump(fused_dictionary, working_file)
+            # create a separate file for each splitted parts (massively reduces computation time)
+            id_list_paths = list()
+            for i in range(len(split_ids)):
+                id_list_path = self.directory_path + "_splitted_signals_" + str(i)
+                id_list_path = find_non_existing_path(path_without_file_type = id_list_path, file_type = "pkl")
+                id_list_paths.append(id_list_path)
 
-            # remove file containing transferred data points
-            os.remove(id_path)
+            open_files = [open(path, "ab") for path in id_list_paths]
 
-            # update progress bar
-            progress_bar.update()
+            try:
+                # Initialize progress bar
+                print("\nDistributing splitted data parts into individual files (Subprocess of Reversing Signal Split):")
+                progress_bar = DynamicProgressBar(total = total_files) # type: ignore
+
+                # Load data generator from the file
+                file_generator = load_from_pickle(main_file_path)
+
+                # iterate over entries and append them to appropriate files
+                for data_point in file_generator:
+                    this_id = data_point["ID"]
+                    appended = False
+                    for id_list_index in range(len(split_ids)):
+                        if this_id == split_ids[id_list_index] or this_id == split_ids[id_list_index] + "*":
+                            pickle.dump(data_point, open_files[id_list_index])
+                            appended = True
+                            break
+                    if not appended:
+                        pickle.dump(data_point, working_file)
+                        number_original_datapoints += 1
+
+                    # update progress bar
+                    progress_bar.update()
+                
+                del file_generator, progress_bar
+            
+            finally:
+                # Close all open files
+                for open_file in open_files:
+                    open_file.close()
+
+            # Initialize progress bar
+            print("\nMerging data points back into the main file and reversing the Signal Split:")
+            progress_bar = DynamicProgressBar(total = len(id_list_paths))
+
+            # iterate over entries in database and reverse signal split
+            for id_path in id_list_paths:
+
+                # collect splitted data dictionaries
+                splitted_data_dictionaries = list()
+
+                file_generator = load_from_pickle(id_path)
+                for data_dict in file_generator:
+                    splitted_data_dictionaries.append(data_dict)
+                del file_generator
+
+                # fuse splitted data dictionaries
+                fused_dictionary = fuse_splitted_signals_within_dictionaries(
+                    data_dictionaries = splitted_data_dictionaries,
+                    valid_signal_keys = self.signal_keys,
+                    valid_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
+                )
+
+                # append fused dictionary to working file
+                pickle.dump(fused_dictionary, working_file)
+
+                # update progress bar
+                progress_bar.update()
+
+                # remove file containing transferred data points
+                os.remove(id_path)
+
+                number_original_datapoints += 1
+
+            error_occurred = False
+                
+        finally:
+            # close the working file
+            working_file.close()
+            
+            # if no error occured, rename the working file and update the number of datapoints
+            # Otherwise clean up files
+            if error_occurred:
+                if os.path.exists(working_file_path):
+                    os.remove(working_file_path)
+
+                if id_list_paths:
+                    for f in id_list_paths:
+                        if os.path.exists(f):
+                            os.remove(f)
+
+        # rename the working file to the original file name
+        if os.path.exists(main_file_path):
+            os.remove(main_file_path)
+        os.rename(working_file_path, main_file_path)
         
-        # close working file
-        working_file.close()
-        
-        # Remove the old file and rename the working file
-        if os.path.exists(self.file_path):
-            os.remove(self.file_path)
-        os.rename(working_file_path, self.file_path)
+        # update database configuration
+        self.database_configuration["number_datapoints"][self.main_pid] = number_original_datapoints
+        self.database_configuration["signal_length_seconds"] = None
+        self.database_configuration["wanted_shift_length_seconds"] = None
+        self.database_configuration["absolute_shift_deviation_seconds"] = None
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
     def separate_train_test_validation(
@@ -2430,15 +2542,6 @@ class SleepDataManager:
         """
 
         # check arguments:
-        if join_splitted_parts and self.file_info["signal_length_seconds"] is not None:
-            signal_length_seconds = self.file_info["signal_length_seconds"]
-            wanted_shift_length_seconds = self.file_info["wanted_shift_length_seconds"]
-            absolute_shift_deviation_seconds = self.file_info["absolute_shift_deviation_seconds"]
-            print("\nAttention: 'join_splitted_parts' is set to True, but the data was already split into uniform length. Depending on the number of datapoints, this could cause long computation times. Reversing signal split.")
-            self.reverse_signal_split()
-            self.separate_train_test_validation(train_size, validation_size, test_size, random_state, shuffle, join_splitted_parts, equally_distribute_signal_durations, stratify)
-            self.split_to_uniform_length(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
-
         if test_size == 0:
             test_size = None
         
@@ -2452,16 +2555,50 @@ class SleepDataManager:
         else:
             if train_size + validation_size + test_size != 1: # type: ignore
                 raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
+        
+        # access main, train, validation and test file path
+        main_file_path = self.pid_paths[self.main_pid]
+        train_file_path = self.pid_paths[self.training_pid]
+        validation_file_path = self.pid_paths[self.validation_pid]
+        test_file_path = self.pid_paths[self.test_pid]
 
         # Fuse data back together if train_val_test_split_applied is True
-        if self.file_info["train_val_test_split_applied"]:
+        if os.path.exists(train_file_path):
             self.fuse_train_test_validation()
+        
+        if join_splitted_parts and self.database_configuration["signal_length_seconds"] is not None:
+            signal_length_seconds = self.database_configuration["signal_length_seconds"]
+            wanted_shift_length_seconds = self.database_configuration["wanted_shift_length_seconds"]
+            absolute_shift_deviation_seconds = self.database_configuration["absolute_shift_deviation_seconds"]
+            print("\nAttention: 'join_splitted_parts' is set to True, but the data was already split into uniform length. Depending on the number of datapoints, this could cause long computation times. Reversing signal split.")
+            self.reverse_signal_split()
+            self.separate_train_test_validation(train_size, validation_size, test_size, random_state, shuffle, join_splitted_parts, equally_distribute_signal_durations) # type: ignore
+            self.split_to_uniform_length(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
+        
+        if not join_splitted_parts:
+            if self.database_configuration["signal_length_seconds"] is None:
+                raise ValueError("If 'join_splitted_parts' is False, the data must be split into uniform length first. Please call 'split_to_uniform_length' before calling 'separate_train_test_validation' with 'join_splitted_parts' set to False.")
+            # if join_splitted_parts is False, the ids of the splitted parts need to be distinguishable
+            # we'll therefore append a meaningless number to those
+            working_file_path = self.directory_path + "save_in_progress"
+            working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+            meaningless_number = 0
+            file_generator = load_from_pickle(main_file_path)
+            with open(working_file_path, "ab") as f:
+                for data_point in file_generator:
+                    if data_point["ID"][-1] == "*":
+                        data_point["ID"] += str(meaningless_number)
+                        meaningless_number += 1
+                    
+                    pickle.dump(data_point, f)
+            del file_generator
+            if os.path.exists(main_file_path):
+                os.remove(main_file_path)
+            os.rename(working_file_path, main_file_path)
 
         # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # skip file information
-        next(file_generator)
+        file_generator = load_from_pickle(main_file_path)
 
         # collect ID's of all valid datapoints (needs to contain "RRI" and "SLP"), divide into ones 
         # that contain "RRI" and ones that contain "RRI" and "MAD"
@@ -2471,13 +2608,14 @@ class SleepDataManager:
         # iterate over entries and collect ids
         num_invalid_data_points = 0
         for data_point in file_generator:
-            if "SLP" in data_point and "RRI" in data_point:
-                if "MAD" in data_point:
-                    id_with_rri_and_mad.append(data_point["ID"])
+            if join_splitted_parts:
+                if "SLP" in data_point and "RRI" in data_point:
+                    if "MAD" in data_point:
+                        id_with_rri_and_mad.append(data_point["ID"])
+                    else:
+                        id_with_rri.append(data_point["ID"])
                 else:
-                    id_with_rri.append(data_point["ID"])
-            else:
-                num_invalid_data_points += 1
+                    num_invalid_data_points += 1
         
         del file_generator
         
@@ -2497,6 +2635,13 @@ class SleepDataManager:
         
         del id_with_rri_and_mad, id_with_rri
 
+        # check if there are enough data points available
+        if test_size is None and len(consider_identifications) < 2:
+            raise ValueError("Not enough data available. Please save some more data first.")
+
+        if test_size is not None and len(consider_identifications) < 3:
+            raise ValueError("Not enough data available. Please save some more data first.")
+
         """
         To enable that the duration of the signals is equally distributed across the pids, we will assign
         the duration as class label and enable stratification.
@@ -2505,29 +2650,23 @@ class SleepDataManager:
             # collect signal durations (we'll exploit just the rri length as this signal must be present) for each id
             rri_signal_lengths = [0 for _ in range(len(consider_identifications))]
 
-            file_generator = load_from_pickle(self.file_path)
-            next(file_generator)
+            file_generator = load_from_pickle(main_file_path)
             for data_point in file_generator:
                 if data_point["ID"] in consider_identifications:
                     # calculate signal duration in seconds
                     rri_signal_lengths[consider_identifications.index(data_point["ID"])] = len(data_point["RRI"])
 
             # round signal durations to next 0.5 hours
-            binwidth = self.file_info["RRI_frequency"]*1800 # 0.5 hour of RRI datapoints
+            binwidth = self.database_configuration["RRI_frequency"]*1800 # 0.5 hour of RRI datapoints
             rri_signal_lengths = np.array(rri_signal_lengths, dtype=np.float64)
             rri_signal_lengths = np.round(rri_signal_lengths / binwidth)
             rri_signal_lengths = rri_signal_lengths.astype(np.int64)
             
         # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
 
-        # Change file information
-        self.file_info["train_val_test_split_applied"] = True
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-        working_file = open(working_file_path, "ab")
+        count_datapoints = [0 for _ in range(len(self.pid_paths))] # count of datapoints that were saved to each file
 
         if test_size is None:
             """
@@ -2552,34 +2691,49 @@ class SleepDataManager:
                 )
 
             # ensure files are empty before writing
-            for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"]]:
+            for file_path in [train_file_path, validation_file_path]:
                 if os.path.exists(file_path):
                     os.remove(file_path)
             
             # open files
-            open_files = [open(self.file_info["train_file_path"], "ab"), open(self.file_info["validation_file_path"], "ab")]
+            working_file = open(working_file_path, "ab")
+            open_files = [open(train_file_path, "ab"), open(validation_file_path, "ab")]
 
-            # print progress
-            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:") # type: ignore
-            progress_bar = DynamicProgressBar(total = len(self))
-            
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
-
-            # skip file information
-            next(file_generator)
-
-            # save each data point to corresponding file
-            for data_point in file_generator:
-                if data_point["ID"] in train_data_ids:
-                    pickle.dump(data_point, open_files[0])
-                elif data_point["ID"] in validation_data_ids:
-                    pickle.dump(data_point, open_files[1])
-                else:
-                    pickle.dump(data_point, working_file)
-                
+            error_occurred = True
+            try:
                 # print progress
-                progress_bar.update()
+                print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% of datapoints into training / validation pids, respectively:") # type: ignore
+                progress_bar = DynamicProgressBar(total = len(self))
+                
+                # Load data generator from the file
+                file_generator = load_from_pickle(main_file_path)
+
+                # save each data point to corresponding file
+                for data_point in file_generator:
+                    if data_point["ID"] in train_data_ids:
+                        pickle.dump(data_point, open_files[0])
+                        count_datapoints[self.training_pid] += 1
+                    elif data_point["ID"] in validation_data_ids:
+                        pickle.dump(data_point, open_files[1])
+                        count_datapoints[self.validation_pid] += 1
+                    else:
+                        pickle.dump(data_point, working_file)
+                        count_datapoints[self.main_pid] += 1
+                    
+                    # print progress
+                    progress_bar.update()
+                
+                error_occurred = False
+            
+            finally:
+                # close all open files
+                for open_file in open_files:
+                    open_file.close()
+                working_file.close()
+
+                # if an error occured, clean up the working file
+                if error_occurred and os.path.exists(working_file_path):
+                    os.remove(working_file_path)
         
         else:
             """
@@ -2594,6 +2748,12 @@ class SleepDataManager:
                     shuffle = shuffle,
                     stratify = rri_signal_lengths
                 )
+
+                # ensure rest_data_ids contains enough data points for validation and test
+                if len(rest_data_ids) < 2:
+                    rest_data_ids.append(train_data_ids[-1]) # type: ignore
+                    train_data_ids = train_data_ids[:-1]
+
                 validation_data_ids, test_data_ids = train_test_split(
                     rest_data_ids,
                     train_size = validation_size / (1 - train_size), # type: ignore
@@ -2609,6 +2769,12 @@ class SleepDataManager:
                     random_state = random_state,
                     shuffle = shuffle,
                 )
+
+                # ensure rest_data_ids contains enough data points for validation and test
+                if len(rest_data_ids) < 2:
+                    rest_data_ids.append(train_data_ids[-1]) # type: ignore
+                    train_data_ids = train_data_ids[:-1]
+
                 validation_data_ids, test_data_ids = train_test_split(
                     rest_data_ids,
                     train_size = validation_size / (1 - train_size), # type: ignore
@@ -2617,47 +2783,81 @@ class SleepDataManager:
                 )
             
             # ensure files are empty before writing
-            for file_path in [self.file_info["train_file_path"], self.file_info["validation_file_path"], self.file_info["test_file_path"]]:
+            for file_path in [train_file_path, validation_file_path, test_file_path]:
                 if os.path.exists(file_path):
                     os.remove(file_path)
 
             # open files
-            open_files = [open(self.file_info["train_file_path"], "ab"), open(self.file_info["validation_file_path"], "ab"), open(self.file_info["test_file_path"], "ab")]
+            working_file = open(working_file_path, "ab")
+            open_files = [open(train_file_path, "ab"), open(validation_file_path, "ab"), open(test_file_path, "ab")]
 
-            # print progress
-            print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:") # type: ignore
-            progress_bar = DynamicProgressBar(total = len(self))
-            
-            # Load data generator from the file
-            file_generator = load_from_pickle(self.file_path)
-
-            # skip file information
-            next(file_generator)
-
-            # save each data point to corresponding file
-            for data_point in file_generator:
-                if data_point["ID"] in train_data_ids:
-                    pickle.dump(data_point, open_files[0])
-                elif data_point["ID"] in validation_data_ids:
-                    pickle.dump(data_point, open_files[1])
-                elif data_point["ID"] in test_data_ids:
-                    pickle.dump(data_point, open_files[2])
-                else:
-                    pickle.dump(data_point, working_file)
-                
+            error_occurred = True
+            try:
                 # print progress
-                progress_bar.update()
-        
-        # close all open files
-        for open_file in open_files:
-            open_file.close()
-        working_file.close()
-        
-        # Remove the old file and rename the working file
-        if os.path.exists(self.file_path):
-            os.remove(self.file_path)
+                print(f"\nDistributing {round(train_size*100,1)}% / {round(validation_size*100,1)}% / {round(test_size*100,1)}% of datapoints into training / validation / test pids, respectively:") # type: ignore
+                progress_bar = DynamicProgressBar(total = len(self))
+                
+                # Load data generator from the file
+                file_generator = load_from_pickle(main_file_path)
+
+                # save each data point to corresponding file
+                for data_point in file_generator:
+                    if data_point["ID"] in train_data_ids:
+                        pickle.dump(data_point, open_files[0])
+                        count_datapoints[self.training_pid] += 1
+                    elif data_point["ID"] in validation_data_ids:
+                        pickle.dump(data_point, open_files[1])
+                        count_datapoints[self.validation_pid] += 1
+                    elif data_point["ID"] in test_data_ids:
+                        pickle.dump(data_point, open_files[2])
+                        count_datapoints[self.test_pid] += 1
+                    else:
+                        pickle.dump(data_point, working_file)
+                        count_datapoints[self.main_pid] += 1
+                    
+                    # print progress
+                    progress_bar.update()
+                
+                error_occurred = False
             
-        os.rename(working_file_path, self.file_path)
+            finally:
+                # close all open files
+                for open_file in open_files:
+                    open_file.close()
+                working_file.close()
+
+                # if an error occured, clean up the working file
+                if error_occurred and os.path.exists(working_file_path):
+                    os.remove(working_file_path)
+
+        # if no error occured, replace the main file with the working file
+        if os.path.exists(main_file_path):
+            os.remove(main_file_path)
+        os.rename(working_file_path, main_file_path)
+
+        # if no error occured, update database configuration
+        self.database_configuration["number_datapoints"] = count_datapoints
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+
+        # if random numbers were appended to the IDs due to 'join_splitted_parts' being False, we need to remove them now
+        if not join_splitted_parts:
+            for file_path in self.pid_paths:
+                if os.path.exists(file_path):
+                    working_file_path = self.directory_path + "save_in_progress"
+                    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+                    working_file = open(working_file_path, "ab")
+
+                    try:
+                        file_generator = load_from_pickle(file_path)
+                        for data_point in file_generator:
+                            if "*" in data_point["ID"]:
+                                data_point["ID"] = data_point["ID"][:data_point["ID"].index("*")+1]
+                            pickle.dump(data_point, working_file)
+                        os.remove(file_path)  # Remove the file after copying its content
+                    finally:
+                        working_file.close()
+                    
+                    os.rename(working_file_path, file_path)
 
 
     def fuse_train_test_validation(self):
@@ -2673,67 +2873,46 @@ class SleepDataManager:
         None
         """
 
+        # access main and train file path
+        main_file_path = self.pid_paths[self.main_pid]
+        train_file_path = self.pid_paths[self.training_pid]
+
         # Skip if train_val_test_split was not applied
-        if not self.file_info["train_val_test_split_applied"]:
+        if not os.path.exists(train_file_path):
             return
-        
-        # edit file information
-        self.file_info["train_val_test_split_applied"] = False
 
         # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
+        working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
         working_file = open(working_file_path, "ab")
 
-        # Append data points from main file
-        main_file_generator = load_from_pickle(self.file_info["main_file_path"])
-        next(main_file_generator)
-        for data_point in main_file_generator:
-            pickle.dump(data_point, working_file)
-        
-        # Remove main file
-        if os.path.exists(self.file_info["main_file_path"]):
-            os.remove(self.file_info["main_file_path"])
+        try:
+            for file_path in self.pid_paths:  # Skip the main file
+                if os.path.exists(file_path):
+                    file_generator = load_from_pickle(file_path)
+                    for data_point in file_generator:
+                        pickle.dump(data_point, working_file)
+                    os.remove(file_path)  # Remove the file after copying its content
 
-        # Append data points from training file
-        training_file_generator = load_from_pickle(self.file_info["train_file_path"])
-        next(training_file_generator)
-        for data_point in training_file_generator:
-            pickle.dump(data_point, working_file)
-        
-        # Remove training file
-        if os.path.exists(self.file_info["train_file_path"]):
-            os.remove(self.file_info["train_file_path"])
-        
-        # Append data points from validation file
-        validation_file_generator = load_from_pickle(self.file_info["validation_file_path"])
-        next(validation_file_generator)
-        for data_point in validation_file_generator:
-            pickle.dump(data_point, working_file)
-        
-        # Remove validation file
-        if os.path.exists(self.file_info["validation_file_path"]):
-            os.remove(self.file_info["validation_file_path"])
-        
-        # Append data points from test file if it exists
-        if os.path.exists(self.file_info["test_file_path"]):
-            test_file_generator = load_from_pickle(self.file_info["test_file_path"])
-            next(test_file_generator)
-            for data_point in test_file_generator:
-                pickle.dump(data_point, working_file)
-            
-            os.remove(self.file_info["test_file_path"])
-        
-        # close working file
-        working_file.close()
+        finally:
+            # close working file
+            working_file.close()
         
         # Rename the working file
-        os.rename(working_file_path, self.file_info["main_file_path"])
+        os.rename(working_file_path, main_file_path)
+
+        # update database configuration
+        self.database_configuration["number_datapoints"][self.main_pid] = sum(self.database_configuration["number_datapoints"])
+        for i in range(len(self.database_configuration["number_datapoints"])):
+            if i != self.main_pid:
+                self.database_configuration["number_datapoints"][i] = 0
+
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
-    def change_file_information(self, new_file_info: dict):
+    def change_uniform_frequencies(self, updated_frequencies: dict):
         """
-        Change the file information of the file. Only possible if no datapoints are in the file.
+        Change the uniform frequencies. Only possible if no datapoints are in the file.
 
         RETURNS:
         ------------------------------
@@ -2741,57 +2920,36 @@ class SleepDataManager:
 
         ARGUMENTS:
         ------------------------------
-        new_file_info: dict
-            The new file information.
+        updated_frequencies: dict
+            The updated frequencies containing the corresponding keys.
         """
 
+        # access train file path
+        train_file_path = self.pid_paths[self.training_pid]
+
         # prevent runnning this function if data was split into training, validation, and test files
-        if self.file_info["train_val_test_split_applied"]:
+        if os.path.exists(train_file_path):
             raise ValueError("This function can only be called before data was split into training, validation, and test files.")
 
         # check if there are datapoints in the file
         if len(self) > 0:
             raise ValueError("File information can only be changed if no data points are in the file.")
 
-        # Create temporary file to save data in progress
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
         # update file information
-        for key in new_file_info:
-            if key not in self.file_info:
-                print(f"Attention: Key {key} not recognized. It will be skipped.")
+        for key in updated_frequencies:
+            if key not in ["RRI_frequency", "SLP_frequency", "MAD_frequency"]:
+                print(f"Warning: Key '{key}' is not a valid signal frequency key. It will be ignored.")
                 continue
-            if key in ["train_val_test_split_applied", "main_file_path", "train_file_path", "validation_file_path", "test_file_path", "signal_split_reversed"]:
-                print(f"Attention: Key {key} is a reserved key and cannot be changed.")
-                continue
-            self.file_info[key] = new_file_info[key]
-        
+            self.database_configuration[key] = updated_frequencies[key]
+
         # Check if the parameters ensure correct signal processing
-        all_signal_frequency_keys = copy.deepcopy(self.signal_frequency_keys)
-        all_signal_frequency_keys.append("SLP_predicted_frequency")
-        all_signal_frequencies = [self.file_info[key] for key in all_signal_frequency_keys]
+        all_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
         minimum_signal_frequency = min(all_signal_frequencies)
         if minimum_signal_frequency <= 0:
             raise ValueError("Signal Frequencies must be larger than 0!")
-        
-        # Check if signals can be split and fused correctly
-        retrieve_possible_shift_lengths(
-            min_shift_seconds = max(self.file_info["wanted_shift_length_seconds"]-self.file_info["absolute_shift_deviation_seconds"], 1),
-            max_shift_seconds = self.file_info["wanted_shift_length_seconds"]+self.file_info["absolute_shift_deviation_seconds"],
-            all_signal_frequencies = all_signal_frequencies
-        )
 
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-        
-        # Remove the old file and rename the working file
-        try:
-            os.remove(self.file_path)
-        except:
-            pass
-
-        os.rename(working_file_path, self.file_path)
+        # update database configuration
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
     def __len__(self):
@@ -2809,45 +2967,7 @@ class SleepDataManager:
         None
         """
 
-        if self.file_info["number_datapoints"] is not None:
-            return self.file_info["number_datapoints"]
-        
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        # Skip file information
-        next(file_generator)
-
-        count = 0
-        for _ in file_generator:
-            count += 1
-        
-        del file_generator
-
-        # Update file information
-        self.file_info["number_datapoints"] = count
-
-        # Save file information to the file
-        working_file_path = os.path.split(copy.deepcopy(self.file_path))[0] + "/save_in_progress"
-        working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-
-        # save file information to working file
-        save_to_pickle(data = self.file_info, file_name = working_file_path)
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
-
-        with open(working_file_path, "ab") as f:
-            for data_point in file_generator:
-                # Save data point to the working file
-                pickle.dump(data_point, f)
-        
-        # Remove the old file and rename the working file
-        if os.path.exists(self.file_path):
-            os.remove(self.file_path)
-        os.rename(working_file_path, self.file_path)
-
-        return count
+        return self.database_configuration["number_datapoints"][self.current_pid]
     
 
     def __contains__(self, id):
@@ -2866,11 +2986,11 @@ class SleepDataManager:
             The ID to be checked.
         """
 
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        # access current file path
+        current_file_path = self.pid_paths[self.current_pid]
 
-        # Skip file information
-        next(file_generator)
+        # Load data generator from the file
+        file_generator = load_from_pickle(current_file_path)
 
         id_found = False
         for data_point in file_generator:
@@ -2898,11 +3018,11 @@ class SleepDataManager:
         None
         """
 
-        # Load data generator from the file
-        file_generator = load_from_pickle(self.file_path)
+        # access current file path
+        current_file_path = self.pid_paths[self.current_pid]
 
-        # Skip file information
-        next(file_generator)
+        # Load data generator from the file
+        file_generator = load_from_pickle(current_file_path)
 
         for data_point in file_generator:
             yield data_point
@@ -2952,4 +3072,7 @@ class SleepDataManager:
         None
         """
 
-        return f"file_path: {self.file_path}\nfile_info: {self.file_info}"
+        # access current file path
+        current_file_path = self.pid_paths[self.current_pid]
+
+        return f"File path: {current_file_path}\nDatabase Configuration: {self.database_configuration}"

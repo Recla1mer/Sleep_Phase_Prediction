@@ -45,6 +45,10 @@ def final_data_preprocessing(
                 required if the corresponding preprocessing transformation should be applied in the first place.
     """
 
+    # database_configuration["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
+    # database_configuration["MAD_inlier_interval"] = [None, None] # No MAD values are altered
+    # database_configuration["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+
     # set default values for necessary keyword arguments:
     kwargs.setdefault("normalization_mode", "local")
 
