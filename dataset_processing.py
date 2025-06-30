@@ -753,7 +753,7 @@ def fuse_splitted_signals(
     # calculate original signal length
     max_shift_length = max(shift_lengths)
     last_splitted_signal_index = shift_lengths.index(max_shift_length)
-    original_signal_length = len(signals[last_splitted_signal_index]) + max_shift_length
+    original_signal_length = int(len(signals[last_splitted_signal_index]) + max_shift_length)
 
     # choose return data type
     data_types = [np.array(i).dtype for i in signals]
@@ -769,7 +769,7 @@ def fuse_splitted_signals(
     # fuse signals (collect duplicate entries into list)
     for signal_index in range(len(signals)):
         this_signal = signals[signal_index]
-        this_shift_length = shift_lengths[signal_index]
+        this_shift_length = int(shift_lengths[signal_index])
 
         for i in range(0, len(this_signal)):
             fused_signal[i + this_shift_length].append(this_signal[i])
@@ -784,6 +784,8 @@ def fuse_splitted_signals(
             if isinstance(fused_signal[0][0], list):
                 raise ValueError("This should not exist.")
             return np.array([max(set(i), key=i.count) for i in fused_signal], dtype=use_data_type)
+    
+    return fused_signal
 
 
 def fuse_splitted_signals_within_dictionaries(
@@ -818,7 +820,7 @@ def fuse_splitted_signals_within_dictionaries(
         if "*" != data_dict["ID"][-1]:
             restored_dictionary["ID"] = data_dict["ID"]
             shift_length_seconds = data_dict["shift_length_seconds"]
-            additional_keys = {key: data_dict[key] for key in data_dict if key not in ["ID", "shift_length_seconds"].extend(valid_signal_keys)}
+            additional_keys = {key: data_dict[key] for key in data_dict if key not in ["ID", "shift_length_seconds"] + valid_signal_keys}
 
     # Iterate over different signals, fuse and store them
     for signal_key_index in range(0, len(valid_signal_keys)):
@@ -1897,7 +1899,7 @@ class SleepDataManager:
                 
                 # Append new data point if ID was not found
                 if not_appended:
-                    pickle.dump(data_point, working_file)
+                    pickle.dump(new_data, working_file)
                 
                 error_occurred = False
             
@@ -2119,15 +2121,18 @@ class SleepDataManager:
             The ID, key, or index of the data to be removed.
         """
 
+        if len(self) == 0:
+            raise ValueError("There is no data to remove. The database is empty.")
+
         # prevent running this function outside of the main file
         if self.current_pid != self.main_pid:
-            raise ValueError("You can only remove data from the main file. If the desird datapoint is in the training, validation, or test file, remerge all datapoints into your main file ('fuse_train_test_validation' function) first.")
+            raise ValueError("You can only remove data from the main file. If the desired datapoint is in the training, validation, or test file, remerge all datapoints into your main file ('fuse_train_test_validation' function) first.")
 
         # access main file path
         main_file_path = self.pid_paths[self.main_pid]
 
         # check if key_id_index is an id, a key, or an index
-        valid_keys = ["ID", "RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
+        valid_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
 
         # Load data generator from the file
         file_generator = load_from_pickle(main_file_path)
@@ -2168,17 +2173,14 @@ class SleepDataManager:
                     
             elif isinstance(key_id_index, int):
                 count = 0
-                index_out_of_bounds = True
 
                 for data_point in file_generator:
                     if count == key_id_index:
-                        index_out_of_bounds = False
                         self.remove(data_point["ID"])  # remove data point by ID
-                        break
+                        return
                     count += 1
                 
-                if index_out_of_bounds:
-                    raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
 
             else:
                 raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
@@ -2196,9 +2198,19 @@ class SleepDataManager:
         if os.path.exists(main_file_path):
             os.remove(main_file_path)
         os.rename(working_file_path, main_file_path)
-    
 
-    def split_to_uniform_length(
+        if len(self) == 0:
+            if os.path.exists(main_file_path):
+                os.remove(main_file_path)
+            
+            # restore database configuration to default values
+            self.database_configuration["sleep_stage_label"] = None
+            self.database_configuration["signal_length_seconds"] = None
+            self.database_configuration["wanted_shift_length_seconds"] = None
+            self.database_configuration["absolute_shift_deviation_seconds"] = None
+            save_to_pickle(self.database_configuration, self.configuration_path)
+
+    def crop_oversized_data(
             self,
             signal_length_seconds: int,
             wanted_shift_length_seconds: int,
@@ -2219,7 +2231,7 @@ class SleepDataManager:
                 print("\nSignals were already split into uniform length using current settings. No need to split again.")
                 return
             print("\nSignals were already split into uniform length. Reversing the split to apply new split.")
-            self.reverse_signal_split()
+            self.reverse_signal_crop()
         
         # Check if signals can be split and fused correctly
         retrieve_possible_shift_lengths(
@@ -2228,25 +2240,28 @@ class SleepDataManager:
             all_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
         )
 
+        pid_identifier = [self.main_pid, self.training_pid, self.validation_pid, self.test_pid]
+
         # Create temporary file for every PID to save data in progress
-        working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress", file_type = "pkl") for _ in range(len(self.pid_paths))]
+        working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress", file_type = "pkl") for _ in range(len(pid_identifier))]
         working_files = [open(path, "ab") for path in working_file_paths]
-        number_split_datapoints = [0 for _ in range(len(self.pid_paths))] # number of new datapoints that were created by splitting the signals
+        number_split_datapoints = [0 for _ in range(len(pid_identifier))] # number of new datapoints that were created by splitting the signals
 
         error_occurred = True
         try:
-            for file_path_iteration in range(len(self.pid_paths)):
-                file_path = self.pid_paths[file_path_iteration]
-                working_file_path = working_file_paths[file_path_iteration]
-                working_file = working_files[file_path_iteration]
+            for pid_iteration in range(len(pid_identifier)):
+                this_pid = pid_identifier[pid_iteration]
+                file_path = self.pid_paths[this_pid]
+                working_file_path = working_file_paths[pid_iteration]
+                working_file = working_files[pid_iteration]
 
                 # skip file if it does not exist
-                if not os.path.exists(file_path):
+                if not os.path.exists(file_path) or self.database_configuration["number_datapoints"][this_pid] == 0: # type: ignore
                     continue
 
                 # Initialize progress bar
                 print(f"\nSplitting entries within {file_path} into multiple ones to ensure the contained signals span at most across: {signal_length_seconds} seconds.")
-                progress_bar = DynamicProgressBar(total = len(self)) # type: ignore
+                progress_bar = DynamicProgressBar(total = self.database_configuration["number_datapoints"][this_pid]) # type: ignore
 
                 # Load data generator from the file
                 file_generator = load_from_pickle(file_path)
@@ -2279,11 +2294,11 @@ class SleepDataManager:
                         with open(working_file_path, "ab") as f:
                             for splitted_data_dict in splitted_data_dictionaries:
                                 pickle.dump(splitted_data_dict, f)
-                                number_split_datapoints[file_path_iteration] += 1
+                                number_split_datapoints[this_pid] += 1
                     else:
                         # Append data point to the working file and increment number of new datapoints
                         pickle.dump(data_point, working_file)
-                        number_split_datapoints[file_path_iteration] += 1
+                        number_split_datapoints[this_pid] += 1
 
                     # Update progress bar
                     progress_bar.update()
@@ -2317,7 +2332,7 @@ class SleepDataManager:
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
-    def reverse_signal_split(self):
+    def reverse_signal_crop(self):
         """
         Reverses the signal split that was applied to the data during saving process.
 
@@ -2542,6 +2557,9 @@ class SleepDataManager:
         """
 
         # check arguments:
+        if equally_distribute_signal_durations and not join_splitted_parts:
+            raise ValueError("If 'equally_distribute_signal_durations' is True, 'join_splitted_parts' must also be True. It does not make sense to equally distribute signal durations if you do not intend to keep all splitted parts of a datapoint together in the same pid.")
+
         if test_size == 0:
             test_size = None
         
@@ -2571,13 +2589,13 @@ class SleepDataManager:
             wanted_shift_length_seconds = self.database_configuration["wanted_shift_length_seconds"]
             absolute_shift_deviation_seconds = self.database_configuration["absolute_shift_deviation_seconds"]
             print("\nAttention: 'join_splitted_parts' is set to True, but the data was already split into uniform length. Depending on the number of datapoints, this could cause long computation times. Reversing signal split.")
-            self.reverse_signal_split()
+            self.reverse_signal_crop()
             self.separate_train_test_validation(train_size, validation_size, test_size, random_state, shuffle, join_splitted_parts, equally_distribute_signal_durations) # type: ignore
-            self.split_to_uniform_length(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
+            self.crop_oversized_data(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
         
         if not join_splitted_parts:
             if self.database_configuration["signal_length_seconds"] is None:
-                raise ValueError("If 'join_splitted_parts' is False, the data must be split into uniform length first. Please call 'split_to_uniform_length' before calling 'separate_train_test_validation' with 'join_splitted_parts' set to False.")
+                raise ValueError("If 'join_splitted_parts' is False, the data must be split into uniform length first. Please call 'crop_oversized_data' before calling 'separate_train_test_validation' with 'join_splitted_parts' set to False.")
             # if join_splitted_parts is False, the ids of the splitted parts need to be distinguishable
             # we'll therefore append a meaningless number to those
             working_file_path = self.directory_path + "save_in_progress"
@@ -2656,12 +2674,33 @@ class SleepDataManager:
                     # calculate signal duration in seconds
                     rri_signal_lengths[consider_identifications.index(data_point["ID"])] = len(data_point["RRI"])
 
-            # round signal durations to next 0.5 hours
-            binwidth = self.database_configuration["RRI_frequency"]*1800 # 0.5 hour of RRI datapoints
+            # put signal durations into bins
             rri_signal_lengths = np.array(rri_signal_lengths, dtype=np.float64)
-            rri_signal_lengths = np.round(rri_signal_lengths / binwidth)
-            rri_signal_lengths = rri_signal_lengths.astype(np.int64)
             
+            binwidth = self.database_configuration["RRI_frequency"]*1800 # 30 minutes of RRI datapoints
+            signal_durations = np.round(rri_signal_lengths / binwidth)
+            signal_durations = signal_durations.astype(np.int64)
+
+            # ensure at least two instances of each artificial class (sklearn demands this), we make it ten to avoid further problems
+            while True:
+                class_label, label_occurance = np.unique(signal_durations, return_counts = True)
+                if np.min(label_occurance) >= 10:
+                    break
+
+                # find the class label with the least occurances
+                min_class_label_index = np.argmin(label_occurance)
+                min_class_label = class_label[min_class_label_index]
+
+                # find second closest class label
+                difference_to_label = np.abs(class_label - min_class_label)
+                difference_to_label[min_class_label_index] = max(difference_to_label) # ignore the closest class label
+                closest_class_label = class_label[np.argmin(difference_to_label)]
+
+                # assign labels with unsufficient occurances to the closest class label
+                signal_durations[signal_durations == min_class_label] = closest_class_label
+            
+                del class_label, label_occurance, min_class_label_index, min_class_label, difference_to_label, closest_class_label
+
         # Create temporary file to save data in progress
         working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
@@ -2679,7 +2718,7 @@ class SleepDataManager:
                     train_size = train_size,
                     random_state = random_state,
                     shuffle = shuffle,
-                    stratify = rri_signal_lengths
+                    stratify = signal_durations
                 )
             
             else:                
@@ -2746,7 +2785,7 @@ class SleepDataManager:
                     train_size = train_size,
                     random_state = random_state,
                     shuffle = shuffle,
-                    stratify = rri_signal_lengths
+                    stratify = signal_durations
                 )
 
                 # ensure rest_data_ids contains enough data points for validation and test
@@ -2759,7 +2798,7 @@ class SleepDataManager:
                     train_size = validation_size / (1 - train_size), # type: ignore
                     random_state = random_state,
                     shuffle = shuffle,
-                    stratify = [rri_signal_lengths[consider_identifications.index(id)] for id in rest_data_ids]
+                    stratify = [signal_durations[consider_identifications.index(id)] for id in rest_data_ids]
                 )
 
             else:                
@@ -2910,6 +2949,39 @@ class SleepDataManager:
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
+    def calculate_total_signal_duration(self, only_current_pid = True):
+        """
+        Calculates the total signal duration for all data points in the database.
+
+        RETURNS:
+        ------------------------------
+        total_duration: float
+            The total duration of all signals in seconds.
+        """
+
+        total_duration = 0
+
+        relevant_paths = self.pid_paths
+        if only_current_pid:
+            relevant_paths = [self.pid_paths[self.current_pid]]
+
+        
+        for file_path in relevant_paths:
+            if not os.path.exists(file_path):
+                continue
+            file_generator = load_from_pickle(file_path)
+            for data_point in file_generator:
+                if "RRI" in data_point:
+                    total_duration += len(data_point["RRI"]) / self.database_configuration["RRI_frequency"]
+                    continue
+                if "SLP" in data_point:
+                    total_duration += len(data_point["SLP"]) / self.database_configuration["SLP_frequency"]
+                    continue
+                if "MAD" in data_point:
+                    total_duration += len(data_point["MAD"]) / self.database_configuration["MAD_frequency"]
+
+        return total_duration
+
     def change_uniform_frequencies(self, updated_frequencies: dict):
         """
         Change the uniform frequencies. Only possible if no datapoints are in the file.
@@ -2949,6 +3021,32 @@ class SleepDataManager:
             raise ValueError("Signal Frequencies must be larger than 0!")
 
         # update database configuration
+        save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+    
+
+    def empty_database(self):
+        """
+        Empties the database by removing all data points from the file. 
+        The file information will be kept.
+
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
+        """
+
+        for file_path in self.pid_paths:  # Skip the main file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+        self.database_configuration["sleep_stage_label"] = None
+        self.database_configuration["signal_length_seconds"] = None
+        self.database_configuration["wanted_shift_length_seconds"] = None
+        self.database_configuration["absolute_shift_deviation_seconds"] = None
+        self.database_configuration["number_datapoints"] = [0 for _ in range(len(self.pid_paths))]
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
