@@ -34,7 +34,7 @@ Operating On Signals
 
 def remove_outliers(
         signal: list, 
-        inlier_interval: list = [None, None]
+        inlier_interval: tuple = (None, None)
     ) -> np.ndarray:
     """
     Remove outliers from a signal. Outliers are defined as values that are smaller than lower_bound (replaced 
@@ -55,6 +55,9 @@ def remove_outliers(
         The interval in which inliers are expected. Outliers will be set to the closest value in this interval.
         If interval value is None, no lower and/or upper bound will be applied.
     """
+
+    if inlier_interval == (None, None):
+        return np.array(signal)
 
     signal = np.array(signal) # type: ignore
 
@@ -1268,9 +1271,9 @@ def reverse_signal_to_windows_reshape(
     return np.array(recovered_signal[:original_signal_length])
 
 
-def slp_label_transformation(
+def get_slp_label_mapping(
         current_labels: dict,
-        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0},
+        desired_labels: dict,
     ) -> dict:
     """
     Create transformation dictionary to alter the labels that classify the sleep stage.
@@ -1305,10 +1308,9 @@ def slp_label_transformation(
     return transformation_dict
 
 
-def alter_slp_labels(
+def map_slp_labels(
         slp_labels: list,
-        current_labels: dict,
-        desired_labels: dict = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": -1},
+        slp_label_mapping: dict,
     ) -> np.ndarray:
     """
     Alter the labels that classify the sleep stage.
@@ -1327,38 +1329,29 @@ def alter_slp_labels(
     desired_labels: dict
         The desired labels that classify the sleep stage.
     """
-
-    transformation = slp_label_transformation(current_labels, desired_labels)
     
     # alter dtype of slp labels if necessary (float is not accepted)
     slp_labels = np.array(slp_labels) # type: ignore
     if slp_labels.dtype == float: # type: ignore
-        print("\nWARNING: Sleep labels are of type float. Converting to int.")
         slp_labels = slp_labels.astype(int) # type: ignore
-
-    signal_data_type = slp_labels.dtype # type: ignore
     slp_labels = slp_labels.astype(str) # type: ignore
 
     altered_labels = np.empty((0), str) # type: ignore
 
-    transform_all_other = False
-    if "other" in transformation:
-        transform_all_other = True
-    
-    if transform_all_other:
+    if "other" in slp_label_mapping:
         for label in slp_labels:
-            if label in transformation:
-                altered_labels = np.append(altered_labels, transformation[label])
+            if label in slp_label_mapping:
+                altered_labels = np.append(altered_labels, slp_label_mapping[label])
             else:
-                altered_labels = np.append(altered_labels, transformation["other"])
+                altered_labels = np.append(altered_labels, slp_label_mapping["other"])
     else:
         for label in slp_labels:
-            if label in transformation:
-                altered_labels = np.append(altered_labels, transformation[label])
+            if label in slp_label_mapping:
+                altered_labels = np.append(altered_labels, slp_label_mapping[label])
             else:
                 raise ValueError(f"Label '{label}' not found in transformation dictionary.")
         
-    altered_labels = altered_labels.astype(signal_data_type)
+    altered_labels = altered_labels.astype(int)
     
     return altered_labels
 
@@ -1424,6 +1417,18 @@ def summarize_predicted_signal(predicted_signal: list, mode: str):
 Handling Pickle Files And Paths
 ================================
 """
+
+def clean_and_remove_directory(directory):
+    """
+    Cleans and removes the specified directory if it exists.
+    """
+    entries = os.listdir(directory)
+    for entry in entries:
+        if os.path.isdir(os.path.join(directory, entry)):
+            clean_and_remove_directory(os.path.join(directory, entry))
+        else:
+            os.remove(os.path.join(directory, entry))
+    os.rmdir(directory)
 
 
 def save_to_pickle(data, file_name):
@@ -2199,7 +2204,7 @@ class SleepDataManager:
             os.remove(main_file_path)
         os.rename(working_file_path, main_file_path)
 
-        if len(self) == 0:
+        if self.database_configuration["number_datapoints"][self.main_pid] == 0:
             if os.path.exists(main_file_path):
                 os.remove(main_file_path)
             
@@ -2209,6 +2214,7 @@ class SleepDataManager:
             self.database_configuration["wanted_shift_length_seconds"] = None
             self.database_configuration["absolute_shift_deviation_seconds"] = None
             save_to_pickle(self.database_configuration, self.configuration_path)
+
 
     def crop_oversized_data(
             self,
@@ -2240,28 +2246,25 @@ class SleepDataManager:
             all_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
         )
 
-        pid_identifier = [self.main_pid, self.training_pid, self.validation_pid, self.test_pid]
-
         # Create temporary file for every PID to save data in progress
-        working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress", file_type = "pkl") for _ in range(len(pid_identifier))]
+        working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress_" + str(i), file_type = "pkl") for i in range(len(self.pid_paths))]
         working_files = [open(path, "ab") for path in working_file_paths]
-        number_split_datapoints = [0 for _ in range(len(pid_identifier))] # number of new datapoints that were created by splitting the signals
+        number_split_datapoints = [0 for _ in range(len(self.pid_paths))] # number of new datapoints that were created by splitting the signals
 
         error_occurred = True
         try:
-            for pid_iteration in range(len(pid_identifier)):
-                this_pid = pid_identifier[pid_iteration]
-                file_path = self.pid_paths[this_pid]
-                working_file_path = working_file_paths[pid_iteration]
-                working_file = working_files[pid_iteration]
+            for file_path_iteration in range(len(self.pid_paths)):
+                file_path = self.pid_paths[file_path_iteration]
+                working_file_path = working_file_paths[file_path_iteration]
+                working_file = working_files[file_path_iteration]
 
                 # skip file if it does not exist
-                if not os.path.exists(file_path) or self.database_configuration["number_datapoints"][this_pid] == 0: # type: ignore
+                if not os.path.exists(file_path) or self.database_configuration["number_datapoints"][file_path_iteration] == 0: # type: ignore
                     continue
 
                 # Initialize progress bar
                 print(f"\nSplitting entries within {file_path} into multiple ones to ensure the contained signals span at most across: {signal_length_seconds} seconds.")
-                progress_bar = DynamicProgressBar(total = self.database_configuration["number_datapoints"][this_pid]) # type: ignore
+                progress_bar = DynamicProgressBar(total = self.database_configuration["number_datapoints"][file_path_iteration]) # type: ignore
 
                 # Load data generator from the file
                 file_generator = load_from_pickle(file_path)
@@ -2294,11 +2297,11 @@ class SleepDataManager:
                         with open(working_file_path, "ab") as f:
                             for splitted_data_dict in splitted_data_dictionaries:
                                 pickle.dump(splitted_data_dict, f)
-                                number_split_datapoints[this_pid] += 1
+                                number_split_datapoints[file_path_iteration] += 1
                     else:
                         # Append data point to the working file and increment number of new datapoints
                         pickle.dump(data_point, working_file)
-                        number_split_datapoints[this_pid] += 1
+                        number_split_datapoints[file_path_iteration] += 1
 
                     # Update progress bar
                     progress_bar.update()
@@ -2320,12 +2323,14 @@ class SleepDataManager:
         for file_path_iteration in range(len(self.pid_paths)):
             file_path = self.pid_paths[file_path_iteration]
             working_file_path = working_file_paths[file_path_iteration]
-            if os.path.exists(working_file_path):
+            if os.path.exists(file_path):
+                os.remove(file_path)
                 os.rename(working_file_path, file_path)
+            if os.path.exists(working_file_path):
+                os.remove(working_file_path)
 
         # if no error occured, update and save database configuration
-        for i in range(len(self.pid_paths)):
-            self.database_configuration["number_datapoints"][i] = number_split_datapoints[i]
+        self.database_configuration["number_datapoints"] = number_split_datapoints
         self.database_configuration["signal_length_seconds"] = signal_length_seconds
         self.database_configuration["wanted_shift_length_seconds"] = wanted_shift_length_seconds
         self.database_configuration["absolute_shift_deviation_seconds"] = absolute_shift_deviation_seconds
@@ -2626,14 +2631,13 @@ class SleepDataManager:
         # iterate over entries and collect ids
         num_invalid_data_points = 0
         for data_point in file_generator:
-            if join_splitted_parts:
-                if "SLP" in data_point and "RRI" in data_point:
-                    if "MAD" in data_point:
-                        id_with_rri_and_mad.append(data_point["ID"])
-                    else:
-                        id_with_rri.append(data_point["ID"])
+            if "SLP" in data_point and "RRI" in data_point:
+                if "MAD" in data_point:
+                    id_with_rri_and_mad.append(data_point["ID"])
                 else:
-                    num_invalid_data_points += 1
+                    id_with_rri.append(data_point["ID"])
+            else:
+                num_invalid_data_points += 1
         
         del file_generator
         
@@ -2770,10 +2774,15 @@ class SleepDataManager:
                     open_file.close()
                 working_file.close()
 
-                # if an error occured, clean up the working file
-                if error_occurred and os.path.exists(working_file_path):
-                    os.remove(working_file_path)
-        
+                # if an error occured, clean up the working files
+                if error_occurred:
+                    if os.path.exists(working_file_path):
+                        os.remove(working_file_path)
+                    
+                    for f in [train_file_path, validation_file_path]:
+                        if os.path.exists(f):
+                            os.remove(f)
+
         else:
             """
             split into training validation and test data
@@ -2865,9 +2874,14 @@ class SleepDataManager:
                     open_file.close()
                 working_file.close()
 
-                # if an error occured, clean up the working file
-                if error_occurred and os.path.exists(working_file_path):
-                    os.remove(working_file_path)
+                # if an error occured, clean up the working files
+                if error_occurred:
+                    if os.path.exists(working_file_path):
+                        os.remove(working_file_path)
+                    
+                    for f in [train_file_path, validation_file_path, test_file_path]:
+                        if os.path.exists(f):
+                            os.remove(f)
 
         # if no error occured, replace the main file with the working file
         if os.path.exists(main_file_path):
@@ -2877,6 +2891,9 @@ class SleepDataManager:
         # if no error occured, update database configuration
         self.database_configuration["number_datapoints"] = count_datapoints
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+        
+        if self.database_configuration["number_datapoints"][self.main_pid] == 0 and os.path.exists(main_file_path): # type: ignore
+            os.remove(main_file_path)  # If the main file is empty, remove it
 
         # if random numbers were appended to the IDs due to 'join_splitted_parts' being False, we need to remove them now
         if not join_splitted_parts:

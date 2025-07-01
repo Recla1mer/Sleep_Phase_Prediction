@@ -30,7 +30,10 @@ Implementing a Custom Dataset
 
 def final_data_preprocessing(
         signal: np.ndarray,
-        signal_type: str,
+        signal_id: str,
+        target_frequency: int,
+        signal_length_seconds: int,
+        pad_with,
         reshape_to_overlapping_windows: bool,
         normalize: bool,
         datatype_mappings: list,
@@ -45,9 +48,25 @@ def final_data_preprocessing(
                 required if the corresponding preprocessing transformation should be applied in the first place.
     """
 
-    # database_configuration["RRI_inlier_interval"] = [0.3, 2.0] # RRI > 2, RRI < 0.3 are set to 2, 0.3 respectively 
-    # database_configuration["MAD_inlier_interval"] = [None, None] # No MAD values are altered
-    # database_configuration["sleep_stage_label"] = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifect": 0}
+    if signal_id == "SLP":
+        signal_type = "target"
+    elif signal_id in ["RRI", "MAD"]:
+        signal_type = "feature"
+    else:
+        raise ValueError(f"Unknown signal_id '{signal_id}'. Expected 'SLP', 'RRI' or 'MAD'.")
+
+    if signal_id == "SLP":
+        # transform sleep stage labels to uniform labels:
+        signal = map_slp_labels(
+            slp_labels = signal, # type: ignore
+            slp_label_mapping = kwargs["slp_label_mapping"] # type: ignore
+        )
+    else:
+        # remove outliers from signal:
+        signal = remove_outliers(
+            signal = signal, # type: ignore
+            inlier_interval = kwargs["inlier_interval"]
+        )
 
     # set default values for necessary keyword arguments:
     kwargs.setdefault("normalization_mode", "local")
@@ -69,9 +88,9 @@ def final_data_preprocessing(
     if reshape_to_overlapping_windows:
         signal = reshape_signal_to_overlapping_windows(
             signal = copy.deepcopy(signal), # type: ignore
-            target_frequency = kwargs["target_frequency"],
-            nn_signal_duration_seconds = kwargs["signal_length_seconds"],
-            pad_with = kwargs["pad_with"],
+            target_frequency = target_frequency,
+            nn_signal_duration_seconds = signal_length_seconds,
+            pad_with = pad_with,
             number_windows = kwargs["windows_per_signal"],
             window_duration_seconds = kwargs["window_duration_seconds"],
             overlap_seconds = kwargs["overlap_seconds"],
@@ -79,12 +98,17 @@ def final_data_preprocessing(
             priority_order = kwargs["priority_order"],
         )
     else:
+        # pad signal if it is shorter than the expected length (automatically done by reshape_signal_to_overlapping_windows):
+        if len(signal) < int(signal_length_seconds * target_frequency):
+            signal = np.append(signal, np.full_like(np.empty(int(signal_length_seconds * target_frequency) - signal.shape[0]), pad_with, dtype=signal.dtype), axis=0)
+
         # ensure only one label per signal (automatically done by reshape_signal_to_overlapping_windows):
         if signal_type == "target":
             # collect unique labels and their counts
             different_labels, label_counts = np.unique(copy.deepcopy(signal), return_counts=True)
             # take label with highest count
             signal = np.array([different_labels[np.argmax(label_counts)]])
+        
 
     # apply normalization after window segmentation if local normalization is requested:
     if kwargs["normalization_mode"] == "local" and normalize:
@@ -115,7 +139,14 @@ class CustomSleepDataset(Dataset):
     """
     def __init__(
             self, 
-            path_to_data: str, 
+            path_to_data_directory: str,
+            pid: str,
+            slp_label_mapping: dict,
+            rri_inlier_interval: tuple,
+            mad_inlier_interval: tuple,
+            signal_length_seconds: int,
+            pad_feature_with,
+            pad_target_with,
             reshape_to_overlapping_windows: bool,
             normalize_rri: bool = False,
             normalize_mad: bool = False,
@@ -126,8 +157,8 @@ class CustomSleepDataset(Dataset):
         """
         ARGUMENTS:
         ------------------------------
-        path_to_data : str
-            Path to the data file
+        data_manager_class : type
+            The class used to access the data
         reshape_to_overlapping_windows : bool
             Whether to reshape the signal into overlapping windows
         normalize_rri : bool
@@ -148,6 +179,8 @@ class CustomSleepDataset(Dataset):
             Value to pad feature (RRI and MAD) with if signal too short, by default 0
         pad_target_with : int
             Value to pad target (SLP) with if signal too short, by default 0
+        signal_length_seconds: int
+            The length of the signal in seconds. This is used to determine the number of windows to create.
         windows_per_signal: int
             The number of windows to split the signal into.
         window_duration_seconds: int
@@ -179,25 +212,32 @@ class CustomSleepDataset(Dataset):
         """
         
         # access data file and sampling frequencies:
-        self.data_manager = SleepDataManager(path_to_data)
+        self.data_manager = SleepDataManager(
+            directory_path = path_to_data_directory,
+            pid = pid,
+        )
         
-        self.rri_frequency = self.data_manager.file_info["RRI_frequency"]
-        self.mad_frequency = self.data_manager.file_info["MAD_frequency"]
-        self.slp_frequency = self.data_manager.file_info["SLP_frequency"]
+        self.rri_frequency = self.data_manager.database_configuration["RRI_frequency"]
+        self.mad_frequency = self.data_manager.database_configuration["MAD_frequency"]
+        self.slp_frequency = self.data_manager.database_configuration["SLP_frequency"]
+
+        # access target and feature value mapping parameters:
+        self.slp_label_mapping = slp_label_mapping
+        self.rri_inlier_interval = rri_inlier_interval
+        self.mad_inlier_interval = mad_inlier_interval
         
+        # parameters needed for ensuring uniform signal shape
+        self.signal_length_seconds = signal_length_seconds
+        self.pad_feature_with = pad_feature_with
+        self.pad_target_with = pad_target_with
+
         # access common window_reshape_parameters
         self.reshape_to_overlapping_windows = reshape_to_overlapping_windows
         self.common_window_reshape_parameters = dict()
 
         if reshape_to_overlapping_windows:
-            self.common_window_reshape_parameters["signal_length_seconds"] = self.data_manager.file_info["signal_length_seconds"]
             for key in ["windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order"]:
                 self.common_window_reshape_parameters[key] = kwargs[key]
-        
-        kwargs.setdefault("pad_feature_with", None) # even if not reshaping, we need to set this parameter to ensure functionality
-        kwargs.setdefault("pad_target_with", None) # even if not reshaping, we need to set this parameter to ensure functionality
-        self.pad_feature_with = kwargs["pad_feature_with"]
-        self.pad_target_with = kwargs["pad_target_with"]
 
         # access common signal_normalization_parameters
         self.normalize_rri = normalize_rri
@@ -223,11 +263,13 @@ class CustomSleepDataset(Dataset):
         # extract feature (RRI) from dictionary and perform final preprocessing:
         rri_sample = final_data_preprocessing(
             signal = data_sample["RRI"], # type: ignore
+            signal_id = "RRI",
+            inlier_interval = self.rri_inlier_interval,
+            target_frequency = self.rri_frequency,
+            signal_length_seconds = self.signal_length_seconds,
+            pad_with = self.pad_feature_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
             **self.common_window_reshape_parameters,
-            target_frequency = self.rri_frequency,
-            pad_with = self.pad_feature_with,
-            signal_type = "feature",
             normalize = self.normalize_rri,
             **self.common_signal_normalization_parameters,
             datatype_mappings = [(np.float64, np.float32)],
@@ -238,11 +280,13 @@ class CustomSleepDataset(Dataset):
             # extract feature (MAD) from dictionary and perform final preprocessing:
             mad_sample = final_data_preprocessing(
                 signal = data_sample["MAD"], # type: ignore
+                signal_id = "MAD",
+                inlier_interval = self.mad_inlier_interval,
+                target_frequency = self.mad_frequency,
+                signal_length_seconds = self.signal_length_seconds,
+                pad_with = self.pad_feature_with,
                 reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
                 **self.common_window_reshape_parameters,
-                target_frequency = self.mad_frequency,
-                pad_with = self.pad_feature_with,
-                signal_type = "feature",
                 normalize = self.normalize_mad,
                 **self.common_signal_normalization_parameters,
                 datatype_mappings = [(np.float64, np.float32)],
@@ -255,11 +299,13 @@ class CustomSleepDataset(Dataset):
         # extract labels (Sleep Phase) from dictionary and perform final preprocessing:
         slp_labels = final_data_preprocessing(
             signal = data_sample["SLP"], # type: ignore
+            signal_id = "SLP",
+            slp_label_mapping = self.slp_label_mapping,
+            target_frequency = self.slp_frequency,
+            signal_length_seconds = self.signal_length_seconds,
+            pad_with = self.pad_target_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
             **self.common_window_reshape_parameters,
-            target_frequency = self.slp_frequency,
-            pad_with = self.pad_target_with,
-            signal_type = "target",
             normalize = False,  # SLP labels should not be normalized
             datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
             transform = self.target_transform
@@ -2749,9 +2795,9 @@ if __name__ == "__main__":
     print("\n\nPreparing random data file for testing...")
     print("="*80)
     # creating dataset file and data manager instance on it
-    random_file_path = "Testing_NNM/random_data.pkl"
-    random_data_manager = SleepDataManager(file_path = random_file_path)
-    random_sleep_stage_labels = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifect": ["other"]}
+    random_directory_path = "Testing_NNM/"
+    random_data_manager = SleepDataManager(directory_path = random_directory_path)
+    random_sleep_stage_labels = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # creating and saving random data to file
     for index in range(10):
@@ -2776,6 +2822,13 @@ if __name__ == "__main__":
         random_data_manager.save(random_datapoint, unique_id=True) # comment to test data without MAD signal
         #random_data_manager.save(random_datapoint_without_mad) # uncomment to test data without MAD signal
     
+    # retrieve slp label mapping
+    slp_label_mapping = get_slp_label_mapping(
+        current_labels = random_sleep_stage_labels,
+        desired_labels = {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0}
+    )
+
+    # print some data
     some_datapoint = random_data_manager.load(0)
 
     print("Shape of Signals:")
@@ -2803,7 +2856,11 @@ if __name__ == "__main__":
 
     # Create dataset
     dataset = CustomSleepDataset(
-        path_to_data = random_file_path,
+        path_to_data_directory = random_directory_path,
+        pid = "main",
+        slp_label_mapping = slp_label_mapping,
+        rri_inlier_interval = (None, None), # no inlier interval for RRI
+        mad_inlier_interval = (None, None), # no inlier interval for MAD
         reshape_to_overlapping_windows = True,
         normalize_rri = True,
         normalize_mad = True,
@@ -2812,7 +2869,8 @@ if __name__ == "__main__":
         target_transform = None,
         pad_feature_with = 0,
         pad_target_with = 0,
-        windows_per_signal = 1197, 
+        signal_length_seconds = 36000,
+        windows_per_signal = 1197,
         window_duration_seconds = 120, 
         overlap_seconds = 90,
         priority_order = [3, 2, 1, 0],
@@ -2838,9 +2896,12 @@ if __name__ == "__main__":
         print("SLP shape:", slp.shape)
         print("")
     
-    # delete data file
-    os.remove(random_file_path)
-    os.rmdir(os.path.split(random_file_path)[0])
+    # delete directory
+    for file in os.listdir(random_directory_path):
+        file_path = os.path.join(random_directory_path, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    os.rmdir(random_directory_path)
 
     print("="*80)
 
