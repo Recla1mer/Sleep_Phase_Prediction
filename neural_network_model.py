@@ -2634,9 +2634,6 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         Number of samples in each batch
     """
 
-    # get number of windows the signals are reshaped to
-    windows_per_signal = model.windows_per_signal
-
     # set optimizer
     optimizer = optimizer_fn(model.parameters(), lr=lr_scheduler(current_epoch))
 
@@ -2644,11 +2641,11 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
     model.train()
 
     # variables to save accuracy progress
-    train_loss, correct = 0, 0
+    train_loss = 0
+    train_confusion_matrix = np.zeros((model.number_sleep_stages, model.number_sleep_stages))
 
     # variables to track progress
     num_batches = len(dataloader)
-    total_number_predictions = 0
     print("\nTraining Neural Network Model:")
     progress_bar = DynamicProgressBar(total = len(dataloader.dataset), batch_size = batch_size)
 
@@ -2677,25 +2674,23 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
         optimizer.step() # updates the model parameters based on the gradients computed during the backward pass
         optimizer.zero_grad()
 
-        # collect accuracy progress values
-        this_correct_predicted = (pred.argmax(1) == slp).type(torch.float).sum().item()
-        this_number_predictions = slp.shape[0]
+        # update confusion matrix
+        pred = pred.argmax(1).cpu().numpy()
+        slp = slp.cpu().numpy()
+        for i in range(len(slp)):
+            train_confusion_matrix[slp[i], pred[i]] += 1
 
         train_loss += loss.item()
-        correct += this_correct_predicted
-        total_number_predictions += this_number_predictions
 
         # print progress bar
+        accuracy = train_confusion_matrix.diagonal().sum() / train_confusion_matrix.sum()
         progress_bar.update(
-            additional_info = f'Loss: {format_float(loss.item(), 3)} | Acc: {round(this_correct_predicted / this_number_predictions*100, 2)}%',
+            additional_info = f'Loss: {format_float(loss.item(), 3)} | Acc: {(100*accuracy):>0.1f}%',
             )
-
-        del this_correct_predicted
     
     train_loss /= num_batches
-    correct /= total_number_predictions
-    
-    return train_loss, correct
+
+    return train_loss, train_confusion_matrix
 
 
 # TESTING LOOP
@@ -2733,20 +2728,17 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
         If True, predicted and actual results are collected
     """
 
-    # get number of windows the signals are reshaped to
-    windows_per_signal = model.windows_per_signal
-
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     model.eval()
 
     # variables to track progress
     num_batches = len(dataloader)
-    total_number_predictions = 0
     print("\nCalculating Prediction Accuracy on Test Data:")
     progress_bar = DynamicProgressBar(total = len(dataloader.dataset), batch_size = batch_size)
 
-    # variables to save accuracy progress
-    test_loss, correct = 0, 0
+    # variables to save performance progress
+    test_loss = 0
+    test_confusion_matrix = np.zeros((model.number_sleep_stages, model.number_sleep_stages))
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
@@ -2770,18 +2762,22 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
             slp = slp.long()
             test_loss += loss_fn(pred, slp).item()
 
-            # collect accuracy values
-            correct += (pred.argmax(1) == slp).type(torch.float).sum().item()
-            total_number_predictions += slp.shape[0]
+            # update confusion matrix
+            pred = pred.argmax(1).cpu().numpy()
+            slp = slp.cpu().numpy()
+
+            for i in range(len(slp)):
+                test_confusion_matrix[slp[i], pred[i]] += 1
 
             # print progress bar
             progress_bar.update()
 
     test_loss /= num_batches
-    correct /= total_number_predictions
-    print(f"\nTest Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}")
+    accuracy = test_confusion_matrix.diagonal().sum() / test_confusion_matrix.sum()
 
-    return test_loss, correct
+    print(f"\nTest Error: \n Accuracy: {(100*accuracy):>0.1f}%, Avg loss: {test_loss:>8f}")
+
+    return test_loss, test_confusion_matrix
 
 
 # Example usage

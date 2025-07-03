@@ -807,11 +807,11 @@ def main_model_training(
         clearing_sequence += "\033[2K" # Clear line
 
     # variables to store accuracy progress
-    train_accuracy = []
-    train_avg_loss = []
+    train_avg_loss = list()
+    train_confusion_matrices = list()
 
-    test_accuracy = [[] for _ in range(len(paths_to_validation_data_directories))]
     test_avg_loss = [[] for _ in range(len(paths_to_validation_data_directories))]
+    test_confusion_matrices = [[] for _ in range(len(paths_to_validation_data_directories))]
 
     for t in range(number_epochs):
         # clearing previous epoch progress bars
@@ -821,7 +821,7 @@ def main_model_training(
         print(f"\nEpoch {t+1}:")
         print("-"*130)
 
-        train_results = train_loop(
+        train_loss, train_confusion_matrix = train_loop(
             dataloader = train_dataloader,
             model = neural_network_model,
             device = device,
@@ -831,11 +831,11 @@ def main_model_training(
             current_epoch = t,
             batch_size = batch_size
         )
-        train_avg_loss.append(train_results[0])
-        train_accuracy.append(train_results[1])
+        train_avg_loss.append(train_loss)
+        train_confusion_matrices.append(train_confusion_matrix)
 
         for i, validation_dataloader in enumerate(validation_dataloaders):
-            validation_results = test_loop(
+            test_loss, test_confusion_matrix = test_loop(
                 dataloader = validation_dataloader,
                 model = neural_network_model,
                 device = device,
@@ -843,10 +843,9 @@ def main_model_training(
                 batch_size = batch_size
             )
 
-            test_avg_loss[i].append(validation_results[0])
-            test_accuracy[i].append(validation_results[1])
+            test_avg_loss[i].append(test_loss)
+            test_confusion_matrices[i].append(test_confusion_matrix)
 
-    
     """
     ----------------------------------
     Saving Neural Network Model State
@@ -867,12 +866,19 @@ def main_model_training(
     create_directories_along_path(path_to_loss_per_epoch)
 
     performance_values = {
-        "train_accuracy": train_accuracy,
         "train_avg_loss": train_avg_loss,
+        "train_confusion_matrix": train_confusion_matrices,
     }
-    for i, path in enumerate(paths_to_validation_data_directories):
-        performance_values[f"{path}_accuracy"] = test_accuracy[i]
-        performance_values[f"{path}_avg_loss"] = test_avg_loss[i]
+    short_names = copy.deepcopy(paths_to_validation_data_directories)
+    for i in range(len(short_names)):
+        if "SHHS" in short_names[i]:
+            short_names[i] = "SHHS"
+        elif "GIF" in short_names[i]:
+            short_names[i] = "GIF"
+
+    for i, name in enumerate(short_names):
+        performance_values[f"{name}_avg_loss"] = test_avg_loss[i]
+        performance_values[f"{name}_confusion_matrix"] = test_confusion_matrices[i]
 
     save_to_pickle(performance_values, path_to_loss_per_epoch)
 
@@ -885,11 +891,11 @@ Applying Trained Neural Network Model
 
 
 def main_model_predicting(
-        path_to_model_state: str = "Neural_Network/Model_State.pth",
-        path_to_data_directory: str = "Processed_Data/shhs_data.pkl",
-        pid: str = "main",
-        path_to_project_configuration: str = "Neural_Network/Project_Configuration.pkl",
-        path_to_save_results: str = "Neural_Network/Model_Performance.pkl",
+        path_to_model_state: str,
+        path_to_data_directory: str,
+        pid: str,
+        path_to_project_configuration: str,
+        path_to_save_results: str,
     ):
     """
     Applies the trained neural network model to the processed data. The processed data is accessed using the
@@ -1099,9 +1105,6 @@ def main_model_predicting(
     with torch.no_grad():
         # Iterate over Database
         for data_dict in data_manager:
-            
-            # retrieve signal length in seconds
-            signal_length_seconds = len(data_dict["RRI"]) / rri_frequency
 
             """
             Data Processing (Analogue to CustomSleepDataset class in neural_network_model.py)
@@ -1167,7 +1170,7 @@ def main_model_predicting(
                     signal_id = "SLP",
                     slp_label_mapping = slp_label_mapping,
                     target_frequency = slp_frequency,
-                    signal_length_seconds = original_signal_length,
+                    signal_length_seconds = signal_length_seconds,
                     pad_with = pad_target_with,
                     reshape_to_overlapping_windows = reshape_to_overlapping_windows,
                     **common_window_reshape_params,
@@ -1296,6 +1299,7 @@ def main_model_predicting(
                         results["SLP_predicted"] = predicted
                 
                 error_occured = False
+                pickle.dump(results, working_file)
 
             finally:
                 working_file.close()
@@ -1303,8 +1307,6 @@ def main_model_predicting(
                 if error_occured:
                     if os.path.exists(working_file_path):
                         os.remove(working_file_path)
-            
-            pickle.dump(results, working_file)
                     
             # update progress
             progress_bar.update()
