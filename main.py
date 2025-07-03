@@ -703,8 +703,16 @@ def main_model_training(
     CustomDatasetKeywords["slp_label_mapping"] = slp_label_mapping
     del data_manager
 
+    # add data cleaning parameters
     CustomDatasetKeywords["rri_inlier_interval"] = project_configuration["rri_inlier_interval"]
     CustomDatasetKeywords["mad_inlier_interval"] = project_configuration["mad_inlier_interval"]
+
+    # add desired signal length
+    CustomDatasetKeywords["signal_length_seconds"] = project_configuration["signal_length_seconds"]
+
+    # add padding parameters
+    CustomDatasetKeywords["pad_feature_with"] = project_configuration["pad_feature_with"]
+    CustomDatasetKeywords["pad_target_with"] = project_configuration["pad_target_with"]
 
     # add window_reshape_parameters
     CustomDatasetKeywords["reshape_to_overlapping_windows"] = project_configuration["reshape_to_overlapping_windows"]

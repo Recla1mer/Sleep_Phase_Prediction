@@ -390,18 +390,22 @@ def copy_and_split_default_database(
     if not os.path.exists(path_to_save_shhs_database):
         shutil.copytree(path_to_default_shhs_database, path_to_save_shhs_database)
 
+        # process SHHS dataset
+        shhs_data_manager = SleepDataManager(directory_path = path_to_save_shhs_database)
+        shhs_data_manager.crop_oversized_data(**signal_crop_params)
+
+        del shhs_data_manager
+
     if not os.path.exists(path_to_save_gif_database):
         shutil.copytree(path_to_default_gif_database, path_to_save_gif_database)
 
-    # process SHHS dataset
-    shhs_data_manager = SleepDataManager(directory_path = path_to_save_shhs_database)
-    shhs_data_manager.crop_oversized_data(**signal_crop_params)
+        # process GIF dataset
+        gif_data_manager = SleepDataManager(directory_path = path_to_save_gif_database)
+        gif_data_manager.crop_oversized_data(**signal_crop_params)
 
-    # process GIF dataset
-    gif_data_manager = SleepDataManager(directory_path = path_to_save_gif_database)
-    gif_data_manager.crop_oversized_data(**signal_crop_params)
+        del gif_data_manager
 
-    del signal_crop_params, shhs_data_manager, gif_data_manager
+    del signal_crop_params
 
 
 default_shhs_path = "Default_SHHS_Data/"
@@ -944,8 +948,27 @@ if False:
         "absolute_shift_deviation_seconds": 0,
     }
 
-    # gif_data_manager.crop_oversized_data(**signal_cropping_parameters)
-    # shhs_data_manager.crop_oversized_data(**signal_cropping_parameters)
+    gif_data_manager.crop_oversized_data(**signal_cropping_parameters)
+    shhs_data_manager.crop_oversized_data(**signal_cropping_parameters)
 
     print(len(shhs_data_manager), len(shhs_training_data_manager), len(shhs_validation_data_manager))
     print(len(gif_data_manager), len(gif_training_data_manager), len(gif_validation_data_manager))
+
+    # -----------------------------------------------------------
+
+    data_manager = SleepDataManager(directory_path = default_shhs_path, pid="train")
+    count = 0
+    for data in data_manager:
+        count += 1
+
+    print(count, data_manager.database_configuration["number_datapoints"])
+
+    data_manager = SleepDataManager(directory_path = "10h_SHHS_Data/", pid="train")
+
+    count = 0
+    for data in data_manager:
+        count += 1
+
+    print(count, data_manager.database_configuration["number_datapoints"])
+
+    raise SystemExit

@@ -2295,10 +2295,9 @@ class SleepDataManager:
                             ) # returns a list of dictionaries
                         
                         # append all dictionaries at once and increment number of new datapoints
-                        with open(working_file_path, "ab") as f:
-                            for splitted_data_dict in splitted_data_dictionaries:
-                                pickle.dump(splitted_data_dict, f)
-                                number_split_datapoints[file_path_iteration] += 1
+                        for splitted_data_dict in splitted_data_dictionaries:
+                            pickle.dump(splitted_data_dict, working_file)
+                            number_split_datapoints[file_path_iteration] += 1
                     else:
                         # Append data point to the working file and increment number of new datapoints
                         pickle.dump(data_point, working_file)
