@@ -674,10 +674,12 @@ def split_signals_within_dictionary(
         )
 
     # split signals if they are too long
+    present_signal_keys = list()
     for signal_key_index in range(0, len(signal_keys)):
         signal_key = signal_keys[signal_key_index]
         if signal_key not in data_dict:
             continue
+        present_signal_keys.append(signal_key)
 
         this_splitted_signal = split_long_signal(
             signal = copy.deepcopy(data_dict[signal_key]), # type: ignore
@@ -695,7 +697,6 @@ def split_signals_within_dictionary(
     new_dictionaries_for_splitted_signals = list()
     
     identifier = data_dict[id_key]
-    present_signal_keys = [key for key in data_dict if key in signal_keys]
     additional_keys = {key: data_dict[key] for key in data_dict if key != id_key and key not in signal_keys}
     
     # create and append first dictionary (additionally contains the shift length and other common keys)
@@ -704,8 +705,8 @@ def split_signals_within_dictionary(
         "shift_length_seconds": use_shift_length_seconds,
         "shift": 0
     }
-    for key in present_signal_keys:
-        first_dict[key] = np.array(splitted_signals[signal_keys.index(key)][0])
+    for key_index in range(len(present_signal_keys)):
+        first_dict[present_signal_keys[key_index]] = np.array(splitted_signals[key_index][0])
     first_dict.update(additional_keys)
     new_dictionaries_for_splitted_signals.append(first_dict)
     del first_dict
@@ -716,8 +717,8 @@ def split_signals_within_dictionary(
         splitted_data_dict = dict()
         splitted_data_dict[id_key] = identifier
         splitted_data_dict["shift"] = i
-        for key in present_signal_keys:
-            splitted_data_dict[key] = np.array(splitted_signals[signal_keys.index(key)][i])
+        for key_index in range(len(present_signal_keys)):
+            splitted_data_dict[present_signal_keys[key_index]] = np.array(splitted_signals[key_index][i])
 
         new_dictionaries_for_splitted_signals.append(splitted_data_dict)
     

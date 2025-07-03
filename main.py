@@ -127,8 +127,8 @@ neural_network_model_parameters = {
     "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
     "windows_per_signal": window_reshape_parameters["windows_per_signal"],
     # parameters necessary for neural network models only based on short time signals (do not append if using a model based on whole night signals)
-    "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
-    "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
+    "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
+    "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
 }
 
 # neural network hyperparameters for SHHS dataset, see 'main_model_training' function in this file
@@ -170,6 +170,23 @@ def check_project_configuration(parameters: dict):
     parameters: dict
         the parameters to check
     """
+
+    # Check if unknown keys are present in the parameters
+    known_keys = [
+        "RRI_frequency", "MAD_frequency", "SLP_frequency",
+        "signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds",
+        "pad_feature_with", "pad_target_with",
+        "rri_inlier_interval", "mad_inlier_interval", "sleep_stage_label",
+        "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
+        "feature_transform", "target_transform",
+        "reshape_to_overlapping_windows", "windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order",
+        "normalize_rri", "normalize_mad", "normalization_technique", "normalization_mode", "normalization_max", "normalization_min",
+        "neural_network_model", "number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "rri_datapoints", "mad_datapoints"
+    ]
+
+    unknown_keys = [key for key in parameters if key not in known_keys]
+    if len(unknown_keys) > 0:
+        raise ValueError(f"Unknown parameters: {', '.join(unknown_keys)}. Please check your project configuration file.")
 
     # Check if all necessary parameters are provided
     required_keys = [
@@ -1260,8 +1277,8 @@ def main_model_predicting(
                     if actual_results_available:
                         # save results to new dictionary
                         results = {
-                            "Predicted_Probabilities": predictions_probability,
-                            "Predicted": predicted,
+                            "Predicted_Probabilities": predictions_probability[:original_signal_length], # remove padding
+                            "Predicted": predicted[:original_signal_length], # remove padding
                             "Actual": actual_original_structure,
                         }
                     else:
@@ -2083,7 +2100,7 @@ if __name__ == "__main__":
     project_configuration.update(dataset_class_transform_parameters)
     project_configuration.update(neural_network_model_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, neural_network_hyperparameters_shhs, neural_network_hyperparameters_gif
+    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters
 
     check_project_configuration(project_configuration)
 
@@ -2101,8 +2118,8 @@ if __name__ == "__main__":
 
     run_model_training(
         path_to_model_directory = model_directory_path,
-        path_to_processed_shhs = model_directory_path + processed_shhs_path,
-        path_to_processed_gif = model_directory_path + processed_gif_path,
+        path_to_shhs_directory = shhs_directory_path,
+        path_to_gif_directory = gif_directory_path,
         neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
         neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
     )
@@ -2115,8 +2132,8 @@ if __name__ == "__main__":
 
     run_model_performance_evaluation(
         path_to_model_directory = model_directory_path,
-        path_to_processed_shhs = processed_shhs_path,
-        path_to_processed_gif = processed_gif_path,
+        path_to_shhs_directory = shhs_directory_path,
+        path_to_gif_directory = gif_directory_path,
     )
 
     """
@@ -2143,7 +2160,7 @@ if __name__ == "__main__":
     =========================
     """
 
-    results_data_manager = SleepDataManager(file_path = processed_unknown_dataset_path)
+    results_data_manager = SleepDataManager(directory_path = processed_unknown_dataset_path)
     
     # accessing random datapoint
     random_datapoint = results_data_manager.load(random.randint(0, len(results_data_manager) - 1))
