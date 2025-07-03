@@ -132,8 +132,8 @@ def main_pipeline(
         model_directory_path,
         neural_network_hyperparameters_shhs: dict,
         neural_network_hyperparameters_gif: dict,
-        default_shhs_database: str,
-        default_gif_database: str,
+        path_to_shhs_database: str,
+        path_to_gif_database: str,
         ):
     """
     Main function to run the entire pipeline
@@ -147,9 +147,6 @@ def main_pipeline(
 
     # Create directory to store configurations and results
     create_directories_along_path(model_directory_path)
-
-    shhs_directory_path = model_directory_path + "SHHS_Data/"
-    gif_directory_path = model_directory_path + "GIF_Data/"
 
 
     """
@@ -165,33 +162,6 @@ def main_pipeline(
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
     """
-    =======================
-    Copy Default Databases
-    =======================
-    """
-
-    # access parameters used for cropping the data
-    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"]} # signal_cropping_parameters
-    del project_configuration
-
-    # copy default SHHS and GIF databases
-    if not os.path.exists(shhs_directory_path):
-        shutil.copytree(default_shhs_database, shhs_directory_path)
-
-    if not os.path.exists(gif_directory_path):
-        shutil.copytree(default_gif_database, gif_directory_path)
-    
-    # process SHHS dataset
-    shhs_data_manager = SleepDataManager(directory_path = shhs_directory_path)
-    shhs_data_manager.crop_oversized_data(**signal_crop_params)
-
-    # process GIF dataset
-    gif_data_manager = SleepDataManager(directory_path = gif_directory_path)
-    gif_data_manager.crop_oversized_data(**signal_crop_params)
-
-    del signal_crop_params, shhs_data_manager, gif_data_manager
-
-    """
     ==============================
     Training Neural Network Model
     ==============================
@@ -199,21 +169,21 @@ def main_pipeline(
 
     main_model_training(
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_training_data_directory = shhs_directory_path,
+        path_to_training_data_directory = path_to_shhs_database,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = None,
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
-        paths_to_validation_data_directories = [shhs_directory_path, gif_directory_path],
+        paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
     )
 
     main_model_training(
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_training_data_directory = gif_directory_path,
+        path_to_training_data_directory = path_to_gif_database,
         path_to_project_configuration = model_directory_path + project_configuration_file,
         path_to_model_state = model_directory_path + model_state_after_shhs_file,
         path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
-        paths_to_validation_data_directories = [shhs_directory_path, gif_directory_path],
+        paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
         path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
     )
 
@@ -225,8 +195,8 @@ def main_pipeline(
 
     run_model_performance_evaluation(
         path_to_model_directory = model_directory_path,
-        path_to_shhs_directory = shhs_directory_path,
-        path_to_gif_directory = gif_directory_path,
+        path_to_shhs_directory = path_to_shhs_database,
+        path_to_gif_directory = path_to_gif_database,
     )
 
 
@@ -395,6 +365,43 @@ def Reduced_Process_GIF_Dataset(
 
     # Train-, Validation- and Test-Pid Distribution
     gif_data_manager.separate_train_test_validation(**distribution_params)
+
+
+def copy_and_split_default_database(
+        path_to_default_shhs_database: str,
+        path_to_default_gif_database: str,
+        path_to_save_shhs_database: str,
+        path_to_save_gif_database: str,
+        project_configuration: dict
+    ):
+    """
+    """
+    """
+    =======================
+    Copy Default Databases
+    =======================
+    """
+
+    # access parameters used for cropping the data
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"]} # signal_cropping_parameters
+    del project_configuration
+
+    # copy default SHHS and GIF databases
+    if not os.path.exists(path_to_save_shhs_database):
+        shutil.copytree(path_to_default_shhs_database, path_to_save_shhs_database)
+
+    if not os.path.exists(path_to_save_gif_database):
+        shutil.copytree(path_to_default_gif_database, path_to_save_gif_database)
+
+    # process SHHS dataset
+    shhs_data_manager = SleepDataManager(directory_path = path_to_save_shhs_database)
+    shhs_data_manager.crop_oversized_data(**signal_crop_params)
+
+    # process GIF dataset
+    gif_data_manager = SleepDataManager(directory_path = path_to_save_gif_database)
+    gif_data_manager.crop_oversized_data(**signal_crop_params)
+
+    del signal_crop_params, shhs_data_manager, gif_data_manager
 
 
 default_shhs_path = "Default_SHHS_Data/"
@@ -615,6 +622,19 @@ if True:
     network_models = [SleepStageModelNew, YaoModel, YaoModelNew]
     network_model_names = ["LTM_BAA", "Yao", "Yao_BAA"]
 
+    # all share same signal cropping parameters, so we need to create only one database to draw data from
+    shhs_directory_path = "10h_SHHS_Data/"
+    gif_directory_path = "10h_GIF_Data/"
+
+    if not os.path.exists(shhs_directory_path):
+        copy_and_split_default_database(
+            path_to_default_shhs_database = default_shhs_path,
+            path_to_default_gif_database = default_gif_path,
+            path_to_save_shhs_database = shhs_directory_path,
+            path_to_save_gif_database = gif_directory_path,
+            project_configuration = default_project_configuration
+        )
+
     for clean_index in range(len(cleaning_adjustments)):
         for window_index in range(len(window_and_class_adjustments)):
             for model_index in range(len(network_models)):
@@ -633,8 +653,8 @@ if True:
                     model_directory_path = identifier + "/",
                     neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
                     neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
-                    default_shhs_database = default_shhs_path,
-                    default_gif_database = default_gif_path,
+                    path_to_shhs_database = shhs_directory_path,
+                    path_to_gif_database = gif_directory_path,
                 )
 
 
@@ -852,6 +872,19 @@ if True:
     gif_hyperparameter_adjustments = [thirty_second_hyperparameters_gif, sixty_second_hyperparameters_gif, hundred_twenty_second_hyperparameters_gif]
     network_names = ["Local_30s", "Local_60s", "Local_120s"]
 
+    # different networks have different signal cropping parameters, so we need to create a database for each network
+    shhs_directory_paths = ["30s_SHHS_Data/", "60s_SHHS_Data/", "120s_SHHS_Data/"]
+    gif_directory_paths = ["30s_GIF_Data/", "60s_GIF_Data/", "120s_GIF_Data/"]
+
+    for net_adjust_index in range(len(network_adjustments)):
+        copy_and_split_default_database(
+            path_to_default_shhs_database = default_shhs_path,
+            path_to_default_gif_database = default_gif_path,
+            path_to_save_shhs_database = shhs_directory_paths[net_adjust_index],
+            path_to_save_gif_database = gif_directory_paths[net_adjust_index],
+            project_configuration = network_adjustments[net_adjust_index]
+        )
+
     for clean_index in range(len(cleaning_adjustments)):
         project_configuration = copy.deepcopy(default_project_configuration)
         project_configuration.update(cleaning_adjustments[clean_index])
@@ -871,8 +904,8 @@ if True:
                     model_directory_path = identifier + "/",
                     neural_network_hyperparameters_shhs = shhs_hyperparameter_adjustments[network_index],
                     neural_network_hyperparameters_gif = gif_hyperparameter_adjustments[network_index],
-                    default_shhs_database = default_shhs_path,
-                    default_gif_database = default_gif_path,
+                    path_to_shhs_database = shhs_directory_paths[network_index],
+                    path_to_gif_database = gif_directory_paths[network_index],
                 )
 
 
