@@ -689,6 +689,7 @@ def main_model_training(
     neural_network_model = project_configuration["neural_network_model"]
 
     nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+    number_classes = project_configuration["number_sleep_stages"]
 
     # initialize parameters adjusting the data preprocessing
     CustomDatasetKeywords = dict()
@@ -829,7 +830,8 @@ def main_model_training(
             optimizer_fn = optimizer_function,
             lr_scheduler = learning_rate_scheduler,
             current_epoch = t,
-            batch_size = batch_size
+            batch_size = batch_size,
+            number_classes = number_classes
         )
         train_avg_loss.append(train_loss)
         train_confusion_matrices.append(train_confusion_matrix)
@@ -840,7 +842,8 @@ def main_model_training(
                 model = neural_network_model,
                 device = device,
                 loss_fn = loss_function,
-                batch_size = batch_size
+                batch_size = batch_size,
+                number_classes = number_classes
             )
 
             test_avg_loss[i].append(test_loss)

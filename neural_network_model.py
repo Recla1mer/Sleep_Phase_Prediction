@@ -2596,7 +2596,7 @@ Looping Over The Dataset
 """
 
 # TRAINING LOOP
-def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size):
+def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, current_epoch, batch_size, number_classes):
     """
     Iterate over the training dataset and try to converge to optimal parameters.
 
@@ -2641,7 +2641,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
     # variables to save accuracy progress
     train_loss = 0
-    train_confusion_matrix = np.zeros((model.number_sleep_stages, model.number_sleep_stages))
+    train_confusion_matrix = np.zeros((number_classes, number_classes))
 
     # variables to track progress
     num_batches = len(dataloader)
@@ -2693,7 +2693,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer_fn, lr_scheduler, c
 
 
 # TESTING LOOP
-def test_loop(dataloader, model, device, loss_fn, batch_size):
+def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
     """
     Iterate over the test dataset to check if model performance is improving
 
@@ -2737,7 +2737,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size):
 
     # variables to save performance progress
     test_loss = 0
-    test_confusion_matrix = np.zeros((model.number_sleep_stages, model.number_sleep_stages))
+    test_confusion_matrix = np.zeros((number_classes, number_classes))
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
