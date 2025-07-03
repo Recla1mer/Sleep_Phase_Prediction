@@ -129,7 +129,7 @@ Model Training
 
 def main_pipeline(
         project_configuration, 
-        model_directory_path,
+        path_to_model_directory: str,
         neural_network_hyperparameters_shhs: dict,
         neural_network_hyperparameters_gif: dict,
         path_to_shhs_database: str,
@@ -146,7 +146,7 @@ def main_pipeline(
     """
 
     # Create directory to store configurations and results
-    create_directories_along_path(model_directory_path)
+    create_directories_along_path(path_to_model_directory)
 
 
     """
@@ -157,9 +157,9 @@ def main_pipeline(
 
     check_project_configuration(project_configuration)
 
-    if os.path.isfile(model_directory_path + project_configuration_file):
-        os.remove(model_directory_path + project_configuration_file)
-    save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
+    if os.path.isfile(path_to_model_directory + project_configuration_file):
+        os.remove(path_to_model_directory + project_configuration_file)
+    save_to_pickle(project_configuration, path_to_model_directory + project_configuration_file)
 
     """
     ==============================
@@ -170,21 +170,21 @@ def main_pipeline(
     main_model_training(
         neural_network_hyperparameters = neural_network_hyperparameters_shhs,
         path_to_training_data_directory = path_to_shhs_database,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
         path_to_model_state = None,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_file,
+        path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
         paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_shhs_file,
+        path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
     )
 
     main_model_training(
         neural_network_hyperparameters = neural_network_hyperparameters_gif,
         path_to_training_data_directory = path_to_gif_database,
-        path_to_project_configuration = model_directory_path + project_configuration_file,
-        path_to_model_state = model_directory_path + model_state_after_shhs_file,
-        path_to_updated_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
+        path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
+        path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
-        path_to_loss_per_epoch = model_directory_path + loss_per_epoch_gif_file,
+        path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
     )
 
     """
@@ -194,7 +194,7 @@ def main_pipeline(
     """
 
     run_model_performance_evaluation(
-        path_to_model_directory = model_directory_path,
+        path_to_model_directory = path_to_model_directory,
         path_to_shhs_directory = path_to_shhs_database,
         path_to_gif_directory = path_to_gif_database,
     )
@@ -654,7 +654,7 @@ if True:
 
                 main_pipeline(
                     project_configuration = project_configuration,
-                    model_directory_path = identifier + "/",
+                    path_to_model_directory = identifier + "/",
                     neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
                     neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
                     path_to_shhs_database = shhs_directory_path,
@@ -905,7 +905,7 @@ if True:
 
                 main_pipeline(
                     project_configuration = project_configuration,
-                    model_directory_path = identifier + "/",
+                    path_to_model_directory = identifier + "/",
                     neural_network_hyperparameters_shhs = shhs_hyperparameter_adjustments[network_index],
                     neural_network_hyperparameters_gif = gif_hyperparameter_adjustments[network_index],
                     path_to_shhs_database = shhs_directory_paths[network_index],
