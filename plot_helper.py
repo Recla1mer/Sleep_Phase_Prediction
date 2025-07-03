@@ -63,9 +63,10 @@ matplotlib.rcParams["savefig.facecolor"] = (0.0, 0.0, 0.0, 0.0)  # transparent f
 matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)
 
 
-def plot_accuracy_per_epoch(
+def plot_performance_per_epoch(
         paths_to_pkl_files: list,
-        result_keys: list,
+        include_metrics: list = ["loss", "accuracy", "f1_score", "precision", "recall"],
+        include_datasets: list = ["train", "test"],
         **kwargs
     ):
     """
@@ -121,7 +122,7 @@ def plot_accuracy_per_epoch(
     """
 
     # check if user wants to overkill the plot
-    if len(paths_to_pkl_files) > 1 and len(result_keys) > 1:
+    if len(paths_to_pkl_files) > 1 and len(include_metrics) > 1:
         raise ValueError("You can either provide multiple files and one result key or one file and multiple result keys.")
     
     # Default values
@@ -129,7 +130,7 @@ def plot_accuracy_per_epoch(
     kwargs.setdefault("title", "")
     kwargs.setdefault("xlabel", "")
     kwargs.setdefault("ylabel", "count")
-    kwargs.setdefault("label", [])
+    kwargs.setdefault("label", ["loss", "accuracy", "f1_score", "precision", "recall"])
     kwargs.setdefault("loc", "best")
     kwargs.setdefault("grid", False)
 
@@ -156,9 +157,9 @@ def plot_accuracy_per_epoch(
     ax.grid(kwargs["grid"])
 
     labels = kwargs["label"]
-    if len(kwargs["label"]) != len(paths_to_pkl_files) * len(result_keys):
+    if len(kwargs["label"]) != len(paths_to_pkl_files) * len(include_metrics):
         print("The number of labels does not match the number of data. Using empty labels.")
-        labels = ["" for _ in range(len(paths_to_pkl_files) * len(result_keys))]
+        labels = ["" for _ in range(len(paths_to_pkl_files) * len(include_metrics))]
         kwargs["label"] = []
 
     if len(paths_to_pkl_files) > 1:
@@ -171,7 +172,13 @@ def plot_accuracy_per_epoch(
                 label = labels[i],
                 **plot_args
             )
-    elif len(result_keys) > 1:
+    elif len(include_metrics) > 1:
+        # access results and calulate performance values
+        with open(paths_to_pkl_files[0], "rb") as f:
+            results = pickle.load(f)
+        loss = results["loss"]
+        confusion_matrix = results["confusion_matrix"]
+
         data_generator = load_from_pickle(paths_to_pkl_files[0])
         data = next(data_generator)
         for i, key in enumerate(result_keys):

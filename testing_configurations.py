@@ -491,7 +491,7 @@ if True:
     }
 
     dataset_class_transform_parameters = {
-        "feature_transform": ToTensor(),
+        "feature_transform": custom_transform,
         "target_transform": None,
     }
 
@@ -649,12 +649,15 @@ if True:
                 project_configuration["neural_network_model"] = network_models[model_index]
 
                 identifier = network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index]
-
                 print_headline("Running " + identifier, "=")
+
+                identifier += "/"
+                if os.path.exists(identifier):
+                    continue
 
                 main_pipeline(
                     project_configuration = project_configuration,
-                    path_to_model_directory = identifier + "/",
+                    path_to_model_directory = identifier,
                     neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
                     neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
                     path_to_shhs_database = shhs_directory_path,
@@ -704,7 +707,7 @@ if True:
     }
 
     dataset_class_transform_parameters = {
-        "feature_transform": ToTensor(),
+        "feature_transform": custom_transform,
         "target_transform": None,
     }
 
@@ -725,8 +728,8 @@ if True:
         "max_pooling_layers": 5,
         "number_window_learning_features": 128,
         "window_learning_dilations": [2, 4, 8, 16, 32],
-        "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
-        "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
+        "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
+        "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
     }
 
     default_project_configuration = dict()
@@ -900,12 +903,15 @@ if True:
                 project_configuration.update(network_adjustments[network_index])
 
                 identifier = network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index]
-
                 print_headline("Running " + identifier, "=")
+
+                identifier += "/"
+                if os.path.exists(identifier):
+                    continue
 
                 main_pipeline(
                     project_configuration = project_configuration,
-                    path_to_model_directory = identifier + "/",
+                    path_to_model_directory = identifier,
                     neural_network_hyperparameters_shhs = shhs_hyperparameter_adjustments[network_index],
                     neural_network_hyperparameters_gif = gif_hyperparameter_adjustments[network_index],
                     path_to_shhs_database = shhs_directory_paths[network_index],

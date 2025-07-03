@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torchvision.transforms import ToTensor
+# from torchvision.transforms import ToTensor
 
 # LOCAL IMPORTS:
 from dataset_processing import *
@@ -245,7 +245,7 @@ class CustomSleepDataset(Dataset):
         self.common_signal_normalization_parameters = dict()
 
         if normalize_mad or normalize_rri:
-            self.common_signal_normalization_parameters[key] = {key: kwargs[key] for key in kwargs if key in ["normalization_technique", "normalization_mode", "normalization_max", "normalization_min"]} # signal_normalization_parameters
+            self.common_signal_normalization_parameters = {key: kwargs[key] for key in kwargs if key in ["normalization_technique", "normalization_mode", "normalization_max", "normalization_min"]} # signal_normalization_parameters
 
         # access settings for additional transformations (if required):
         self.feature_transform = feature_transform
@@ -386,7 +386,7 @@ def calculate_pooling_layer_start(
     mad_start_pooling = len(mad_convolutional_channels) - (rri_poolings - rri_mad_ratio)
     rri_start_pooling = len(rri_convolutional_channels) - rri_poolings
 
-    print(f"\nThe given settings allow for {rri_poolings} pooling layers in RRI branch and {rri_poolings - rri_mad_ratio} pooling layers in MAD branch.\nPooling starts at layer {rri_start_pooling} in RRI branch and at layer {mad_start_pooling} in MAD branch, corresponding to the transition from {rri_convolutional_channels[rri_start_pooling-1]} input to {rri_convolutional_channels[rri_start_pooling]} output channels and {mad_convolutional_channels[mad_start_pooling-1]} input to {mad_convolutional_channels[mad_start_pooling]} output channels, respectively.\n")
+    # print(f"\nThe given settings allow for {rri_poolings} pooling layers in RRI branch and {rri_poolings - rri_mad_ratio} pooling layers in MAD branch.\nPooling starts at layer {rri_start_pooling} in RRI branch and at layer {mad_start_pooling} in MAD branch, corresponding to the transition from {rri_convolutional_channels[rri_start_pooling-1]} input to {rri_convolutional_channels[rri_start_pooling]} output channels and {mad_convolutional_channels[mad_start_pooling-1]} input to {mad_convolutional_channels[mad_start_pooling]} output channels, respectively.\n")
 
     return rri_poolings, rri_start_pooling, mad_start_pooling
 
@@ -2860,7 +2860,7 @@ if __name__ == "__main__":
         normalize_rri = True,
         normalize_mad = True,
         # kwargs for CustomSleepDataset:
-        transform=ToTensor(),
+        transform=None,
         target_transform = None,
         pad_feature_with = 0,
         pad_target_with = 0,

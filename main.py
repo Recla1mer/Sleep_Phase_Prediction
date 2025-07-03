@@ -81,8 +81,21 @@ pid_distribution_parameters = {
 }
 
 # transformations applied to the data, see 'CustomSleepDataset' class in neural_network_model.py
+def custom_transform(x):
+    """
+    This function is used to transform the data into a format that can be used by the neural network.
+    It is used in the 'CustomSleepDataset' class in neural_network_model.py.
+    
+    RETURNS:
+    ------------------------------
+    x: torch.Tensor
+        the transformed data
+    """
+    return torch.from_numpy(x).unsqueeze(0).float() # add a batch dimension and convert to float tensor
+
+
 dataset_class_transform_parameters = {
-    "feature_transform": ToTensor(),
+    "feature_transform": custom_transform,
     "target_transform": None,
 }
 
@@ -2042,7 +2055,7 @@ if __name__ == "__main__":
     }
 
     dataset_class_transform_parameters = {
-        "feature_transform": ToTensor(),
+        "feature_transform": custom_transform,
         "target_transform": None,
     }
 
