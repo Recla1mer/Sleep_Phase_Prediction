@@ -1810,10 +1810,10 @@ def run_model_performance_evaluation(
     # make predictions for the relevant files
     if user_response == "y":
         main_model_predicting(
-            path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+            path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
             path_to_data_directory = path_to_shhs_directory,
             pid = "validation",
-            path_to_project_configuration = model_directory_path + project_configuration_file,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_save_results = shhs_validation_pid_results_path,
         )
 
@@ -1822,7 +1822,7 @@ def run_model_performance_evaluation(
 
     print_model_performance(
         paths_to_pkl_files = [shhs_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
         prediction_result_key = "Predicted_in_windows", # or: "Predicted"
         actual_result_key = "Actual_in_windows", # or: "Actual"
         additional_score_function_args = {"zero_division": np.nan},
@@ -1836,7 +1836,7 @@ def run_model_performance_evaluation(
     """
 
     # path to save the predictions
-    path_to_save_gif_results = model_directory_path + model_performance_file[:-4] + "_GIF.pkl"
+    path_to_save_gif_results = path_to_model_directory + model_performance_file[:-4] + "_GIF.pkl"
     gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
     # gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
     # gif_test_pid_results_path = path_to_save_gif_results[:-4] + "_Test_Pid.pkl"
@@ -1859,10 +1859,10 @@ def run_model_performance_evaluation(
     # make predictions for the relevant files
     if user_response == "y":
         main_model_predicting(
-            path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+            path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
             path_to_data_directory = path_to_gif_directory,
             pid = "validation",
-            path_to_project_configuration = model_directory_path + project_configuration_file,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_save_results = gif_validation_pid_results_path,
         )
 
@@ -1871,7 +1871,7 @@ def run_model_performance_evaluation(
 
     print_model_performance(
         paths_to_pkl_files = [gif_validation_pid_results_path],
-        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
         prediction_result_key = "Predicted_in_windows", # or: "Predicted"
         actual_result_key = "Actual_in_windows", # or: "Actual"
         additional_score_function_args = {"zero_division": np.nan},
