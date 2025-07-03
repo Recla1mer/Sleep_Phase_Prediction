@@ -245,8 +245,7 @@ class CustomSleepDataset(Dataset):
         self.common_signal_normalization_parameters = dict()
 
         if normalize_mad or normalize_rri:
-            for key in ["normalization_max", "normalization_min", "normalization_mode"]:
-                self.common_signal_normalization_parameters[key] = kwargs[key]
+            self.common_signal_normalization_parameters[key] = {key: kwargs[key] for key in kwargs if key in ["normalization_technique", "normalization_mode", "normalization_max", "normalization_min"]} # signal_normalization_parameters
 
         # access settings for additional transformations (if required):
         self.feature_transform = feature_transform
