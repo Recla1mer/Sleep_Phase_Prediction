@@ -387,8 +387,9 @@ def calculate_pooling_layer_start(
     rri_start_pooling = len(rri_convolutional_channels) - rri_poolings
 
     # print(f"\nThe given settings allow for {rri_poolings} pooling layers in RRI branch and {rri_poolings - rri_mad_ratio} pooling layers in MAD branch.\nPooling starts at layer {rri_start_pooling} in RRI branch and at layer {mad_start_pooling} in MAD branch, corresponding to the transition from {rri_convolutional_channels[rri_start_pooling-1]} input to {rri_convolutional_channels[rri_start_pooling]} output channels and {mad_convolutional_channels[mad_start_pooling-1]} input to {mad_convolutional_channels[mad_start_pooling]} output channels, respectively.\n")
+    mad_poolings = rri_poolings - rri_mad_ratio
 
-    return rri_poolings, rri_start_pooling, mad_start_pooling
+    return rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling
 
 
 class Window_Learning(nn.Module):
@@ -565,8 +566,7 @@ class YaoModel(nn.Module):
         self.datapoints_per_rri_window = datapoints_per_rri_window
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
-
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = datapoints_per_rri_window,
             mad_datapoints = datapoints_per_mad_window,
             rri_convolutional_channels = rri_convolutional_channels,
@@ -715,9 +715,9 @@ class YaoModel(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -866,7 +866,7 @@ class YaoModelNew(nn.Module):
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = datapoints_per_rri_window,
             mad_datapoints = datapoints_per_mad_window,
             rri_convolutional_channels = rri_convolutional_channels,
@@ -1018,9 +1018,9 @@ class YaoModelNew(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -1157,7 +1157,7 @@ class SleepStageModel(nn.Module):
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = datapoints_per_rri_window,
             mad_datapoints = datapoints_per_mad_window,
             rri_convolutional_channels = rri_convolutional_channels,
@@ -1301,9 +1301,9 @@ class SleepStageModel(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -1447,7 +1447,7 @@ class SleepStageModelNew(nn.Module):
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = datapoints_per_rri_window,
             mad_datapoints = datapoints_per_mad_window,
             rri_convolutional_channels = rri_convolutional_channels,
@@ -1592,9 +1592,9 @@ class SleepStageModelNew(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -1724,13 +1724,15 @@ class DemoWholeNightModel(nn.Module):
         self.datapoints_per_mad_window = datapoints_per_mad_window
         self.windows_per_signal = windows_per_signal
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = datapoints_per_rri_window,
             mad_datapoints = datapoints_per_mad_window,
             rri_convolutional_channels = rri_convolutional_channels,
             mad_convolutional_channels = mad_convolutional_channels,
             max_pooling_layers = max_pooling_layers
         )
+
+        print(f"RRI Poolings: {rri_poolings}, RRI Start Pooling: {rri_start_pooling}, MAD Poolings: {mad_poolings}, MAD Start Pooling: {mad_start_pooling}")
 
         super(DemoWholeNightModel, self).__init__()
 
@@ -1868,9 +1870,9 @@ class DemoWholeNightModel(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -2017,13 +2019,15 @@ class DemoLocalIntervalModel(nn.Module):
         self.datapoints_per_rri_window = rri_datapoints
         self.datapoints_per_mad_window = mad_datapoints
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = rri_datapoints,
             mad_datapoints = mad_datapoints,
             rri_convolutional_channels = rri_convolutional_channels,
             mad_convolutional_channels = mad_convolutional_channels,
             max_pooling_layers = max_pooling_layers
         )
+
+        print(f"RRI Poolings: {rri_poolings}, RRI Start Pooling: {rri_start_pooling}, MAD Poolings: {mad_poolings}, MAD Start Pooling: {mad_start_pooling}")
 
         super(DemoLocalIntervalModel, self).__init__()
 
@@ -2158,9 +2162,9 @@ class DemoLocalIntervalModel(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = mad_datapoints // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = mad_datapoints // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -2296,7 +2300,7 @@ class LocalIntervalModel(nn.Module):
         self.datapoints_per_rri_window = rri_datapoints
         self.datapoints_per_mad_window = mad_datapoints
 
-        rri_poolings, rri_start_pooling, mad_start_pooling = calculate_pooling_layer_start(
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
             rri_datapoints = rri_datapoints,
             mad_datapoints = mad_datapoints,
             rri_convolutional_channels = rri_convolutional_channels,
@@ -2437,9 +2441,9 @@ class LocalIntervalModel(nn.Module):
         """
 
         self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = mad_datapoints // (2 ** ((len(rri_convolutional_channels)-1)/2))
+        self.mad_values_after_signal_learning = mad_datapoints // (2 ** mad_poolings)
 
-        if int( self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
             raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
@@ -2962,10 +2966,12 @@ if __name__ == "__main__":
     print("\nLocal (Short Time) Sleep Stage Models:")
     print("-"*80)
 
+    seconds = 120
+
     # Define the Neural Network
     DCNN = DemoLocalIntervalModel(
-        rri_datapoints = 120,
-        mad_datapoints = 30,
+        rri_datapoints = seconds * 4,  # 4 Hz sampling rate
+        mad_datapoints = seconds,  # 1 Hz sampling rate
         rri_convolutional_channels = [1, 8, 16, 32, 64],
         mad_convolutional_channels = [1, 8, 16, 32, 64],
         max_pooling_layers = 5,
@@ -2976,8 +2982,8 @@ if __name__ == "__main__":
     DCNN.to(device)
 
     # Create example data
-    rri_example = torch.rand((2, 1, 120), device=device)
-    mad_example = torch.rand((2, 1, 30), device=device)
+    rri_example = torch.rand((2, 1, seconds * 4), device=device)
+    mad_example = torch.rand((2, 1, seconds), device=device)
     # mad_example = None # uncomment to test data without MAD signal
 
     # Send data to device

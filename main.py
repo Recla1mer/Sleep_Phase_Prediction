@@ -1841,8 +1841,8 @@ def run_model_performance_evaluation(
     print_model_performance(
         paths_to_pkl_files = [shhs_validation_pid_results_path],
         path_to_project_configuration = path_to_model_directory + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
-        actual_result_key = "Actual_in_windows", # or: "Actual"
+        prediction_result_key = "Predicted", # or: "Predicted_in_windows"
+        actual_result_key = "Actual", # or: "Actual_in_windows"
         additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
@@ -1890,8 +1890,8 @@ def run_model_performance_evaluation(
     print_model_performance(
         paths_to_pkl_files = [gif_validation_pid_results_path],
         path_to_project_configuration = path_to_model_directory + project_configuration_file,
-        prediction_result_key = "Predicted_in_windows", # or: "Predicted"
-        actual_result_key = "Actual_in_windows", # or: "Actual"
+        prediction_result_key = "Predicted", # or: "Predicted_in_windows"
+        actual_result_key = "Actual", # or: "Actual_in_windows"
         additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )

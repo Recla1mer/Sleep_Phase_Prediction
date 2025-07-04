@@ -1639,6 +1639,7 @@ class SleepDataManager:
         self.configuration_path = directory_path + "configuration.pkl"
 
         self.pid_paths = [directory_path + file_name for file_name in ["data.pkl", "training_pid.pkl", "validation_pid.pkl", "test_pid.pkl"]]
+        self.pid_offset_paths = [directory_path + file_name for file_name in [".data_offset.pkl", ".training_pid_offset.pkl", ".validation_pid_offset.pkl", ".test_pid_offset.pkl"]]
         self.main_pid = 0
         self.training_pid = 1
         self.validation_pid = 2
@@ -1866,12 +1867,28 @@ class SleepDataManager:
 
         # access main file path
         main_file_path = self.pid_paths[self.main_pid]
+        main_offset_file_path = self.pid_offset_paths[self.main_pid]
         
         if unique_id or not os.path.exists(main_file_path):
+            # access byte offset
+            if os.path.exists(main_offset_file_path):
+                with open(main_offset_file_path, "rb") as f:
+                    byte_offset = pickle.load(f)
+            else:
+                byte_offset = list()
+
             # Append new data point to the file
-            append_to_pickle(data = new_data, file_name = main_file_path)
+            with open(main_file_path, "ab") as f:
+                new_byte_offset = f.tell()  # Store the byte offset before writing the new data point
+                pickle.dump(new_data, f)
+            
+            # Append byte offset
+            byte_offset.append(new_byte_offset)
 
         else:
+            # initialize byte positioning
+            byte_offset = list()
+
             # Create temporary file to save data in progress
             working_file_path = self.directory_path + "save_in_progress"
             working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
@@ -1900,11 +1917,15 @@ class SleepDataManager:
                             signal_frequency_keys = self.signal_frequency_keys,
                         )
                     
+                    # Append byte offset for the current data point
+                    byte_offset.append(working_file.tell())
+
                     # Append data point to the working file
                     pickle.dump(data_point, working_file)
                 
-                # Append new data point if ID was not found
+                # Append new byte position and data point if ID was not found
                 if not_appended:
+                    byte_offset.append(working_file.tell())
                     pickle.dump(new_data, working_file)
                 
                 error_occurred = False
@@ -1921,6 +1942,10 @@ class SleepDataManager:
             if os.path.exists(main_file_path):
                 os.remove(main_file_path)
             os.rename(working_file_path, main_file_path)
+        
+        # update byte offset file
+        with open(main_offset_file_path, "wb") as f:
+            pickle.dump(byte_offset, f)
 
         # save database configuration
         self.database_configuration["number_datapoints"][self.main_pid] += number_new_datapoints
@@ -1969,6 +1994,7 @@ class SleepDataManager:
         # access main and train file path
         main_file_path = self.pid_paths[self.main_pid]
         train_file_path = self.pid_paths[self.training_pid]
+        main_offset_file_path = self.pid_offset_paths[self.main_pid]
 
         # Warn user that data will remain in main file and won't forwarded into training, validation, or test file automatically
         if os.path.exists(train_file_path):
@@ -1978,10 +2004,18 @@ class SleepDataManager:
         # only first dictionary needs to be checked if present in database, as appending id's containing "shift" will not be allowed
         self._save_datapoint(corrected_data_dicts[0], unique_id, len(corrected_data_dicts))
 
-        # append all other dictionaries at once
+        # append all other dictionaries at once and update the byte offset
+        with open(main_offset_file_path, "rb") as f:
+            byte_offset = pickle.load(f)
+
         with open(main_file_path, "ab") as f:
             for corrected_data_dict in corrected_data_dicts[1:]:
+                byte_offset.append(f.tell())  # Store the byte offset before writing the new data point
                 pickle.dump(corrected_data_dict, f)
+        
+        with open(main_offset_file_path, "wb") as f:
+            pickle.dump(byte_offset, f)
+
 
     def check_if_ids_are_unique(self, ids: list):
         """
@@ -2050,6 +2084,7 @@ class SleepDataManager:
 
         # access current file path
         current_file_path = self.pid_paths[self.current_pid]
+        current_offset_file_path = self.pid_offset_paths[self.current_pid]
 
         # check if key_id_index is an id, a key, or an index
         load_keys = False
@@ -2066,21 +2101,11 @@ class SleepDataManager:
             load_index = True
         else:
             raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
-
-        # Load data generator from the file
-        file_generator = load_from_pickle(current_file_path)
-
-        if load_id:
-            id_found = False
-            for data_point in file_generator:
-                if data_point["ID"] == key_id_index:
-                    id_found = True
-                    return data_point
-            
-            if not id_found:
-                raise ValueError(f"ID {key_id_index} not found in the data file.")
         
-        elif load_keys:
+        if load_keys:
+            # Load data generator from the file
+            file_generator = load_from_pickle(current_file_path)
+
             values_for_key_from_all_data_points = list()
             count_data_points_missing_key = 0
 
@@ -2093,19 +2118,39 @@ class SleepDataManager:
             if count_data_points_missing_key > 0:
                 print(f"Attention: {count_data_points_missing_key} data points are missing the key {key_id_index}")
             
-            return values_for_key_from_all_data_points
-
-        elif load_index:
-            count = 0
-            for data_point in file_generator:
-                if count == key_id_index:
-                    return data_point
-                count += 1
+            del file_generator
             
-            raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+            return values_for_key_from_all_data_points
+        
+        elif load_id:
+            # Load data generator from the file
+            file_generator = load_from_pickle(current_file_path)
+            id_found = False
+            for data_point in file_generator:
+                if data_point["ID"] == key_id_index:
+                    id_found = True
+                    return data_point
+            
+            if not id_found:
+                raise ValueError(f"ID {key_id_index} not found in the data file.")
+        elif load_index:
+            index = key_id_index
+            # Load offsets from the offset file
+            with open(current_offset_file_path, "rb") as f:
+                offsets = pickle.load(f)
 
-        del file_generator
-    
+            if index < 0 or index >= len(offsets): # type: ignore
+                raise ValueError(f"Index {index} out of bounds in the data file. The file contains {len(offsets)} data points.")
+            
+            # Load data from the file using the offset
+            with open(current_file_path, "rb") as f:
+                f.seek(offsets[index]) # type: ignore
+                data_point = pickle.load(f)
+
+            return data_point
+        else:
+            raise ValueError("You must provide a key, an ID, or an index to load data from the file.")
+        
 
     def remove(self, key_id_index):
         """
@@ -2134,8 +2179,9 @@ class SleepDataManager:
         if self.current_pid != self.main_pid:
             raise ValueError("You can only remove data from the main file. If the desired datapoint is in the training, validation, or test file, remerge all datapoints into your main file ('fuse_train_test_validation' function) first.")
 
-        # access main file path
+        # access main file path and corresponding offset file path
         main_file_path = self.pid_paths[self.main_pid]
+        main_offset_file_path = self.pid_offset_paths[self.main_pid]
 
         # check if key_id_index is an id, a key, or an index
         valid_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
@@ -2146,6 +2192,9 @@ class SleepDataManager:
         # Create temporary file to save data in progress
         working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+
+        # initialize byte offset
+        byte_offset = list()
 
         error_occurred = True
         try:
@@ -2160,7 +2209,9 @@ class SleepDataManager:
                         for data_point in file_generator:
                             if key_id_index in data_point:
                                 del data_point[key_id_index]
+                            byte_offset.append(f.tell())  # Store the byte offset before writing the new data point
                             pickle.dump(data_point, f)
+                    
                 else:
                     count_deletions = 0
                     with open(working_file_path, "ab") as f:
@@ -2168,25 +2219,20 @@ class SleepDataManager:
                             if data_point["ID"] == key_id_index or data_point["ID"] == key_id_index + "*":
                                 count_deletions += 1
                                 continue
+                            byte_offset.append(f.tell())  # Store the byte offset before writing the new data point
                             pickle.dump(data_point, f)
                     
                     if count_deletions == 0:
                         raise ValueError(f"ID {key_id_index} not found in the data file.")
                     
-                    # update file information
+                    # update database configuration
                     self.database_configuration["number_datapoints"][self.main_pid] -= count_deletions
                     save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
                     
             elif isinstance(key_id_index, int):
-                count = 0
-
-                for data_point in file_generator:
-                    if count == key_id_index:
-                        self.remove(data_point["ID"])  # remove data point by ID
-                        return
-                    count += 1
-                
-                raise ValueError(f"Index {key_id_index} out of bounds in the data file.")
+                data_point = self.load(key_id_index)  # load data point by index
+                self.remove(data_point["ID"])  # type: ignore
+                return
 
             else:
                 raise ValueError("\'key_id_index\' must be a string, integer, or a key (also a string).")
@@ -2205,9 +2251,17 @@ class SleepDataManager:
             os.remove(main_file_path)
         os.rename(working_file_path, main_file_path)
 
+        # update byte offset file
+        self._remove_offsets()
+        if len(byte_offset) > 0:
+            with open(main_offset_file_path, "wb") as f:
+                pickle.dump(byte_offset, f)
+
         if self.database_configuration["number_datapoints"][self.main_pid] == 0:
             if os.path.exists(main_file_path):
                 os.remove(main_file_path)
+            
+            self._remove_offsets()
             
             # restore database configuration to default values
             self.database_configuration["sleep_stage_label"] = None
@@ -2251,6 +2305,7 @@ class SleepDataManager:
         working_file_paths = [find_non_existing_path(path_without_file_type = self.directory_path + "save_in_progress_" + str(i), file_type = "pkl") for i in range(len(self.pid_paths))]
         working_files = [open(path, "ab") for path in working_file_paths]
         number_split_datapoints = [0 for _ in range(len(self.pid_paths))] # number of new datapoints that were created by splitting the signals
+        file_byte_offsets = list()
 
         error_occurred = True
         try:
@@ -2259,8 +2314,12 @@ class SleepDataManager:
                 working_file_path = working_file_paths[file_path_iteration]
                 working_file = working_files[file_path_iteration]
 
+                # initialize byte offset
+                byte_offset = list()
+
                 # skip file if it does not exist
                 if not os.path.exists(file_path) or self.database_configuration["number_datapoints"][file_path_iteration] == 0: # type: ignore
+                    file_byte_offsets.append(byte_offset)
                     continue
 
                 # Initialize progress bar
@@ -2296,17 +2355,21 @@ class SleepDataManager:
                         
                         # append all dictionaries at once and increment number of new datapoints
                         for splitted_data_dict in splitted_data_dictionaries:
+                            byte_offset.append(working_file.tell())  # Store the byte offset before writing the new data point
                             pickle.dump(splitted_data_dict, working_file)
                             number_split_datapoints[file_path_iteration] += 1
                     else:
                         # Append data point to the working file and increment number of new datapoints
+                        byte_offset.append(working_file.tell())  # Store the byte offset before writing the new data point
                         pickle.dump(data_point, working_file)
                         number_split_datapoints[file_path_iteration] += 1
 
                     # Update progress bar
                     progress_bar.update()
                 
-                error_occurred = False
+                file_byte_offsets.append(byte_offset)
+                
+            error_occurred = False
             
         finally:
             # close the working files
@@ -2319,13 +2382,17 @@ class SleepDataManager:
                     if os.path.exists(f):
                         os.remove(f)
 
-        # if no error occured, replace the original files with the working files
+        # if no error occured, replace the original files with the working files and update byte offsets
+        self._remove_offsets()
         for file_path_iteration in range(len(self.pid_paths)):
             file_path = self.pid_paths[file_path_iteration]
             working_file_path = working_file_paths[file_path_iteration]
+            offset_file_path = self.pid_offset_paths[file_path_iteration]
             if os.path.exists(file_path):
                 os.remove(file_path)
                 os.rename(working_file_path, file_path)
+                with open(offset_file_path, "wb") as f:
+                    pickle.dump(file_byte_offsets[file_path_iteration], f)
             if os.path.exists(working_file_path):
                 os.remove(working_file_path)
 
@@ -2356,13 +2423,14 @@ class SleepDataManager:
         None
         """
 
-        # prevent running this function signals are not split
+        # prevent running this function if signals are not split
         if self.database_configuration["signal_length_seconds"] is None:
             print("\nData was not split yet. No need to reverse the split.")
             return
         
-        # access main and train file path
+        # access main, train and offset file path
         main_file_path = self.pid_paths[self.main_pid]
+        main_offset_file_path = self.pid_offset_paths[self.main_pid]
         train_file_path = self.pid_paths[self.training_pid]
         
         if os.path.exists(train_file_path):
@@ -2372,6 +2440,9 @@ class SleepDataManager:
         working_file_path = self.directory_path + "save_in_progress"
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
         working_file = open(working_file_path, "ab")
+
+        # initialize byte offset
+        byte_offset = list()
 
         number_original_datapoints = 0
 
@@ -2420,6 +2491,7 @@ class SleepDataManager:
                             appended = True
                             break
                     if not appended:
+                        byte_offset.append(working_file.tell())  # Store the byte offset before writing the new data point
                         pickle.dump(data_point, working_file)
                         number_original_datapoints += 1
 
@@ -2454,6 +2526,8 @@ class SleepDataManager:
                     valid_signal_keys = self.signal_keys,
                     valid_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
                 )
+
+                byte_offset.append(working_file.tell())  # Store the byte offset before writing the new data point
 
                 # append fused dictionary to working file
                 pickle.dump(fused_dictionary, working_file)
@@ -2494,6 +2568,11 @@ class SleepDataManager:
         self.database_configuration["wanted_shift_length_seconds"] = None
         self.database_configuration["absolute_shift_deviation_seconds"] = None
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+
+        # update byte offset file
+        self._remove_offsets()
+        with open(main_offset_file_path, "wb") as f:
+            pickle.dump(byte_offset, f)
     
 
     def separate_train_test_validation(
@@ -2579,11 +2658,16 @@ class SleepDataManager:
             if train_size + validation_size + test_size != 1: # type: ignore
                 raise ValueError("The sum of train_size, validation_size, and test_size must be 1.")
         
-        # access main, train, validation and test file path
+        # access main, train, validation and test file path and their corresponding offset file paths
         main_file_path = self.pid_paths[self.main_pid]
         train_file_path = self.pid_paths[self.training_pid]
         validation_file_path = self.pid_paths[self.validation_pid]
         test_file_path = self.pid_paths[self.test_pid]
+
+        main_offset_file_path = self.pid_offset_paths[self.main_pid]
+        train_offset_file_path = self.pid_offset_paths[self.training_pid]
+        validation_offset_file_path = self.pid_offset_paths[self.validation_pid]
+        test_offset_file_path = self.pid_offset_paths[self.test_pid]
 
         # Fuse data back together if train_val_test_split_applied is True
         if os.path.exists(train_file_path):
@@ -2711,6 +2795,12 @@ class SleepDataManager:
 
         count_datapoints = [0 for _ in range(len(self.pid_paths))] # count of datapoints that were saved to each file
 
+        # initialize byte offsets for each file
+        main_byte_offsets = list() # byte offsets for main pid
+        train_byte_offsets = list() # byte offsets for training pid
+        validation_byte_offsets = list() # byte offsets for validation pid
+        test_byte_offsets = list() # byte offsets for test pid
+
         if test_size is None:
             """
             split into training and validation data based on the chosen distribution method
@@ -2754,12 +2844,15 @@ class SleepDataManager:
                 # save each data point to corresponding file
                 for data_point in file_generator:
                     if data_point["ID"] in train_data_ids:
+                        train_byte_offsets.append(open_files[0].tell())
                         pickle.dump(data_point, open_files[0])
                         count_datapoints[self.training_pid] += 1
                     elif data_point["ID"] in validation_data_ids:
+                        validation_byte_offsets.append(open_files[1].tell())
                         pickle.dump(data_point, open_files[1])
                         count_datapoints[self.validation_pid] += 1
                     else:
+                        main_byte_offsets.append(working_file.tell())
                         pickle.dump(data_point, working_file)
                         count_datapoints[self.main_pid] += 1
                     
@@ -2851,15 +2944,19 @@ class SleepDataManager:
                 # save each data point to corresponding file
                 for data_point in file_generator:
                     if data_point["ID"] in train_data_ids:
+                        train_byte_offsets.append(open_files[0].tell())
                         pickle.dump(data_point, open_files[0])
                         count_datapoints[self.training_pid] += 1
                     elif data_point["ID"] in validation_data_ids:
+                        validation_byte_offsets.append(open_files[1].tell())
                         pickle.dump(data_point, open_files[1])
                         count_datapoints[self.validation_pid] += 1
                     elif data_point["ID"] in test_data_ids:
+                        test_byte_offsets.append(open_files[2].tell())
                         pickle.dump(data_point, open_files[2])
                         count_datapoints[self.test_pid] += 1
                     else:
+                        main_byte_offsets.append(working_file.tell())
                         pickle.dump(data_point, working_file)
                         count_datapoints[self.main_pid] += 1
                     
@@ -2891,13 +2988,33 @@ class SleepDataManager:
         # if no error occured, update database configuration
         self.database_configuration["number_datapoints"] = count_datapoints
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
+
+        # if no error occured, update byte offset files
+        self._remove_offsets()
+
+        if len(main_byte_offsets) > 0:
+            with open(main_offset_file_path, "wb") as f:
+                pickle.dump(main_byte_offsets, f)
+        if len(train_byte_offsets) > 0:
+            with open(train_offset_file_path, "wb") as f:
+                pickle.dump(train_byte_offsets, f)
+        if len(validation_byte_offsets) > 0:
+            with open(validation_offset_file_path, "wb") as f:
+                pickle.dump(validation_byte_offsets, f)
+        if len(test_byte_offsets) > 0:
+            with open(test_offset_file_path, "wb") as f:
+                pickle.dump(test_byte_offsets, f)
         
         if self.database_configuration["number_datapoints"][self.main_pid] == 0 and os.path.exists(main_file_path): # type: ignore
             os.remove(main_file_path)  # If the main file is empty, remove it
 
         # if random numbers were appended to the IDs due to 'join_splitted_parts' being False, we need to remove them now
         if not join_splitted_parts:
-            for file_path in self.pid_paths:
+            for file_path_iteration in range(len(self.pid_paths)):
+                file_path = self.pid_paths[file_path_iteration]
+                file_offset_path = self.pid_offset_paths[file_path_iteration]
+                byte_offsets = list()
+                
                 if os.path.exists(file_path):
                     working_file_path = self.directory_path + "save_in_progress"
                     working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
@@ -2908,11 +3025,17 @@ class SleepDataManager:
                         for data_point in file_generator:
                             if "*" in data_point["ID"]:
                                 data_point["ID"] = data_point["ID"][:data_point["ID"].index("*")+1]
+                            byte_offsets.append(working_file.tell())  # Store the byte offset before writing the new data point
                             pickle.dump(data_point, working_file)
                         os.remove(file_path)  # Remove the file after copying its content
                     finally:
                         working_file.close()
                     
+                    # update byte offsets
+                    with open(file_offset_path, "wb") as f:
+                        pickle.dump(byte_offsets, f)
+                    
+                    # Rename the working file
                     os.rename(working_file_path, file_path)
 
 
@@ -2942,11 +3065,17 @@ class SleepDataManager:
         working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
         working_file = open(working_file_path, "ab")
 
+        # initialize byte offset
+        byte_offset = list()
+
         try:
-            for file_path in self.pid_paths:  # Skip the main file
+            for file_path_iteration in range(len(self.pid_paths)):  # Skip the main file
+                file_path = self.pid_paths[file_path_iteration]
+
                 if os.path.exists(file_path):
                     file_generator = load_from_pickle(file_path)
                     for data_point in file_generator:
+                        byte_offset.append(working_file.tell())  # Store the byte offset before writing the new data point
                         pickle.dump(data_point, working_file)
                     os.remove(file_path)  # Remove the file after copying its content
 
@@ -2956,6 +3085,11 @@ class SleepDataManager:
         
         # Rename the working file
         os.rename(working_file_path, main_file_path)
+
+        # update byte offset file
+        self._remove_offsets()
+        with open(self.pid_offset_paths[self.main_pid], "wb") as f:
+            pickle.dump(byte_offset, f)
 
         # update database configuration
         self.database_configuration["number_datapoints"][self.main_pid] = sum(self.database_configuration["number_datapoints"])
@@ -3058,6 +3192,8 @@ class SleepDataManager:
         for file_path in self.pid_paths:  # Skip the main file
             if os.path.exists(file_path):
                 os.remove(file_path)
+        
+        self._remove_offsets()
 
         self.database_configuration["sleep_stage_label"] = None
         self.database_configuration["signal_length_seconds"] = None
@@ -3066,6 +3202,64 @@ class SleepDataManager:
         self.database_configuration["number_datapoints"] = [0 for _ in range(len(self.pid_paths))]
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
+
+    def _create_offsets(self):
+        """
+        """
+
+        self._remove_offsets()
+
+        pid_identifier = [self.main_pid, self.training_pid, self.validation_pid, self.test_pid]
+
+        for pid_index in range(len(pid_identifier)):
+            pid = pid_identifier[pid_index]
+            file_path = self.pid_paths[pid]
+            file_offsets_path = self.pid_offset_paths[pid]
+
+            print(f"\nCreating offsets for {file_path}, enabling faster loading of data points by index (and ID).")
+            progress_bar = DynamicProgressBar(total = self.database_configuration["number_datapoints"][pid])
+
+            if not os.path.exists(file_path):
+                continue
+
+            pid_offsets = list()
+
+            with open(file_path, "rb") as f:
+                while True:
+                    try:
+                        # Save the current byte position (start of a new object)
+                        pid_offsets.append(f.tell())
+
+                        # Read and discard the object to move the file pointer forward
+                        _ = pickle.load(f)
+                        
+                        progress_bar.update()
+
+                    except:
+                        break
+            
+            # Save the offsets to a file
+            with open(file_offsets_path, "wb") as f:
+                pickle.dump(pid_offsets, f)
+    
+
+    def _remove_offsets(self):
+        """
+        Removes the offsets from the database. This is useful if you want to recreate the offsets later.
+
+        RETURNS:
+        ------------------------------
+        None
+
+        ARGUMENTS:
+        ------------------------------
+        None
+        """
+
+        for file_path in self.pid_offset_paths:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
 
     def __len__(self):
         """
