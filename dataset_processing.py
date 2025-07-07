@@ -431,11 +431,27 @@ def retrieve_possible_shift_lengths(
     return possible_shift_lengths
 
 
+def next_possible_shift_length(
+        desired_shift_length_seconds: int,
+        all_signal_frequencies: list,
+    ):
+
+    while True:
+        possible = True
+        for signal_frequency in all_signal_frequencies:
+            if desired_shift_length_seconds * signal_frequency != int(desired_shift_length_seconds * signal_frequency):
+                possible = False
+                break
+        if possible:
+            return desired_shift_length_seconds
+        
+        desired_shift_length_seconds += 1
+
+
 def calculate_optimal_shift_length(
         signal_length_seconds: float, 
         desired_length_seconds: float, 
-        wanted_shift_length_seconds: float,
-        absolute_shift_deviation_seconds: float,
+        shift_length_seconds_interval: tuple,
         all_signal_frequencies: list,
     ) -> int: # type: ignore
     """
@@ -469,79 +485,52 @@ def calculate_optimal_shift_length(
         The frequencies of all signals that must be split.
     """
 
+    if signal_length_seconds <= desired_length_seconds:
+        # If the signal is shorter than the desired length, no shift length is needed.
+        raise ValueError("The signal is already shorter than the desired length and does not need to be split into multiple parts.")
+
     # Calculate min and max shift length
-    min_shift = wanted_shift_length_seconds - absolute_shift_deviation_seconds
+    min_shift = shift_length_seconds_interval[0]
     if min_shift < 1:
         min_shift = 1
-    max_shift = wanted_shift_length_seconds + absolute_shift_deviation_seconds
-
-    # Retrieve possible shift lengths
-    possible_shift_lengths = retrieve_possible_shift_lengths(
-        min_shift_seconds = min_shift,
-        max_shift_seconds = max_shift,
-        all_signal_frequencies = all_signal_frequencies
-    )
-    
-    possible_shift_lengths = np.array(possible_shift_lengths)
+    max_shift = shift_length_seconds_interval[1]
 
     # Initialize variables
     number_shifts = 1
-
-    collect_shift_length = []
-    collect_wanted_deviation = []
-    collect_possible_deviation = []
 
     # Find shift lengths that result in an integer number of shifts:
     # The idea is that the number of shifts is always increased by 1, until the shift length is 
     # smaller than the minimum shift length.
     while True:
         current_shift_length_seconds = (signal_length_seconds-desired_length_seconds) / number_shifts
-        current_shift_deviation_seconds = abs(current_shift_length_seconds - wanted_shift_length_seconds)
 
         if current_shift_length_seconds < min_shift:
             break
 
-        if current_shift_length_seconds <= max_shift:
-            collect_shift_length.append(current_shift_length_seconds)
-            collect_wanted_deviation.append(current_shift_deviation_seconds)
+        if current_shift_length_seconds != int(current_shift_length_seconds):
+            current_shift_length_seconds = int(current_shift_length_seconds) + 1
+        current_shift_length_seconds = int(current_shift_length_seconds)
 
-            deviation_to_possible_shifts = copy.deepcopy(possible_shift_lengths) - current_shift_length_seconds
-            # remove negative values (shift length must be integer, if integer is smaller than float, then not all entries will be collected)
-            this_max = max(deviation_to_possible_shifts)
-            for i in range(0, len(deviation_to_possible_shifts)):
-                if deviation_to_possible_shifts[i] < 0:
-                    deviation_to_possible_shifts[i] = this_max
-            
-            collect_possible_deviation.append(min(deviation_to_possible_shifts))
+        if current_shift_length_seconds <= max_shift:
+            return next_possible_shift_length(
+                desired_shift_length_seconds = current_shift_length_seconds,
+                all_signal_frequencies = all_signal_frequencies)
 
         number_shifts += 1
     
-    if len(collect_shift_length) == 0:
-        possible_wanted_deviation = np.abs(possible_shift_lengths - wanted_shift_length_seconds)
-        return possible_shift_lengths[np.argmin(possible_wanted_deviation)]
+    if min_shift != int(min_shift):
+        min_shift = int(min_shift) + 1
+    min_shift = int(min_shift)
     
-    # return shift length with smallest deviation to wanted shift length and possible shift length, 
-    # slightly prioritize deviation to possible shift length
-    collect_possible_deviation = np.array(collect_possible_deviation) + 0.1
-    collect_wanted_deviation = np.array(collect_wanted_deviation) + 0.1
-    collect_wanted_deviation *= 2
-
-    criterium = collect_possible_deviation * collect_wanted_deviation
-    best_possible_shift_length = collect_shift_length[np.argmin(criterium)]
-
-    for possible_shift_length in possible_shift_lengths:
-        if possible_shift_length >= best_possible_shift_length:
-            return possible_shift_length
-    
-    return possible_shift_lengths[-1]
+    return next_possible_shift_length(
+        desired_shift_length_seconds = min_shift,
+        all_signal_frequencies = all_signal_frequencies)
 
 
 def split_long_signal(
         signal: list, 
         sampling_frequency: int,
         signal_length_seconds: int = 10*3600,
-        wanted_shift_length_seconds: int = 3600,
-        absolute_shift_deviation_seconds: int = 1800,
         use_shift_length_seconds: int = 0
     ) -> list:
     """
@@ -583,12 +572,6 @@ def split_long_signal(
         HIGHLY IMPORTANT for "bad" data with a signal (RRI, MAD, SLP... probably in most cases the latter) 
         so that: (signal_seconds * sampling_frequency != integer)
     """
-    
-    # Check parameters
-    if absolute_shift_deviation_seconds > wanted_shift_length_seconds:
-        raise ValueError("The absolute shift deviation must be smaller than the wanted shift length.")
-    if absolute_shift_deviation_seconds < 0:
-        raise ValueError("The absolute shift deviation must be a positive number.")
 
     signal = np.array(signal) # type: ignore
         
@@ -621,8 +604,7 @@ def split_signals_within_dictionary(
         signal_keys: list,
         signal_frequencies: list,
         signal_length_seconds: int,
-        wanted_shift_length_seconds: int,
-        absolute_shift_deviation_seconds: int
+        shift_length_seconds_interval: tuple,
     ):
     """
     You might handle with data where multiple signals are stored in a dictionary. If those signals are too long,
@@ -668,8 +650,7 @@ def split_signals_within_dictionary(
     use_shift_length_seconds = calculate_optimal_shift_length(
         signal_length_seconds = current_signal_length_seconds,
         desired_length_seconds = signal_length_seconds,
-        wanted_shift_length_seconds = wanted_shift_length_seconds,
-        absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
+        shift_length_seconds_interval = shift_length_seconds_interval,
         all_signal_frequencies = signal_frequencies
         )
 
@@ -685,8 +666,6 @@ def split_signals_within_dictionary(
             signal = copy.deepcopy(data_dict[signal_key]), # type: ignore
             sampling_frequency = copy.deepcopy(signal_frequencies[signal_key_index]),
             signal_length_seconds = signal_length_seconds,
-            wanted_shift_length_seconds = wanted_shift_length_seconds,
-            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds,
             use_shift_length_seconds = use_shift_length_seconds
             )
 
@@ -1423,6 +1402,9 @@ def clean_and_remove_directory(directory):
     """
     Cleans and removes the specified directory if it exists.
     """
+    if not os.path.exists(directory):
+        return
+    
     entries = os.listdir(directory)
     for entry in entries:
         if os.path.isdir(os.path.join(directory, entry)):
@@ -1616,8 +1598,7 @@ class SleepDataManager:
     database_configuration["sleep_stage_label"] = None
 
     database_configuration["signal_length_seconds"] = None
-    database_configuration["wanted_shift_length_seconds"] = None
-    database_configuration["absolute_shift_deviation_seconds"] = None
+    database_configuration["shift_length_seconds_interval"] = None
 
     database_configuration["number_datapoints"] = [0, 0, 0, 0] # main, train, validation, test
 
@@ -1831,8 +1812,7 @@ class SleepDataManager:
                 signal_keys = self.signal_keys,
                 signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
                 signal_length_seconds = self.database_configuration["signal_length_seconds"],
-                wanted_shift_length_seconds = self.database_configuration["wanted_shift_length_seconds"],
-                absolute_shift_deviation_seconds = self.database_configuration["absolute_shift_deviation_seconds"]
+                shift_length_seconds_interval = self.database_configuration["shift_length_seconds_interval"],
                 ) # returns a list of dictionaries
             
             return splitted_data_dictionaries
@@ -2266,16 +2246,14 @@ class SleepDataManager:
             # restore database configuration to default values
             self.database_configuration["sleep_stage_label"] = None
             self.database_configuration["signal_length_seconds"] = None
-            self.database_configuration["wanted_shift_length_seconds"] = None
-            self.database_configuration["absolute_shift_deviation_seconds"] = None
+            self.database_configuration["shift_length_seconds_interval"] = None
             save_to_pickle(self.database_configuration, self.configuration_path)
 
 
     def crop_oversized_data(
             self,
             signal_length_seconds: int,
-            wanted_shift_length_seconds: int,
-            absolute_shift_deviation_seconds: int
+            shift_length_seconds_interval: tuple,
         ):
         """
         """
@@ -2288,7 +2266,7 @@ class SleepDataManager:
 
         # reverse signal split if it was applied
         if self.database_configuration["signal_length_seconds"] is not None:
-            if signal_length_seconds == self.database_configuration["signal_length_seconds"] and wanted_shift_length_seconds == self.database_configuration["wanted_shift_length_seconds"] and absolute_shift_deviation_seconds == self.database_configuration["absolute_shift_deviation_seconds"]:
+            if signal_length_seconds == self.database_configuration["signal_length_seconds"] and shift_length_seconds_interval == self.database_configuration["shift_length_seconds_interval"]:
                 print("\nSignals were already split into uniform length using current settings. No need to split again.")
                 return
             print("\nSignals were already split into uniform length. Reversing the split to apply new split.")
@@ -2296,8 +2274,8 @@ class SleepDataManager:
         
         # Check if signals can be split and fused correctly
         retrieve_possible_shift_lengths(
-            min_shift_seconds = max(wanted_shift_length_seconds-absolute_shift_deviation_seconds, 1),
-            max_shift_seconds = wanted_shift_length_seconds+absolute_shift_deviation_seconds,
+            min_shift_seconds = shift_length_seconds_interval[0],
+            max_shift_seconds = shift_length_seconds_interval[1],
             all_signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys]
         )
 
@@ -2349,8 +2327,7 @@ class SleepDataManager:
                             signal_keys = self.signal_keys,
                             signal_frequencies = [self.database_configuration[key] for key in self.signal_frequency_keys],
                             signal_length_seconds = signal_length_seconds,
-                            wanted_shift_length_seconds = wanted_shift_length_seconds,
-                            absolute_shift_deviation_seconds = absolute_shift_deviation_seconds
+                            shift_length_seconds_interval = shift_length_seconds_interval,
                             ) # returns a list of dictionaries
                         
                         # append all dictionaries at once and increment number of new datapoints
@@ -2399,8 +2376,7 @@ class SleepDataManager:
         # if no error occured, update and save database configuration
         self.database_configuration["number_datapoints"] = number_split_datapoints
         self.database_configuration["signal_length_seconds"] = signal_length_seconds
-        self.database_configuration["wanted_shift_length_seconds"] = wanted_shift_length_seconds
-        self.database_configuration["absolute_shift_deviation_seconds"] = absolute_shift_deviation_seconds
+        self.database_configuration["shift_length_seconds_interval"] = shift_length_seconds_interval
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     
 
@@ -2565,8 +2541,7 @@ class SleepDataManager:
         # update database configuration
         self.database_configuration["number_datapoints"][self.main_pid] = number_original_datapoints
         self.database_configuration["signal_length_seconds"] = None
-        self.database_configuration["wanted_shift_length_seconds"] = None
-        self.database_configuration["absolute_shift_deviation_seconds"] = None
+        self.database_configuration["shift_length_seconds_interval"] = None
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
 
         # update byte offset file
@@ -2675,13 +2650,12 @@ class SleepDataManager:
         
         if join_splitted_parts and self.database_configuration["signal_length_seconds"] is not None:
             signal_length_seconds = self.database_configuration["signal_length_seconds"]
-            wanted_shift_length_seconds = self.database_configuration["wanted_shift_length_seconds"]
-            absolute_shift_deviation_seconds = self.database_configuration["absolute_shift_deviation_seconds"]
+            shift_length_seconds_interval = self.database_configuration["shift_length_seconds_interval"]
             print("\nAttention: 'join_splitted_parts' is set to True, but the data was already split into uniform length. Depending on the number of datapoints, this could cause long computation times. Reversing signal split.")
             self.reverse_signal_crop()
             self.separate_train_test_validation(train_size, validation_size, test_size, random_state, shuffle, join_splitted_parts, equally_distribute_signal_durations) # type: ignore
-            self.crop_oversized_data(signal_length_seconds, wanted_shift_length_seconds, absolute_shift_deviation_seconds)
-        
+            self.crop_oversized_data(signal_length_seconds, shift_length_seconds_interval)
+
         if not join_splitted_parts:
             if self.database_configuration["signal_length_seconds"] is None:
                 raise ValueError("If 'join_splitted_parts' is False, the data must be split into uniform length first. Please call 'crop_oversized_data' before calling 'separate_train_test_validation' with 'join_splitted_parts' set to False.")
@@ -3197,8 +3171,7 @@ class SleepDataManager:
 
         self.database_configuration["sleep_stage_label"] = None
         self.database_configuration["signal_length_seconds"] = None
-        self.database_configuration["wanted_shift_length_seconds"] = None
-        self.database_configuration["absolute_shift_deviation_seconds"] = None
+        self.database_configuration["shift_length_seconds_interval"] = None
         self.database_configuration["number_datapoints"] = [0 for _ in range(len(self.pid_paths))]
         save_to_pickle(data = self.database_configuration, file_name = self.configuration_path)
     

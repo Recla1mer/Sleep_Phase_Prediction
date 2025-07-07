@@ -38,6 +38,64 @@ matplotlib.rcParams["savefig.facecolor"] = (0.0, 0.0, 0.0, 0.0)  # transparent f
 matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)
 
 
+def plot_crop_shift_length(
+        signal_duration_limit = (10, 15), # in hours
+        **kwargs
+    ):
+    # Default values
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "")
+    kwargs.setdefault("ylabel", "")
+    kwargs.setdefault("xticks", None)
+    kwargs.setdefault("yticks", None)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 2)
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("linestyle", "-") # or "--", "-.", ":"
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+    kwargs.setdefault("markeredgewidth", 1)
+    kwargs.setdefault("markeredgecolor", "black")
+
+    plot_args = dict(
+        linewidth = kwargs["linewidth"],
+        alpha = kwargs["alpha"],
+        linestyle = kwargs["linestyle"],
+        marker = kwargs["marker"],
+        markersize = kwargs["markersize"],
+        # markeredgewidth = kwargs["markeredgewidth"],
+        # markeredgecolor = kwargs["markeredgecolor"],
+    )
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+
+    x_data = np.arange(signal_duration_limit[0]*3600, signal_duration_limit[1]*3600 + 120, 120)  # in seconds
+    x_data = x_data[x_data > 36000]  # only hours above desired length
+
+    ax.plot(
+        np.array(x_data)/3600,
+        np.array([calculate_optimal_shift_length(signal_length_seconds=duration, desired_length_seconds=36000, shift_length_seconds_interval=(3600, 7200), all_signal_frequencies=[4,1,1/30]) for duration in x_data])/3600,
+        **plot_args
+    )
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    if kwargs["xticks"] is not None:
+        ax.set_xticks(kwargs["xticks"])
+    if kwargs["yticks"] is not None:
+        ax.set_yticks(kwargs["yticks"])
+
+    plt.show()
+
+
 def plot_length_distribution(
     pickle_name = "shhs_gif_plot.pkl",
     **kwargs
@@ -379,8 +437,10 @@ if __name__ == "__main__":
     linewidth*=0.5
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
+    plot_crop_shift_length()
+
     # data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5")
-    plot_length_distribution(binwidth = 0.25)
+    # plot_length_distribution(binwidth = 0.25)
     
     # plot_length_distribution(yscale = "log", ylim = [1, 10000], binwidth = 0.5, xlim = [0, 16])
 

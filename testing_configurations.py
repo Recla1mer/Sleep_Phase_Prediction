@@ -383,7 +383,7 @@ def copy_and_split_default_database(
     """
 
     # access parameters used for cropping the data
-    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"]} # signal_cropping_parameters
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
     del project_configuration
 
     # copy default SHHS and GIF databases
@@ -465,8 +465,7 @@ if True:
 
     signal_cropping_parameters = {
         "signal_length_seconds": 36000,
-        "wanted_shift_length_seconds": 5400,
-        "absolute_shift_deviation_seconds": 1800,
+        "shift_length_seconds_interval": (3600, 7200),
     }
 
     padding_parameters = {
@@ -681,8 +680,7 @@ if True:
 
     signal_cropping_parameters = {
         "signal_length_seconds": 30,
-        "wanted_shift_length_seconds": 30,
-        "absolute_shift_deviation_seconds": 0,
+        "shift_length_seconds_interval": (30, 30),
     }
 
     padding_parameters = {
@@ -780,8 +778,7 @@ if True:
 
     thirty_second_network = {
         "signal_length_seconds": 30,
-        "wanted_shift_length_seconds": 30,
-        "absolute_shift_deviation_seconds": 0,
+        "shift_length_seconds_interval": (30, 30),
         "rri_datapoints": int(project_configuration["RRI_frequency"] * 30),
         "mad_datapoints": int(project_configuration["MAD_frequency"] * 30),
     }
@@ -810,8 +807,7 @@ if True:
 
     sixty_second_network = {
         "signal_length_seconds": 60,
-        "wanted_shift_length_seconds": 60,
-        "absolute_shift_deviation_seconds": 0,
+        "shift_length_seconds_interval": (60, 60),
         "rri_datapoints": int(project_configuration["RRI_frequency"] * 60),
         "mad_datapoints": int(project_configuration["MAD_frequency"] * 60),
     }
@@ -840,8 +836,7 @@ if True:
 
     hundred_twenty_second_network = {
         "signal_length_seconds": 120,
-        "wanted_shift_length_seconds": 120,
-        "absolute_shift_deviation_seconds": 0,
+        "shift_length_seconds_interval": (120, 120),
         "rri_datapoints": int(project_configuration["RRI_frequency"] * 120),
         "mad_datapoints": int(project_configuration["MAD_frequency"] * 120),
     }
@@ -950,8 +945,7 @@ if False:
 
     signal_cropping_parameters = {
         "signal_length_seconds": 30,
-        "wanted_shift_length_seconds": 30,
-        "absolute_shift_deviation_seconds": 0,
+        "shift_length_seconds_interval": (30, 30)
     }
 
     gif_data_manager.crop_oversized_data(**signal_cropping_parameters)

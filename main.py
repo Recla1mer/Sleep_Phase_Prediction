@@ -52,8 +52,7 @@ sampling_frequency_parameters = {
 # parameters that define how signals with overlength are cropped, see 'crop_oversized_data' function of 'SleepDataManager' class in dataset_processing.py
 signal_cropping_parameters = {
     "signal_length_seconds": 36000,
-    "wanted_shift_length_seconds": 5400,
-    "absolute_shift_deviation_seconds": 1800,
+    "shift_length_seconds_interval": (3600, 7200)
 }
 
 # parameters needed to ensure signals have uniform shape when passed to the network
@@ -187,7 +186,7 @@ def check_project_configuration(parameters: dict):
     # Check if unknown keys are present in the parameters
     known_keys = [
         "RRI_frequency", "MAD_frequency", "SLP_frequency",
-        "signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds",
+        "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
         "rri_inlier_interval", "mad_inlier_interval", "sleep_stage_label",
         "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
@@ -205,7 +204,7 @@ def check_project_configuration(parameters: dict):
     required_keys = [
         "RRI_frequency", "MAD_frequency", "SLP_frequency",
         "rri_inlier_interval", "mad_inlier_interval", "sleep_stage_label",
-        "signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds",
+        "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
         "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
         "feature_transform", "target_transform",
@@ -377,7 +376,7 @@ def Process_SHHS_Dataset(
     distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
-    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"]} # signal_cropping_parameters
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
 
     # access the SHHS dataset
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
@@ -473,7 +472,7 @@ def Process_GIF_Dataset(
     distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
-    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "wanted_shift_length_seconds", "absolute_shift_deviation_seconds"]} # signal_cropping_parameters
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
 
     # access the GIF dataset
     gif_dataset = h5py.File(path_to_gif_dataset, 'r')
@@ -2029,8 +2028,7 @@ if __name__ == "__main__":
 
     signal_cropping_parameters = {
         "signal_length_seconds": 36000,
-        "wanted_shift_length_seconds": 5400,
-        "absolute_shift_deviation_seconds": 1800,
+        "shift_length_seconds_interval": (3600, 7200)
     }
 
     padding_parameters = {
