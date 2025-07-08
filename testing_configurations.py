@@ -662,6 +662,8 @@ if True:
                     path_to_shhs_database = shhs_directory_path,
                     path_to_gif_database = gif_directory_path,
                 )
+    
+    del project_configuration, default_project_configuration
 
 
 if True:
@@ -779,8 +781,8 @@ if True:
     thirty_second_network = {
         "signal_length_seconds": 30,
         "shift_length_seconds_interval": (30, 30),
-        "rri_datapoints": int(project_configuration["RRI_frequency"] * 30),
-        "mad_datapoints": int(project_configuration["MAD_frequency"] * 30),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
     }
 
     thirty_second_hyperparameters_shhs = {
@@ -808,8 +810,8 @@ if True:
     sixty_second_network = {
         "signal_length_seconds": 60,
         "shift_length_seconds_interval": (60, 60),
-        "rri_datapoints": int(project_configuration["RRI_frequency"] * 60),
-        "mad_datapoints": int(project_configuration["MAD_frequency"] * 60),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
     }
 
     sixty_second_hyperparameters_shhs = {
@@ -837,8 +839,8 @@ if True:
     hundred_twenty_second_network = {
         "signal_length_seconds": 120,
         "shift_length_seconds_interval": (120, 120),
-        "rri_datapoints": int(project_configuration["RRI_frequency"] * 120),
-        "mad_datapoints": int(project_configuration["MAD_frequency"] * 120),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
     }
 
     hundred_twenty_second_hyperparameters_shhs = {
