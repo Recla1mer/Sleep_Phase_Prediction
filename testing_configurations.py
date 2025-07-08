@@ -786,10 +786,10 @@ if True:
     }
 
     thirty_second_hyperparameters_shhs = {
-        "batch_size": 256, # 2,13h for 30s data | 6M (5931923) / 256 => 23172 steps per epoch
-        "number_epochs": 10,
+        "batch_size": 128, # 64m for 30s data | 6M (5931923) / 128 => 46344 steps per epoch
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 2,
+            "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -798,9 +798,9 @@ if True:
 
     thirty_second_hyperparameters_gif = {
         "batch_size": 32, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
-        "number_epochs": 25,
+        "number_epochs": 100,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 3,
+            "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -815,10 +815,10 @@ if True:
     }
 
     sixty_second_hyperparameters_shhs = {
-        "batch_size": 128, # 2,1h for 60s data | 3M (2966296) / 128 => 23175 steps per epoch
-        "number_epochs": 20,
+        "batch_size": 128, # 2.1h for 60s data | 3M (2966296) / 128 => 23175 steps per epoch
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 2,
+            "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -826,10 +826,10 @@ if True:
     }
 
     sixty_second_hyperparameters_gif = {
-        "batch_size": 16, # 16m for 60s data | 175K (174374) / 16 => 10899 steps per epoch
-        "number_epochs": 50,
+        "batch_size": 32, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
+        "number_epochs": 100,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 5,
+            "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -844,7 +844,7 @@ if True:
     }
 
     hundred_twenty_second_hyperparameters_shhs = {
-        "batch_size": 32, # 1,1h for 120s data | 1.5M (1484839) / 32 => 46402 steps per epoch
+        "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
@@ -855,7 +855,7 @@ if True:
     }
 
     hundred_twenty_second_hyperparameters_gif = {
-        "batch_size": 16, # 32m for 120s data | 90K (87221) / 16 => 5452 steps per epoch
+        "batch_size": 32, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
         "number_epochs": 100,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
