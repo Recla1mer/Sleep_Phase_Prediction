@@ -526,10 +526,10 @@ if True:
         "batch_size": 8, # 80h for 10h data | 7K (6712) / 8 => 839 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 10,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 5 * 1e-5
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -537,10 +537,10 @@ if True:
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
         "number_epochs": 100,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 25,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 1 * 1e-5
+            "number_updates_to_max_lr": 10,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -785,23 +785,23 @@ if True:
 
     thirty_second_hyperparameters_shhs = {
         "batch_size": 256, # 2,13h for 30s data | 6M (5931923) / 256 => 23172 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 10,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 10,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 5 * 1e-5
+            "number_updates_to_max_lr": 2,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
     thirty_second_hyperparameters_gif = {
         "batch_size": 32, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 25,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 25,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 1 * 1e-5
+            "number_updates_to_max_lr": 3,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -814,23 +814,23 @@ if True:
 
     sixty_second_hyperparameters_shhs = {
         "batch_size": 128, # 2,1h for 60s data | 3M (2966296) / 128 => 23175 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 20,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 10,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 5 * 1e-5
+            "number_updates_to_max_lr": 2,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
     sixty_second_hyperparameters_gif = {
         "batch_size": 16, # 16m for 60s data | 175K (174374) / 16 => 10899 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 50,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 25,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 1 * 1e-5
+            "number_updates_to_max_lr": 5,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -845,10 +845,10 @@ if True:
         "batch_size": 32, # 1,1h for 120s data | 1.5M (1484839) / 32 => 46402 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 10,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 5 * 1e-5
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -856,10 +856,10 @@ if True:
         "batch_size": 16, # 32m for 120s data | 90K (87221) / 16 => 5452 steps per epoch
         "number_epochs": 100,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 25,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 1 * 1e-5
+            "number_updates_to_max_lr": 10,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -912,6 +912,16 @@ if True:
                     path_to_shhs_database = shhs_directory_paths[network_index],
                     path_to_gif_database = gif_directory_paths[network_index],
                 )
+
+
+if True:
+    directory = "LTM_BAA_Overlap_ArtifactAsWake_RAW/"
+    path = directory + loss_per_epoch_gif_file
+
+    with open(path, "rb") as file:
+        loss_per_epoch = pickle.load(file)
+    
+    print(loss_per_epoch)
 
 
 if False:

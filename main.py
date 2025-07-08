@@ -815,7 +815,7 @@ def main_model_training(
     """
     # clearing sequence to remove progress bars of previous epoch
     clearing_sequence = "\033[2K"
-    for _ in range(6+6*len(paths_to_validation_data_directories)):
+    for _ in range(7+6*len(paths_to_validation_data_directories)):
         clearing_sequence += "\033[F" # Move cursor up
         clearing_sequence += "\033[2K" # Clear line
 
@@ -831,8 +831,10 @@ def main_model_training(
         if t > 0:
             print(clearing_sequence, end='')
 
-        print(f"\nEpoch {t+1}:")
-        print("-"*130)
+        print("")
+        print("-"*10)
+        print(f"Epoch {t+1}:")
+        print("-"*10)
 
         train_loss, train_confusion_matrix = train_loop(
             dataloader = train_dataloader,

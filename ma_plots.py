@@ -38,6 +38,70 @@ matplotlib.rcParams["savefig.facecolor"] = (0.0, 0.0, 0.0, 0.0)  # transparent f
 matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)
 
 
+def plot_learning_rate_scheduler(
+        scheduler,
+        **kwargs
+    ):
+    """
+    Plot the learning rate scheduler.
+    """
+
+    # Default values
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "")
+    kwargs.setdefault("ylabel", "")
+    kwargs.setdefault("xticks", None)
+    kwargs.setdefault("yticks", None)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 2)
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("linestyle", "-") # or "--", "-.", ":"
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+    kwargs.setdefault("markeredgewidth", 1)
+    kwargs.setdefault("markeredgecolor", "black")
+
+    plot_args = dict(
+        linewidth = kwargs["linewidth"],
+        alpha = kwargs["alpha"],
+        linestyle = kwargs["linestyle"],
+        marker = kwargs["marker"],
+        markersize = kwargs["markersize"],
+        # markeredgewidth = kwargs["markeredgewidth"],
+        # markeredgecolor = kwargs["markeredgecolor"],
+    )
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+
+    number_updates = scheduler.number_updates_total
+
+    x_data = np.arange(1, number_updates)
+    y_data = np.array([scheduler(update) for update in x_data])
+
+    ax.plot(
+        x_data,
+        y_data,
+        **plot_args
+    )
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    if kwargs["xticks"] is not None:
+        ax.set_xticks(kwargs["xticks"])
+    if kwargs["yticks"] is not None:
+        ax.set_yticks(kwargs["yticks"])
+
+    plt.show()
+
+
 def plot_crop_shift_length(
         signal_duration_limit = (10, 15), # in hours
         **kwargs
@@ -437,7 +501,77 @@ if __name__ == "__main__":
     linewidth*=0.5
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
-    plot_crop_shift_length()
+    # plot_crop_shift_length()
+
+    # yao
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 40,
+            number_updates_to_max_lr = 10,
+            start_learning_rate = 2.5 * 1e-5,
+            max_learning_rate = 1e-4,
+            end_learning_rate = 5 * 1e-5,
+        ))
+    
+    # shhs >= 120s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 40,
+            number_updates_to_max_lr = 4,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
+    
+    # gif >= 120s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 100,
+            number_updates_to_max_lr = 10,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
+    
+    # shhs = 60s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 20,
+            number_updates_to_max_lr = 2,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
+    
+    # gif = 60s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 50,
+            number_updates_to_max_lr = 5,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
+
+    # shhs = 30s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 10,
+            number_updates_to_max_lr = 2,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
+    
+    # gif = 30s
+    plot_learning_rate_scheduler(
+        scheduler=CosineScheduler(
+            number_updates_total = 25,
+            number_updates_to_max_lr = 3,
+            start_learning_rate = 1e-5,
+            max_learning_rate = 1e-3,
+            end_learning_rate = 1e-6,
+        ))
 
     # data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5")
     # plot_length_distribution(binwidth = 0.25)
