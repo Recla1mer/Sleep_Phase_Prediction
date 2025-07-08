@@ -6,6 +6,7 @@ Prediction.
 """
 
 # IMPORTS:
+import time
 import numpy as np
 import os
 import math
@@ -211,11 +212,13 @@ class CustomSleepDataset(Dataset):
             If not specified, defaults to 0.0.
         """
         
-        # access data file and sampling frequencies:
+        # access data file, datapoint offsets (for faster loading) and sampling frequencies:
         self.data_manager = SleepDataManager(
             directory_path = path_to_data_directory,
             pid = pid,
         )
+
+        self.byte_offsets = self.data_manager.return_offsets()
         
         self.rri_frequency = self.data_manager.database_configuration["RRI_frequency"]
         self.mad_frequency = self.data_manager.database_configuration["MAD_frequency"]
@@ -257,7 +260,7 @@ class CustomSleepDataset(Dataset):
 
     def __getitem__(self, idx):
         # load dictionary with data from file using data_manager
-        data_sample = self.data_manager.load(idx)
+        data_sample = self.data_manager.load_by_offset(self.byte_offsets[idx])
 
         # extract feature (RRI) from dictionary and perform final preprocessing:
         rri_sample = final_data_preprocessing(

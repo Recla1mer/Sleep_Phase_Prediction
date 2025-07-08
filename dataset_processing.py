@@ -2130,7 +2130,26 @@ class SleepDataManager:
             return data_point
         else:
             raise ValueError("You must provide a key, an ID, or an index to load data from the file.")
+    
+
+    def return_offsets(self):
+
+        # Load offsets from the offset file
+        with open(self.pid_offset_paths[self.current_pid], "rb") as f:
+            offsets = pickle.load(f)
         
+        return offsets
+    
+
+    def load_by_offset(self, offset):
+
+        # Load data from the file using the offset
+        with open(self.pid_paths[self.current_pid], "rb") as f:
+            f.seek(offset) # type: ignore
+            data_point = pickle.load(f)
+
+        return data_point
+
 
     def remove(self, key_id_index):
         """
