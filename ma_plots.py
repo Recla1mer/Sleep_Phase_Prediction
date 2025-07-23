@@ -166,7 +166,7 @@ def plot_length_distribution(
     ):
     
     kwargs.setdefault("title", "")
-    kwargs.setdefault("xlabel", "Recording length (hours)")
+    kwargs.setdefault("xlabel", "Recording Length (h)")
     kwargs.setdefault("ylabel", "Count")
     kwargs.setdefault("edgecolor", "black")
     kwargs.setdefault("kde", True)
@@ -205,7 +205,7 @@ def plot_length_distribution(
 
     lengths = np.concatenate((SHHS, GIF)) / 3600  # convert to hours
     shhs_label = np.array(["SHHS" for _ in range(len(SHHS))])
-    gif_label = np.array(["GIF" for _ in range(len(GIF))])
+    gif_label = np.array(["CHB" for _ in range(len(GIF))])
     label = np.concatenate((shhs_label, gif_label))
 
     pd_dataframe = pd.DataFrame({
@@ -230,15 +230,15 @@ def plot_length_distribution(
 
 
 def plot_sleep_stages_distribution(
-    pickle_name = "shhs_gif_plot.pkl",
     sleep_labels = ["Wake", "LS", "DS", "REM", "Artifact"],
     stat = "percentage", # "count" or "percentage"
+    remove_wake_artifact = False, # remove wake stage from the plot
     **kwargs
     ):
 
     kwargs.setdefault("title", "")
-    kwargs.setdefault("xlabel", "Sleep stage")
-    kwargs.setdefault("ylabel", "Count" if stat == "count" else "Relative Count (\%)") # type: ignore
+    kwargs.setdefault("xlabel", "Classes")
+    kwargs.setdefault("ylabel", "Count" if stat == "count" else "Relative Frequency (\%)") # type: ignore
     kwargs.setdefault("edgecolor", "black")
     kwargs.setdefault("alpha", 0.5)
     kwargs.setdefault("loc", "best")
@@ -250,6 +250,8 @@ def plot_sleep_stages_distribution(
         edgecolor=kwargs["edgecolor"],
         alpha=kwargs["alpha"]
     )
+
+    pickle_name = "shhs_gif_plot_aso.pkl" if remove_wake_artifact else "shhs_gif_plot.pkl"
 
     with open(pickle_name, "rb") as f:
         pickle_data_loaded = pickle.load(f)
@@ -272,7 +274,7 @@ def plot_sleep_stages_distribution(
         total_gif = sum(gif_num_stages)
         lengths = np.concatenate((np.array(shhs_num_stages) / total_shhs * 100, np.array(gif_num_stages) / total_gif * 100))
     stages = np.concatenate((shhs_labels, gif_labels))
-    label = np.concatenate((["SHHS" for _ in range(len(shhs_num_stages))], ["GIF" for _ in range(len(gif_num_stages))]))
+    label = np.concatenate((["SHHS" for _ in range(len(shhs_num_stages))], ["CHB" for _ in range(len(gif_num_stages))]))
 
     pd_dataframe = pd.DataFrame({
         "lengths": lengths,
@@ -289,6 +291,7 @@ def plot_sleep_stages_distribution(
 
     kwargs.setdefault("ylim", plt.ylim())
     kwargs.setdefault("xlim", plt.xlim())
+    print(f"Y-limits: {kwargs['ylim']}, X-limits: {kwargs['xlim']}")
     plt.ylim(kwargs["ylim"])
     plt.xlim(kwargs["xlim"])
     
@@ -297,7 +300,7 @@ def plot_sleep_stages_distribution(
 
 
 
-def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
+def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, include_aso_only: bool = False):
     # access the SHHS dataset
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
 
@@ -311,9 +314,18 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
     slp_stage = []
     slp_stage_count = []
 
+    for i in range(5):
+        slp_stage.append(i)
+        slp_stage_count.append(0)
+
     tie = 0
+    tie_at_transition = 0
     total = 0
     count_patient = 0
+
+    start_counting = True
+    if include_aso_only:
+        start_counting = False
     
     for patient_id in patients:
         data = shhs_dataset["slp"][patient_id][:] # type: ignore
@@ -321,17 +333,17 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
             if data[i] == 0: # type: ignore
                 data[i] = 0 # type: ignore
             elif data[i] == 1: # type: ignore
-                data[i] = 0 # type: ignore
-            elif data[i] == 2: # type: ignore
                 data[i] = 1 # type: ignore
-            elif data[i] == 3: # type: ignore
+            elif data[i] == 2: # type: ignore
                 data[i] = 2 # type: ignore
-            elif data[i] == 4: # type: ignore
-                data[i] = 4 # type: ignore
-            elif data[i] == 5: # type: ignore
+            elif data[i] == 3: # type: ignore
                 data[i] = 3 # type: ignore
-            elif data[i] == 6: # type: ignore
+            elif data[i] == 4: # type: ignore
+                data[i] = 5 # type: ignore
+            elif data[i] == 5: # type: ignore
                 data[i] = 4 # type: ignore
+            elif data[i] == 6: # type: ignore
+                data[i] = 5 # type: ignore
 
         signal_length.append(len(data)/slp_frequency) # type: ignore
 
@@ -348,22 +360,49 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
             for count in counts:
                 if count == max_count and appeared:
                     tie += 1
+                    
+                    upper_bound = i + 4
+                    if upper_bound >= len(data): # type: ignore
+                        upper_bound = len(data) - 1 # type: ignore
+                    
+                    lower_bound = i - 1
+                    if lower_bound < 0: # type: ignore
+                        lower_bound = 0 # type: ignore
+                    
+                    if data[lower_bound] == window[0] and data[upper_bound] == window[-1]: # type: ignore
+                        tie_at_transition += 1
+
                     break
                 if count == max_count:
                     appeared = True
-            
+        
+        stop_counting_at = 0
+        for i in range(len(data)-1, -1, -1): # type: ignore
+            if data[i] in [1, 2, 3]: # type: ignore
+                stop_counting_at = i
+                break
+        
+        count_iteration = 0
         for stage in data: # type: ignore
+            if include_aso_only and count_iteration > stop_counting_at:
+                break
+            if stage in [1,2,3]:
+                start_counting = True
+            if not start_counting:
+                continue
             if stage not in slp_stage:
                 slp_stage.append(stage)
                 slp_stage_count.append(1)
             else:
                 index = slp_stage.index(stage)
                 slp_stage_count[index] += 1
+            
+            count_iteration += 1
         
         count_patient += 1
         print(count_patient, end = "\r")
 
-    print(f"SHHS Tie: {tie}, Total: {total}, Ratio: {tie/total if total > 0 else 0}")
+    print(f"SHHS Tie: {tie}, At transition: {tie_at_transition}, Total: {total}, Tie Ratio: {tie/total if total > 0 else 0}, Transition Ratio: {tie_at_transition/tie if tie > 0 else 0}")
     print(slp_stage, slp_stage_count)
 
     # access the GIF dataset
@@ -379,9 +418,18 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
     gif_slp_stage = []
     gif_slp_stage_count = []
 
+    for i in range(5):
+        gif_slp_stage.append(i)
+        gif_slp_stage_count.append(0)
+
     gif_tie = 0
+    gif_tie_at_transition = 0
     gif_total = 0
     count_patient = 0
+
+    start_counting = True
+    if include_aso_only:
+        start_counting = False
 
     # saving all data from GIF dataset to the pickle file
     for patient_id in patients:
@@ -390,17 +438,17 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
             if data[i] == 0: # type: ignore
                 data[i] = 0 # type: ignore
             elif data[i] == 1: # type: ignore
-                data[i] = 0 # type: ignore
-            elif data[i] == 2: # type: ignore
                 data[i] = 1 # type: ignore
-            elif data[i] == 3: # type: ignore
+            elif data[i] == 2: # type: ignore
                 data[i] = 2 # type: ignore
-            elif data[i] == 4: # type: ignore
-                data[i] = 4 # type: ignore
-            elif data[i] == 5: # type: ignore
+            elif data[i] == 3: # type: ignore
                 data[i] = 3 # type: ignore
-            elif data[i] == 6: # type: ignore
+            elif data[i] == 4: # type: ignore
+                data[i] = 5 # type: ignore
+            elif data[i] == 5: # type: ignore
                 data[i] = 4 # type: ignore
+            elif data[i] == 6: # type: ignore
+                data[i] = 5 # type: ignore
 
         gif_signal_length.append(len(data)/slp_frequency) # type: ignore
 
@@ -417,22 +465,48 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
             for count in counts:
                 if count == max_count and appeared:
                     gif_tie += 1
+
+                    upper_bound = i + 4
+                    if upper_bound >= len(data): # type: ignore
+                        upper_bound = len(data) - 1 # type: ignore
+                    
+                    lower_bound = i - 1
+                    if lower_bound < 0: # type: ignore
+                        lower_bound = 0 # type: ignore
+                    
+                    if data[lower_bound] == window[0] and data[upper_bound] == window[-1]: # type: ignore
+                        gif_tie_at_transition += 1
+
                     break
                 if count == max_count:
                     appeared = True
-            
+        
+        stop_counting_at = 0
+        for i in range(len(data)-1, -1, -1): # type: ignore
+            if data[i] in [1, 2, 3]: # type: ignore
+                stop_counting_at = i
+                break
+        
+        count_iteration = 0
         for stage in data: # type: ignore
+            if include_aso_only and count_iteration > stop_counting_at:
+                break
+            if stage in [1,2,3,4]:
+                start_counting = True
+            if not start_counting:
+                continue
             if stage not in gif_slp_stage:
                 gif_slp_stage.append(stage)
                 gif_slp_stage_count.append(1)
             else:
                 index = gif_slp_stage.index(stage)
                 gif_slp_stage_count[index] += 1
+            count_iteration += 1
 
         count_patient += 1
         print(count_patient, end = "\r")
 
-    print(f"GIF Tie: {gif_tie}, Total: {gif_total}, Ratio: {gif_tie/gif_total if gif_total > 0 else 0}")
+    print(f"GIF Tie: {gif_tie}, At transition: {gif_tie_at_transition}, Total: {gif_total}, Tie Ratio: {gif_tie/gif_total if gif_total > 0 else 0}, Transition Ratio: {gif_tie_at_transition/gif_tie if gif_tie > 0 else 0}")
     print(gif_slp_stage, gif_slp_stage_count)
 
     dict = {
@@ -444,8 +518,12 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str):
         "GIF_signal_length": gif_signal_length,
     }
 
-    with open("shhs_gif_plot.pkl", "wb") as f:
-        pickle.dump(dict, f)
+    if include_aso_only:
+        with open("shhs_gif_plot_aso.pkl", "wb") as f:
+            pickle.dump(dict, f)
+    else:
+        with open("shhs_gif_plot.pkl", "wb") as f:
+            pickle.dump(dict, f)
 
 
 tex_correction = 0.5
@@ -497,85 +575,46 @@ fig_ratio = 4 / 3
 if __name__ == "__main__":
     matplotlib.rcParams.update(tex_look)
     # linewidth*=0.3
-    # linewidth*=0.48
-    linewidth*=0.5
+    linewidth*=0.48
+    # linewidth*=0.5
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
     # plot_crop_shift_length()
 
     # yao
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 40,
-            number_updates_to_max_lr = 10,
-            start_learning_rate = 2.5 * 1e-5,
-            max_learning_rate = 1e-4,
-            end_learning_rate = 5 * 1e-5,
-        ))
+    # plot_learning_rate_scheduler(
+    #     scheduler=CosineScheduler(
+    #         number_updates_total = 40,
+    #         number_updates_to_max_lr = 10,
+    #         start_learning_rate = 2.5 * 1e-5,
+    #         max_learning_rate = 1e-4,
+    #         end_learning_rate = 5 * 1e-5,
+    #     ))
     
-    # shhs >= 120s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 40,
-            number_updates_to_max_lr = 4,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
+    # shhs
+    # plot_learning_rate_scheduler(
+    #     scheduler=CosineScheduler(
+    #         number_updates_total = 40,
+    #         number_updates_to_max_lr = 4,
+    #         start_learning_rate = 1e-5,
+    #         max_learning_rate = 1e-3,
+    #         end_learning_rate = 1e-6,
+    #     ))
     
-    # gif >= 120s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 100,
-            number_updates_to_max_lr = 10,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
-    
-    # shhs = 60s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 20,
-            number_updates_to_max_lr = 2,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
-    
-    # gif = 60s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 50,
-            number_updates_to_max_lr = 5,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
+    # gif
+    # plot_learning_rate_scheduler(
+    #     scheduler=CosineScheduler(
+    #         number_updates_total = 100,
+    #         number_updates_to_max_lr = 10,
+    #         start_learning_rate = 1e-5,
+    #         max_learning_rate = 1e-3,
+    #         end_learning_rate = 1e-6,
+    #     ))
 
-    # shhs = 30s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 10,
-            number_updates_to_max_lr = 2,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
-    
-    # gif = 30s
-    plot_learning_rate_scheduler(
-        scheduler=CosineScheduler(
-            number_updates_total = 25,
-            number_updates_to_max_lr = 3,
-            start_learning_rate = 1e-5,
-            max_learning_rate = 1e-3,
-            end_learning_rate = 1e-6,
-        ))
-
-    # data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5")
+    data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5", include_aso_only=True)
     # plot_length_distribution(binwidth = 0.25)
     
     # plot_length_distribution(yscale = "log", ylim = [1, 10000], binwidth = 0.5, xlim = [0, 16])
 
-    # plot_sleep_stages_distribution(stat="percentage", yscale="linear")
+    plot_sleep_stages_distribution(stat="percentage", yscale="linear", remove_wake_artifact=False, sleep_labels = ["Wake", "N1", "N2", "N3", "REM", "Artifact"])
+    plot_sleep_stages_distribution(stat="percentage", yscale="linear", remove_wake_artifact=True, ylim = [0, 62.80567577690977], sleep_labels = ["Wake", "N1", "N2", "N3", "REM", "Artifact"])

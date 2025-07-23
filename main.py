@@ -22,7 +22,8 @@ Setting Global Paths and File Names
 
 # paths to the data
 original_shhs_data_path = "Raw_Data/SHHS_dataset.h5"
-original_gif_data_path = "Raw_Data/GIF_dataset.h5"
+# original_gif_data_path = "Raw_Data/GIF_dataset.h5"
+original_gif_data_path = "Raw_Data/gif_separated.pkl"
 
 # file names
 project_configuration_file = "Project_Configuration.pkl"
@@ -425,7 +426,7 @@ def Process_SHHS_Dataset(
         shhs_data_manager.separate_train_test_validation(**distribution_params)
 
 
-def Process_GIF_Dataset(
+def Process_GIF_Dataset_h5(
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
         path_to_project_configuration: str
@@ -500,6 +501,103 @@ def Process_GIF_Dataset(
             "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
             "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
             "SLP_frequency": 1/30, # type: ignore
+            "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
+        }
+
+        gif_data_manager.save(new_datapoint, unique_id=True)
+        progress_bar.update()
+
+    # if all splitted parts resulting from cropping an original datapoint are supposed to end up in the same pid,
+    # we'll apply the signal cropping after pid distribution, otherwise before.
+
+    if distribution_params["join_splitted_parts"]:
+        # Train-, Validation- and Test-Pid Distribution
+        gif_data_manager.separate_train_test_validation(**distribution_params)
+
+        # Cropping datapoints with overlength (resulting in multiple splitted parts)
+        gif_data_manager.crop_oversized_data(**signal_crop_params)
+    else:
+        # Cropping datapoints with overlength (resulting in multiple splitted parts)
+        gif_data_manager.crop_oversized_data(**signal_crop_params)
+
+        # Train-, Validation- and Test-Pid Distribution
+        gif_data_manager.separate_train_test_validation(**distribution_params)
+
+
+def Process_GIF_Dataset(
+        path_to_gif_dataset: str,
+        path_to_save_processed_data: str,
+        path_to_project_configuration: str
+    ):
+    """
+    This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the GIF dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_gif_dataset: str
+        the path to the GIF dataset
+    
+    Others: See 'Process_SHHS_Dataset' function
+    """
+
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
+
+    # initializing the database
+    gif_data_manager = SleepDataManager(directory_path = path_to_save_processed_data)
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # access sampling frequency parameters
+    freq_params = {key: project_configuration[key] for key in ["RRI_frequency", "MAD_frequency", "SLP_frequency"]} # sampling_frequency_parameters
+    gif_data_manager.change_uniform_frequencies(freq_params)
+
+    # access parameters used for distributing the data into train, validation, and test pids
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+
+    # access parameters used for cropping the data
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
+
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
+
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
+    gif_length = 0
+    for _ in gif_data_generator:
+        gif_length += 1
+    del gif_data_generator
+
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
+
+    # showing progress bar
+    print("\nEnsuring sampling frequency uniformity in the datapoints from the GIF dataset:")
+    progress_bar = DynamicProgressBar(total = gif_length)
+
+    # saving all data from GIF dataset to the pickle file
+    for generator_entry in gif_data_generator:
+        new_datapoint = {
+            "ID": generator_entry["ID"],
+            "RRI": generator_entry["RRI"],
+            "MAD": generator_entry["MAD"],
+            "SLP": np.array(generator_entry["SLP"]).astype(int),
+            "RRI_frequency": generator_entry["RRI_frequency"],
+            "MAD_frequency": generator_entry["MAD_frequency"],
+            "SLP_frequency": generator_entry["SLP_frequency"],
             "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
         }
 

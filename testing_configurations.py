@@ -167,25 +167,30 @@ def main_pipeline(
     ==============================
     """
 
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_shhs,
-        path_to_training_data_directory = path_to_shhs_database,
-        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-        path_to_model_state = None,
-        path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
-        paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
-        path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
-    )
-
-    main_model_training(
-        neural_network_hyperparameters = neural_network_hyperparameters_gif,
-        path_to_training_data_directory = path_to_gif_database,
-        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-        path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
-        path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
-        paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
-        path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
-    )
+    newly_trained_model = True
+    if not os.path.exists(path_to_model_directory + model_state_after_shhs_file):
+        main_model_training(
+            neural_network_hyperparameters = neural_network_hyperparameters_shhs,
+            path_to_training_data_directory = path_to_shhs_database,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = None,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
+            paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
+        )
+        newly_trained_model = True
+    
+    if not os.path.exists(path_to_model_directory + model_state_after_shhs_gif_file):
+        main_model_training(
+            neural_network_hyperparameters = neural_network_hyperparameters_gif,
+            path_to_training_data_directory = path_to_gif_database,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
+        )
+        newly_trained_model = True
 
     """
     ===========================
@@ -193,11 +198,12 @@ def main_pipeline(
     ===========================
     """
 
-    run_model_performance_evaluation(
-        path_to_model_directory = path_to_model_directory,
-        path_to_shhs_directory = path_to_shhs_database,
-        path_to_gif_directory = path_to_gif_database,
-    )
+    if newly_trained_model:
+        run_model_performance_evaluation(
+            path_to_model_directory = path_to_model_directory,
+            path_to_shhs_directory = path_to_shhs_database,
+            path_to_gif_directory = path_to_gif_database,
+        )
 
 
 def Reduced_Process_SHHS_Dataset(
@@ -331,32 +337,31 @@ def Reduced_Process_GIF_Dataset(
     # access parameters used for distributing the data into train, validation, and test pids
     distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
 
-    # access the GIF dataset
-    gif_dataset = h5py.File(path_to_gif_dataset, 'r')
-
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
-    # accessing patient ids:
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
+    gif_length = 0
+    for _ in gif_data_generator:
+        gif_length += 1
+    del gif_data_generator
 
-    # check if patient ids are unique:
-    gif_data_manager.check_if_ids_are_unique(patients)
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
 
     # showing progress bar
     print("\nEnsuring sampling frequency uniformity in the datapoints from the GIF dataset:")
-    progress_bar = DynamicProgressBar(total = len(patients))
+    progress_bar = DynamicProgressBar(total = gif_length)
 
     # saving all data from GIF dataset to the pickle file
-    for patient_id in patients:
+    for generator_entry in gif_data_generator:
         new_datapoint = {
-            "ID": patient_id,
-            "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
-            "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
-            "SLP": np.array(gif_dataset["stage"][patient_id][:]).astype(int), # type: ignore
-            "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
-            "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
-            "SLP_frequency": 1/30, # type: ignore
+            "ID": generator_entry["ID"],
+            "RRI": generator_entry["RRI"],
+            "MAD": generator_entry["MAD"],
+            "SLP": np.array(generator_entry["SLP"]).astype(int),
+            "RRI_frequency": generator_entry["RRI_frequency"],
+            "MAD_frequency": generator_entry["MAD_frequency"],
+            "SLP_frequency": generator_entry["SLP_frequency"],
             "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
         }
 
@@ -449,7 +454,7 @@ if True:
     os.remove(limited_project_configuration_file)
 
 
-if False:
+if True:
 
     """
     ======================================================
@@ -535,7 +540,7 @@ if False:
 
     neural_network_hyperparameters_gif = {
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
@@ -651,8 +656,6 @@ if False:
                 print_headline("Running " + identifier, "=")
 
                 identifier += "/"
-                if os.path.exists(identifier):
-                    continue
 
                 main_pipeline(
                     project_configuration = project_configuration,
@@ -798,7 +801,7 @@ if True:
 
     thirty_second_hyperparameters_gif = {
         "batch_size": 32, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
@@ -827,7 +830,7 @@ if True:
 
     sixty_second_hyperparameters_gif = {
         "batch_size": 32, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
@@ -856,7 +859,7 @@ if True:
 
     hundred_twenty_second_hyperparameters_gif = {
         "batch_size": 32, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
-        "number_epochs": 100,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
             "start_learning_rate": 1 * 1e-5,
@@ -903,8 +906,6 @@ if True:
                 print_headline("Running " + identifier, "=")
 
                 identifier += "/"
-                if os.path.exists(identifier):
-                    continue
 
                 main_pipeline(
                     project_configuration = project_configuration,
@@ -916,7 +917,7 @@ if True:
                 )
 
 
-if True:
+if False:
     directory = "LTM_BAA_Overlap_ArtifactAsWake_RAW/"
     path = directory + loss_per_epoch_gif_file
 

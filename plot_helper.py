@@ -63,10 +63,65 @@ matplotlib.rcParams["savefig.facecolor"] = (0.0, 0.0, 0.0, 0.0)  # transparent f
 matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)
 
 
+def accuracy_from_confusion_matrix(
+        confusion_matrix: np.ndarray,
+    ):
+    """
+    # return macro accuracy from confusion matrix
+    """
+    return confusion_matrix.diagonal().sum() / confusion_matrix.sum()
+
+
+def precision_from_confusion_matrix(
+        confusion_matrix: np.ndarray,
+    ):
+    """
+    # return macro precision from confusion matrix
+    """
+    precision = []
+    for i in range(len(confusion_matrix)):
+        true_positive = confusion_matrix[i][i]
+        false_positive = np.sum(confusion_matrix[:, i]) - true_positive
+        if true_positive + false_positive == 0:
+            precision.append(0.0)
+        else:
+            precision.append(true_positive / (true_positive + false_positive))
+    return np.mean(precision)
+
+
+def recall_from_confusion_matrix(
+        confusion_matrix: np.ndarray,
+    ):
+    """
+    # return macro recall from confusion matrix
+    """
+    recall = []
+    for i in range(len(confusion_matrix)):
+        true_positive = confusion_matrix[i][i]
+        false_negative = np.sum(confusion_matrix[i, :]) - true_positive
+        if true_positive + false_negative == 0:
+            recall.append(0.0)
+        else:
+            recall.append(true_positive / (true_positive + false_negative))
+    return np.mean(recall)
+
+
+def f1_score_from_confusion_matrix(
+        confusion_matrix: np.ndarray,
+    ):
+    """
+    # return macro F1 score from confusion matrix
+    """
+    precision = precision_from_confusion_matrix(confusion_matrix)
+    recall = recall_from_confusion_matrix(confusion_matrix)
+    if precision + recall == 0:
+        return 0.0
+    return 2 * (precision * recall) / (precision + recall)
+
+
 def plot_performance_per_epoch(
-        paths_to_pkl_files: list,
-        include_metrics: list = ["loss", "accuracy", "f1_score", "precision", "recall"],
-        include_datasets: list = ["train", "test"],
+        model_directory_path: str,
+        use_metric: str = "loss", # "accuracy", "f1_score", "precision", "recall", "loss"
         **kwargs
     ):
     """
@@ -120,17 +175,12 @@ def plot_performance_per_epoch(
     xlim: list
         the limits of the x-axis
     """
-
-    # check if user wants to overkill the plot
-    if len(paths_to_pkl_files) > 1 and len(include_metrics) > 1:
-        raise ValueError("You can either provide multiple files and one result key or one file and multiple result keys.")
     
     # Default values
-    kwargs.setdefault("figsize", [3.4, 2.7])
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
     kwargs.setdefault("title", "")
     kwargs.setdefault("xlabel", "")
     kwargs.setdefault("ylabel", "count")
-    kwargs.setdefault("label", ["loss", "accuracy", "f1_score", "precision", "recall"])
     kwargs.setdefault("loc", "best")
     kwargs.setdefault("grid", False)
 
@@ -152,46 +202,79 @@ def plot_performance_per_epoch(
         # markeredgecolor = kwargs["markeredgecolor"],
     )
 
+    # load data
+    shhs_file = model_directory_path + loss_per_epoch_shhs_file
+
+    with open(shhs_file, "rb") as f:
+        results = pickle.load(f)
+    
+    shhs_train_avg_loss = results["train_avg_loss"]
+    shhs_train_confusion_matrices = results["train_confusion_matrix"]
+    shhs_test_shhs_loss = results["SHHS_avg_loss"]
+    shhs_test_shhs_confusion_matrices = results["SHHS_confusion_matrix"]
+    shhs_test_gif_loss = results["GIF_avg_loss"]
+    shhs_test_gif_confusion_matrices = results["GIF_confusion_matrix"]
+    
+    gif_file = model_directory_path + loss_per_epoch_gif_file
+
+    with open(gif_file, "rb") as f:
+        results = pickle.load(f)
+
+    gif_train_avg_loss = results["train_avg_loss"]
+    gif_train_confusion_matrices = results["train_confusion_matrix"]
+    gif_test_shhs_loss = results["SHHS_avg_loss"]
+    gif_test_shhs_confusion_matrices = results["SHHS_confusion_matrix"]
+    gif_test_gif_loss = results["GIF_avg_loss"]
+    gif_test_gif_confusion_matrices = results["GIF_confusion_matrix"]
+
+    if use_metric == "accuracy":
+        train_performance = [accuracy_from_confusion_matrix(cm) for cm in shhs_train_confusion_matrices] + [accuracy_from_confusion_matrix(cm) for cm in gif_train_confusion_matrices]
+        test_shhs_performance = [accuracy_from_confusion_matrix(cm) for cm in shhs_test_shhs_confusion_matrices] + [accuracy_from_confusion_matrix(cm) for cm in gif_test_shhs_confusion_matrices]
+        test_gif_performance = [accuracy_from_confusion_matrix(cm) for cm in shhs_test_gif_confusion_matrices] + [accuracy_from_confusion_matrix(cm) for cm in gif_test_gif_confusion_matrices]
+    elif use_metric == "f1_score":
+        train_performance = [f1_score_from_confusion_matrix(cm) for cm in shhs_train_confusion_matrices] + [f1_score_from_confusion_matrix(cm) for cm in gif_train_confusion_matrices]
+        test_shhs_performance = [f1_score_from_confusion_matrix(cm) for cm in shhs_test_shhs_confusion_matrices] + [f1_score_from_confusion_matrix(cm) for cm in gif_test_shhs_confusion_matrices]
+        test_gif_performance = [f1_score_from_confusion_matrix(cm) for cm in shhs_test_gif_confusion_matrices] + [f1_score_from_confusion_matrix(cm) for cm in gif_test_gif_confusion_matrices]
+    elif use_metric == "precision":
+        train_performance = [precision_from_confusion_matrix(cm) for cm in shhs_train_confusion_matrices] + [precision_from_confusion_matrix(cm) for cm in gif_train_confusion_matrices]
+        test_shhs_performance = [precision_from_confusion_matrix(cm) for cm in shhs_test_shhs_confusion_matrices] + [precision_from_confusion_matrix(cm) for cm in gif_test_shhs_confusion_matrices]
+        test_gif_performance = [precision_from_confusion_matrix(cm) for cm in shhs_test_gif_confusion_matrices] + [precision_from_confusion_matrix(cm) for cm in gif_test_gif_confusion_matrices]
+    elif use_metric == "recall":
+        train_performance = [recall_from_confusion_matrix(cm) for cm in shhs_train_confusion_matrices] + [recall_from_confusion_matrix(cm) for cm in gif_train_confusion_matrices]
+        test_shhs_performance = [recall_from_confusion_matrix(cm) for cm in shhs_test_shhs_confusion_matrices] + [recall_from_confusion_matrix(cm) for cm in gif_test_shhs_confusion_matrices]
+        test_gif_performance = [recall_from_confusion_matrix(cm) for cm in shhs_test_gif_confusion_matrices] + [recall_from_confusion_matrix(cm) for cm in gif_test_gif_confusion_matrices]
+    elif use_metric == "loss":
+        train_performance = shhs_train_avg_loss + gif_train_avg_loss
+        test_shhs_performance = shhs_test_shhs_loss + gif_test_shhs_loss
+        test_gif_performance = shhs_test_gif_loss + gif_test_gif_loss
+
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
     ax.grid(kwargs["grid"])
 
-    labels = kwargs["label"]
-    if len(kwargs["label"]) != len(paths_to_pkl_files) * len(include_metrics):
-        print("The number of labels does not match the number of data. Using empty labels.")
-        labels = ["" for _ in range(len(paths_to_pkl_files) * len(include_metrics))]
-        kwargs["label"] = []
-
-    if len(paths_to_pkl_files) > 1:
-        for i, path in enumerate(paths_to_pkl_files):
-            data_generator = load_from_pickle(path)
-            data = next(data_generator)
-            ax.plot(
-                result_keys[0],
-                data = data,
-                label = labels[i],
-                **plot_args
-            )
-    elif len(include_metrics) > 1:
-        # access results and calulate performance values
-        with open(paths_to_pkl_files[0], "rb") as f:
-            results = pickle.load(f)
-        loss = results["loss"]
-        confusion_matrix = results["confusion_matrix"]
-
-        data_generator = load_from_pickle(paths_to_pkl_files[0])
-        data = next(data_generator)
-        for i, key in enumerate(result_keys):
-            ax.plot(
-                key,
-                data = data,
-                label = labels[i],
-                **plot_args
-            )
+    # epochs = [i for i in range(1, len(shhs_train_avg_loss) + 1)] + [i for i in range(1, len(gif_train_avg_loss) + 1)]# type: ignore
+    epochs = [i for i in range(1, len(train_performance) + 1)] # type: ignore
+    ax.plot(
+        epochs,
+        train_performance,
+        label = "Train",
+        **plot_args
+    )
+    ax.plot(
+        epochs,
+        test_shhs_performance,
+        label = "Test SHHS",
+        **plot_args
+    )
+    ax.plot(
+        epochs,
+        test_gif_performance,
+        label = "Test GIF",
+        **plot_args
+    )
     
-    if len(kwargs["label"]) > 0:
-        ax.legend(loc=kwargs["loc"])
-
+    ax.legend(loc=kwargs["loc"])
+    
     kwargs.setdefault("ylim", plt.ylim())
     kwargs.setdefault("xlim", plt.xlim())
     plt.ylim(kwargs["ylim"])
@@ -684,6 +767,13 @@ if __name__ == "__main__":
 
     model_directory_path = "Neural_Network/"
     # model_directory_path = "Yao_no_overlap/"
+    model_directory_path = "test/"
+
+    plot_performance_per_epoch(
+        model_directory_path = model_directory_path,
+        use_metric = "accuracy", # "accuracy", "f1_score", "precision",
+    )
+    raise SystemExit
 
     """
     =============================
