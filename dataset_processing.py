@@ -3417,22 +3417,22 @@ if False:
 
 
 if False:
-    slp = np.array([0, 1, 2, 3, 4, 5, 6])
-    slp[slp>=1] = slp[slp>=1] - 1
-    slp[slp==4] = 3
-    slp[slp==5] = 0
-    slp[slp==-1] = 0 # set artifact as wake stage
-    print(slp)
+    # slp = np.array([0, 1, 2, 3, 4, 5, 6])
+    # slp[slp>=1] = slp[slp>=1] - 1
+    # slp[slp==4] = 3
+    # slp[slp==5] = 0
+    # slp[slp==-1] = 0 # set artifact as wake stage
+    # print(slp)
 
 
     slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
 
-    file_names = os.listdir("/Users/propeter/Downloads/stuff/PSG/")
+    file_names = os.listdir("Raw_Data/PSG_GIF/")
     for file_name in file_names:
         if not file_name.endswith(".slp"):
             continue
 
-        file = open("/Users/propeter/Downloads/stuff/PSG/" + file_name, "rb")
+        file = open("Raw_Data/PSG_GIF/" + file_name, "rb")
         slp = file.readlines()
         slp_stages = list()
         for line in slp:
@@ -3450,23 +3450,145 @@ if False:
     print("Relative SLP stages:", [round(amount / sum(slp_amount), 3) for amount in slp_amount])
 
     # access the GIF dataset
-    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
+    gif_generator = load_from_pickle("RAW_Data/gif_separated.pkl")
 
     gif_slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
 
-    for patient_id in patients:
-        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-        slp_h5 = np.array(slp_h5, dtype = int)
+    for data_dict in gif_generator:
+        slp_mine = data_dict["SLP"]
+        slp_mine = np.array(slp_mine, dtype = int)
+        
+        for i in range(len(slp_mine)):
+            if slp_mine[i] in [1, 2, 3, 5]:
+                break
+        
+        slp_mine = slp_mine[i:] # remove everything before the first sleep stage
 
-        for stage in slp_h5:
+        for i in range(len(slp_mine)-1, -1, -1):
+            if slp_mine[i] in [1, 2, 3, 5]:
+                break
+        
+        slp_mine = slp_mine[:i+1] # remove everything after the last sleep stage
+
+        for stage in slp_mine:
             gif_slp_amount[stage] += 1
+
+    # access the GIF dataset
+    # gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
+    # patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    # gif_slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
+
+    # for patient_id in patients:
+    #     slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
+    #     slp_h5 = np.array(slp_h5, dtype = int)
+
+    #     for stage in slp_h5:
+    #         gif_slp_amount[stage] += 1
 
     print("SLP stages in GIF dataset:", gif_slp_amount)
     print("Relative SLP stages in GIF dataset:", [round(amount / sum(gif_slp_amount), 3) for amount in gif_slp_amount])
 
-    print("Difference in SLP stages between PSG and GIF dataset:", [np.abs(slp_amount[i] - gif_slp_amount[i]) for i in range(len(slp_amount))])
-    print("Relative difference in SLP stages between PSG and GIF dataset:", [round(np.abs(slp_amount[i] - gif_slp_amount[i]) / slp_amount[i], 3) for i in range(len(slp_amount))])
+    print("Difference in SLP stages between PSG and GIF dataset:", [np.abs(slp_amount[i] - gif_slp_amount[i]) for i in range(len(slp_amount)) if slp_amount[i] != 0])
+    print("Relative difference in SLP stages between PSG and GIF dataset:", [round(np.abs(slp_amount[i] - gif_slp_amount[i]) / slp_amount[i], 3) for i in range(len(slp_amount)) if slp_amount[i] != 0])
+
+
+if False:
+
+    # access the GIF dataset
+    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    total = 0
+    found_match = 0
+
+    all_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
+    all_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
+
+    no_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
+    no_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
+
+    mean_before_match = []
+    max_after_match = []
+
+    for patient_id in patients:
+        total += 1
+        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
+        slp_h5 = np.array(slp_h5, dtype = int)
+
+        # access slp
+        path = "/Users/propeter/Downloads/stuff/PSG/" + patient_id + ".slp"
+        file = open(path, "rb")
+        slp = file.readlines()
+        slp_stages = list()
+        for line in slp:
+            slp_stages.append(line.decode("utf-8").strip().split("\t")[0]) # type: ignore
+        slp_stages.pop(0) # remove header
+        slp_stages.pop(-1)
+        file.close()
+
+        # print(len(gif_dataset["stage"][patient_id]), len(gif_dataset["rri"][patient_id])/120, len(gif_dataset["mad"][patient_id])/30, len(gif_dataset["mad"][patient_id])/3600) # type: ignore
+        slp_stages = np.array(slp_stages, dtype = int)
+
+        found_match_bool = False
+        for i in range(0, len(slp_h5) - len(slp_stages)): # type: ignore
+            if np.sum(slp_h5[i:i+len(slp_stages)] - slp_stages) == 0:
+                # print("Start index", i, i*30/3600)
+                # print("End index", i + len(slp_stages), "of", len(slp_h5))
+                found_match += 1
+                found_match_bool = True
+                break
+        
+        if i == 0:
+            i = 1
+        
+        if found_match_bool:
+            mean_before_match.append(np.max(slp_h5[:i])) # type: ignore
+            try:
+                max_after_match.append(np.max(slp_h5[i+len(slp_stages)+5:])) # type: ignore
+            except:
+                max_after_match.append(np.max(slp_h5[i+len(slp_stages):]))
+            for stage in slp_stages:
+                all_stages[stage] += 1
+            for stage in slp_h5:
+                all_stages_h5[stage] += 1
+        else:
+            for stage in slp_stages:
+                no_stages[stage] += 1
+            for stage in slp_h5:
+                no_stages_h5[stage] += 1
+
+    print("Total patients:", total)
+    print("Found matches:", found_match)
+
+    print("SLP stages in PSG dataset:", all_stages)
+    print("SLP stages in PSG dataset (H5):", all_stages_h5)
+
+    print("Relative SLP stages in PSG dataset:", [round(amount / sum(all_stages), 3) for amount in all_stages])
+    print("Relative SLP stages in PSG dataset (H5):", [round(amount / sum(all_stages_h5), 3) for amount in all_stages_h5])
+
+    print("SLP stages in PSG dataset without match:", no_stages)
+    print("SLP stages in PSG dataset without match (H5):", no_stages_h5)
+    print("Relative SLP stages in PSG dataset without match:", [round(amount / sum(no_stages), 3) for amount in no_stages])
+    print("Relative SLP stages in PSG dataset without match (H5):", [round(amount / sum(no_stages_h5), 3) for amount in no_stages_h5])
+
+    print(mean_before_match)
+    print(max_after_match)
+
+    raise SystemExit
+
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
+
+    # accessing patient ids:
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    for patient_id in patients:
+        print(patient_id)
+        print(np.mean(gif_dataset["rri"][patient_id][:120*300]))
+        print(gif_dataset["stage"][patient_id][:300]) #type: ignore
+        print("")
+
 
 if False:
 

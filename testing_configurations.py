@@ -262,7 +262,7 @@ def Reduced_Process_SHHS_Dataset(
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
     
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    shhs_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    shhs_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # accessing patient ids:
     patients = list(shhs_dataset['slp'].keys()) # type: ignore

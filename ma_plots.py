@@ -162,6 +162,8 @@ def plot_crop_shift_length(
 
 def plot_length_distribution(
     pickle_name = "shhs_gif_plot.pkl",
+    include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
+    label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
     **kwargs
     ):
     
@@ -193,20 +195,27 @@ def plot_length_distribution(
         pickle_data_loaded = pickle.load(f)
 
     SHHS = np.array(pickle_data_loaded["SHHS_signal_length"])
-    GIF = np.array(pickle_data_loaded["GIF_signal_length"])
+    GIF = list()
+    for name in include_gifs:
+        GIF.append(np.array(pickle_data_loaded[f"{name}_signal_length"]))
 
     threshold = 10 * 3600  # 10 hours in seconds
     print(f"SHHS length > {threshold/3600} hours: {np.sum(SHHS > threshold)} / {len(SHHS)} ({np.sum(SHHS > threshold) / len(SHHS) * 100:.2f}%)")
-    print(f"GIF length > {threshold/3600} hours: {np.sum(GIF > threshold)} / {len(GIF)} ({np.sum(GIF > threshold) / len(GIF) * 100:.2f}%)")
+    for i in range(len(GIF)):
+        print(f"{label_gifs[i]} length > {threshold/3600} hours: {np.sum(GIF[i] > threshold)} / {len(GIF[i])} ({np.sum(GIF[i] > threshold) / len(GIF[i]) * 100:.2f}%)")
 
-    threshold = 11.5 * 3600 # about 11.5 hours in seconds
+    threshold = 8 * 3600 # about 4 hours in seconds
     print(f"SHHS length > {threshold/3600} hours: {np.sum(SHHS > threshold)} / {len(SHHS)} ({np.sum(SHHS > threshold) / len(SHHS) * 100:.2f}%)")
-    print(f"GIF length > {threshold/3600} hours: {np.sum(GIF > threshold)} / {len(GIF)} ({np.sum(GIF > threshold) / len(GIF) * 100:.2f}%)")
+    for i in range(len(GIF)):
+        print(f"{label_gifs[i]} length > {threshold/3600} hours: {np.sum(GIF[i] > threshold)} / {len(GIF[i])} ({np.sum(GIF[i] > threshold) / len(GIF[i]) * 100:.2f}%)")
 
-    lengths = np.concatenate((SHHS, GIF)) / 3600  # convert to hours
-    shhs_label = np.array(["SHHS" for _ in range(len(SHHS))])
-    gif_label = np.array(["CHB" for _ in range(len(GIF))])
-    label = np.concatenate((shhs_label, gif_label))
+    lengths = np.concatenate((SHHS, GIF[0])) / 3600  # convert to hours
+    for i in range(1, len(GIF)):
+        lengths = np.concatenate((lengths, GIF[i] / 3600))  # convert to hours
+    
+    label = np.concatenate((np.array(["SHHS" for _ in range(len(SHHS))]), np.array([label_gifs[0] for _ in range(len(GIF[0]))])))
+    for i in range(1, len(GIF)):
+        label = np.concatenate((label, np.array([label_gifs[i] for _ in range(len(GIF[i]))])))
 
     pd_dataframe = pd.DataFrame({
         "lengths": lengths,
@@ -230,9 +239,11 @@ def plot_length_distribution(
 
 
 def plot_sleep_stages_distribution(
+    results_file_path: str,
+    include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
+    label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
     sleep_labels = ["Wake", "LS", "DS", "REM", "Artifact"],
     stat = "percentage", # "count" or "percentage"
-    remove_wake_artifact = False, # remove wake stage from the plot
     **kwargs
     ):
 
@@ -251,30 +262,53 @@ def plot_sleep_stages_distribution(
         alpha=kwargs["alpha"]
     )
 
-    pickle_name = "shhs_gif_plot_aso.pkl" if remove_wake_artifact else "shhs_gif_plot.pkl"
-
-    with open(pickle_name, "rb") as f:
+    with open(results_file_path, "rb") as f:
         pickle_data_loaded = pickle.load(f)
+    
+    print(pickle_data_loaded.keys())
 
     shhs_num_stages = pickle_data_loaded["SHHS_slp_stages_count"]
-    gif_num_stages = pickle_data_loaded["GIF_slp_stages_count"]
+    gif_num_stages = list()
+    for name in include_gifs:
+        gif_num_stages.append(pickle_data_loaded[f"{name}_slp_stages_count"])
 
     shhs_stages = pickle_data_loaded["SHHS_slp_stages"]
     shhs_labels = [sleep_labels[stage] for stage in shhs_stages]
-    gif_stages = pickle_data_loaded["GIF_slp_stages"]
-    gif_labels = [sleep_labels[stage] for stage in gif_stages]
+
+    gif_stages = list()
+    for name in include_gifs:
+        gif_stages.append(pickle_data_loaded[f"{name}_slp_stages"])
+    
+    gif_labels = list()
+    for stages in gif_stages:
+        gif_labels.append([sleep_labels[stage] for stage in stages])
 
     print(f"SHHS stages: {shhs_stages}, counts: {shhs_num_stages}, relative: {[count/sum(shhs_num_stages) * 100 for count in shhs_num_stages]}")
-    print(f"GIF stages: {gif_stages}, counts: {gif_num_stages}, relative: {[count/sum(gif_num_stages) * 100 for count in gif_num_stages]}")
+
+    for i, stages in enumerate(gif_stages):
+        print(f"{label_gifs[i]} stages: {stages}, counts: {gif_num_stages[i]}, relative: {[count/sum(gif_num_stages[i]) * 100 for count in gif_num_stages[i]]}")
 
     if stat == "count":
-        lengths = np.concatenate((shhs_num_stages, gif_num_stages))
+        lengths = np.concatenate((shhs_num_stages, gif_num_stages[0]))
+        for i in range(1, len(gif_num_stages)):
+            lengths = np.concatenate((lengths, gif_num_stages[i]))
     elif stat == "percentage":
         total_shhs = sum(shhs_num_stages)
-        total_gif = sum(gif_num_stages)
-        lengths = np.concatenate((np.array(shhs_num_stages) / total_shhs * 100, np.array(gif_num_stages) / total_gif * 100))
-    stages = np.concatenate((shhs_labels, gif_labels))
-    label = np.concatenate((["SHHS" for _ in range(len(shhs_num_stages))], ["CHB" for _ in range(len(gif_num_stages))]))
+        total_gif = [sum(gif) for gif in gif_num_stages]
+
+        lengths = np.concatenate((np.array(shhs_num_stages) / total_shhs * 100, np.array(gif_num_stages[0]) / total_gif[0] * 100))
+        for i in range(1, len(gif_num_stages)):
+            lengths = np.concatenate((lengths, np.array(gif_num_stages[i]) / total_gif[i] * 100))
+
+    stages = np.concatenate((shhs_labels, gif_labels[0]))
+    for i in range(1, len(gif_labels)):
+        stages = np.concatenate((stages, gif_labels[i]))
+
+    label = np.concatenate((["SHHS" for _ in range(len(shhs_num_stages))], [label_gifs[0] for _ in range(len(gif_num_stages[0]))]))
+    for i in range(1, len(gif_num_stages)):
+        label = np.concatenate((label, [label_gifs[i] for _ in range(len(gif_num_stages[i]))]))
+    
+    print(label)
 
     pd_dataframe = pd.DataFrame({
         "lengths": lengths,
@@ -299,8 +333,7 @@ def plot_sleep_stages_distribution(
     plt.show()
 
 
-
-def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, include_aso_only: bool = False):
+def data_shhs_distribution(results_file_path: str, path_to_shhs_dataset: str, path_to_gif_pkl_datasets: list, path_to_gif_h5: str, include_aso_only: bool = False):
     # access the SHHS dataset
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
 
@@ -335,15 +368,13 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, 
             elif data[i] == 1: # type: ignore
                 data[i] = 1 # type: ignore
             elif data[i] == 2: # type: ignore
-                data[i] = 2 # type: ignore
+                data[i] = 1 # type: ignore
             elif data[i] == 3: # type: ignore
-                data[i] = 3 # type: ignore
-            elif data[i] == 4: # type: ignore
-                data[i] = 5 # type: ignore
+                data[i] = 2 # type: ignore
             elif data[i] == 5: # type: ignore
+                data[i] = 3 # type: ignore
+            else: # type: ignore
                 data[i] = 4 # type: ignore
-            elif data[i] == 6: # type: ignore
-                data[i] = 5 # type: ignore
 
         signal_length.append(len(data)/slp_frequency) # type: ignore
 
@@ -405,8 +436,14 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, 
     print(f"SHHS Tie: {tie}, At transition: {tie_at_transition}, Total: {total}, Tie Ratio: {tie/total if total > 0 else 0}, Transition Ratio: {tie_at_transition/tie if tie > 0 else 0}")
     print(slp_stage, slp_stage_count)
 
-    # access the GIF dataset
-    gif_dataset = h5py.File(path_to_gif_dataset, 'r')
+    save_dict = {
+        "SHHS_slp_stages": slp_stage,
+        "SHHS_slp_stages_count": slp_stage_count,
+        "SHHS_signal_length": signal_length,
+    }
+
+    # access the GIF h5 dataset
+    gif_dataset = h5py.File(path_to_gif_h5, 'r')
 
     # accessing patient ids:
     patients = list(gif_dataset['stage'].keys()) # type: ignore
@@ -440,15 +477,13 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, 
             elif data[i] == 1: # type: ignore
                 data[i] = 1 # type: ignore
             elif data[i] == 2: # type: ignore
-                data[i] = 2 # type: ignore
+                data[i] = 1 # type: ignore
             elif data[i] == 3: # type: ignore
-                data[i] = 3 # type: ignore
-            elif data[i] == 4: # type: ignore
-                data[i] = 5 # type: ignore
+                data[i] = 2 # type: ignore
             elif data[i] == 5: # type: ignore
+                data[i] = 3 # type: ignore
+            else: # type: ignore
                 data[i] = 4 # type: ignore
-            elif data[i] == 6: # type: ignore
-                data[i] = 5 # type: ignore
 
         gif_signal_length.append(len(data)/slp_frequency) # type: ignore
 
@@ -481,49 +516,140 @@ def data_shhs_distribution(path_to_shhs_dataset: str, path_to_gif_dataset: str, 
                 if count == max_count:
                     appeared = True
         
-        stop_counting_at = 0
-        for i in range(len(data)-1, -1, -1): # type: ignore
-            if data[i] in [1, 2, 3]: # type: ignore
-                stop_counting_at = i
-                break
+        if include_aso_only:
+            for i in range(len(data)):
+                if data[i] in [1, 2, 3]:
+                    break
+
+            data = data[i:] # remove everything before the first sleep stage
+
+            for i in range(len(data)-1, -1, -1):
+                if data[i] in [1, 2, 3]:
+                    break
+
+            data = data[:i+1] # remove everything after the last sleep stage
         
-        count_iteration = 0
         for stage in data: # type: ignore
-            if include_aso_only and count_iteration > stop_counting_at:
-                break
-            if stage in [1,2,3,4]:
-                start_counting = True
-            if not start_counting:
-                continue
-            if stage not in gif_slp_stage:
-                gif_slp_stage.append(stage)
-                gif_slp_stage_count.append(1)
-            else:
-                index = gif_slp_stage.index(stage)
-                gif_slp_stage_count[index] += 1
-            count_iteration += 1
+            gif_slp_stage_count[stage] += 1
 
         count_patient += 1
         print(count_patient, end = "\r")
 
+    print("")
+    print(path_to_gif_h5)
     print(f"GIF Tie: {gif_tie}, At transition: {gif_tie_at_transition}, Total: {gif_total}, Tie Ratio: {gif_tie/gif_total if gif_total > 0 else 0}, Transition Ratio: {gif_tie_at_transition/gif_tie if gif_tie > 0 else 0}")
     print(gif_slp_stage, gif_slp_stage_count)
 
-    dict = {
-        "SHHS_slp_stages": slp_stage,
-        "SHHS_slp_stages_count": slp_stage_count,
-        "SHHS_signal_length": signal_length,
-        "GIF_slp_stages": gif_slp_stage,
-        "GIF_slp_stages_count": gif_slp_stage_count,
-        "GIF_signal_length": gif_signal_length,
-    }
+    name = path_to_gif_h5.split("/")[-1].split(".")[0]
 
-    if include_aso_only:
-        with open("shhs_gif_plot_aso.pkl", "wb") as f:
-            pickle.dump(dict, f)
-    else:
-        with open("shhs_gif_plot.pkl", "wb") as f:
-            pickle.dump(dict, f)
+    save_dict[name + "_slp_stages"] = gif_slp_stage
+    save_dict[name + "_slp_stages_count"] = gif_slp_stage_count
+    save_dict[name + "_signal_length"] = gif_signal_length
+
+    # access the GIF dataset
+    for path in path_to_gif_pkl_datasets:
+        gif_generator = load_from_pickle(path)
+
+        # saving all data from GIF dataset to the pickle file
+        gif_signal_length = []
+        slp_frequency = 1/30
+        
+        gif_slp_stage = []
+        gif_slp_stage_count = []
+
+        for i in range(5):
+            gif_slp_stage.append(i)
+            gif_slp_stage_count.append(0)
+
+        gif_tie = 0
+        gif_tie_at_transition = 0
+        gif_total = 0
+        count_patient = 0
+
+        start_counting = True
+        if include_aso_only:
+            start_counting = False
+
+        # saving all data from GIF dataset to the pickle file
+        for data_dict in gif_generator:
+            data = np.array(data_dict["SLP"]).astype(int) # type: ignore
+            for i in range(len(data)): # type: ignore
+                if data[i] == 0: # type: ignore
+                    data[i] = 0 # type: ignore
+                elif data[i] == 1: # type: ignore
+                    data[i] = 1 # type: ignore
+                elif data[i] == 2: # type: ignore
+                    data[i] = 1 # type: ignore
+                elif data[i] == 3: # type: ignore
+                    data[i] = 2 # type: ignore
+                elif data[i] == 5: # type: ignore
+                    data[i] = 3 # type: ignore
+                else: # type: ignore
+                    data[i] = 4 # type: ignore
+
+            gif_signal_length.append(len(data)/slp_frequency) # type: ignore
+
+            for i in range(len(data)-1): # type: ignore
+                upper_bound = i + 4
+                if upper_bound >= len(data): # type: ignore
+                    upper_bound = len(data) - 1 # type: ignore
+
+                gif_total += 1
+                window = data[i:upper_bound] # type: ignore
+                unique, counts = np.unique(window, return_counts=True) # type: ignore
+                max_count = np.max(counts)
+                appeared = False
+                for count in counts:
+                    if count == max_count and appeared:
+                        gif_tie += 1
+
+                        upper_bound = i + 4
+                        if upper_bound >= len(data): # type: ignore
+                            upper_bound = len(data) - 1 # type: ignore
+                        
+                        lower_bound = i - 1
+                        if lower_bound < 0: # type: ignore
+                            lower_bound = 0 # type: ignore
+                        
+                        if data[lower_bound] == window[0] and data[upper_bound] == window[-1]: # type: ignore
+                            gif_tie_at_transition += 1
+
+                        break
+                    if count == max_count:
+                        appeared = True
+            
+            if include_aso_only:
+                for i in range(len(data)):
+                    if data[i] in [1, 2, 3]:
+                        break
+
+                data = data[i:] # remove everything before the first sleep stage
+
+                for i in range(len(data)-1, -1, -1):
+                    if data[i] in [1, 2, 3]:
+                        break
+
+                data = data[:i+1] # remove everything after the last sleep stage
+
+            for stage in data: # type: ignore
+                gif_slp_stage_count[stage] += 1
+
+            count_patient += 1
+            print(count_patient, end = "\r")
+
+        print("")
+        print(path)
+        print(f"GIF Tie: {gif_tie}, At transition: {gif_tie_at_transition}, Total: {gif_total}, Tie Ratio: {gif_tie/gif_total if gif_total > 0 else 0}, Transition Ratio: {gif_tie_at_transition/gif_tie if gif_tie > 0 else 0}")
+        print(gif_slp_stage, gif_slp_stage_count)
+
+        name = path.split("/")[-1].split(".")[0]
+
+        save_dict[name + "_slp_stages"] = gif_slp_stage
+        save_dict[name + "_slp_stages_count"] = gif_slp_stage_count
+        save_dict[name + "_signal_length"] = gif_signal_length
+
+    with open(results_file_path, "wb") as f:
+        pickle.dump(save_dict, f)
 
 
 tex_correction = 0.5
@@ -611,10 +737,63 @@ if __name__ == "__main__":
     #         end_learning_rate = 1e-6,
     #     ))
 
-    data_shhs_distribution("Raw_Data/SHHS_dataset.h5", "Raw_Data/GIF_dataset.h5", include_aso_only=True)
+    # data_shhs_distribution(
+    #     results_file_path="slp_overview.pkl",
+    #     path_to_shhs_dataset="Raw_Data/SHHS_dataset.h5",
+    #     path_to_gif_pkl_datasets=["Raw_Data/gif_separated.pkl", "Raw_Data/gif_5min.pkl"],
+    #     path_to_gif_h5="Raw_Data/GIF_dataset.h5",
+    #     include_aso_only=False
+    # )
+    # data_shhs_distribution(
+    #     results_file_path="slp_overview_aso.pkl",
+    #     path_to_shhs_dataset="Raw_Data/SHHS_dataset.h5",
+    #     path_to_gif_pkl_datasets=["Raw_Data/gif_separated.pkl", "Raw_Data/gif_5min.pkl"],
+    #     path_to_gif_h5="Raw_Data/GIF_dataset.h5",
+    #     include_aso_only=True
+    # )
+
+    plot_length_distribution(
+        pickle_name = "slp_overview.pkl",
+        include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
+        label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
+        binwidth = 0.25
+    )
+
+    plot_length_distribution(
+        pickle_name = "slp_overview.pkl",
+        include_gifs = ["gif_separated"],
+        label_gifs = ["Gaps Separated"],
+        binwidth = 0.25
+    )
+
+    # plot_length_distribution(
+    #     pickle_name = "slp_overview.pkl",
+    #     include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
+    #     label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
+    #     yscale = "log",
+    #     ylim = [1, 10000],
+    #     binwidth = 0.5,
+    #     xlim = [0, 16]
+    # )
+
+    # plot_sleep_stages_distribution(
+    #     results_file_path = "slp_overview.pkl",
+    #     include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
+    #     label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+    #     sleep_labels=["Wake", "LS", "DS", "REM", "Artifact"],
+    #     stat="percentage",  # "count" or "percentage"
+    #     yscale="linear",
+    # )
+
+    # plot_sleep_stages_distribution(
+    #     results_file_path = "slp_overview_aso.pkl",
+    #     include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
+    #     label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+    #     sleep_labels=["Wake", "LS", "DS", "REM", "Artifact"],
+    #     stat="percentage",  # "count" or "percentage"
+    #     yscale="linear",
+    # )
+
     # plot_length_distribution(binwidth = 0.25)
     
     # plot_length_distribution(yscale = "log", ylim = [1, 10000], binwidth = 0.5, xlim = [0, 16])
-
-    plot_sleep_stages_distribution(stat="percentage", yscale="linear", remove_wake_artifact=False, sleep_labels = ["Wake", "N1", "N2", "N3", "REM", "Artifact"])
-    plot_sleep_stages_distribution(stat="percentage", yscale="linear", remove_wake_artifact=True, ylim = [0, 62.80567577690977], sleep_labels = ["Wake", "N1", "N2", "N3", "REM", "Artifact"])
