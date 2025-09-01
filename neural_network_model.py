@@ -481,7 +481,6 @@ class Window_Learning_New(nn.Module):
         super(Window_Learning_New, self).__init__()
 
         window_layers = []
-        window_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
         for d in window_learning_dilations:
             window_layers.append(nn.Conv1d(
                 in_channels = number_window_learning_features,
@@ -980,24 +979,10 @@ class YaoModelNew(nn.Module):
         """
 
         # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
-        
-        # Create layer structure for Window Feature Learning
-        """
-        window_feature_learning_layers = []
-        window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_window_learning_features, 
-                kernel_size = window_branch_convolutional_kernel_size, 
-                dilation = dilation,
-                padding='same'
-                ))
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
-        """
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
         
         self.window_feature_learning = nn.Sequential(
             Window_Learning_New(
@@ -1561,11 +1546,13 @@ class SleepStageModelNew(nn.Module):
         """
 
         # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
         
         # Create layer structure for Window Feature Learning
         window_feature_learning_layers = []
-        window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
         for dilation in window_learning_dilations:
             # Residual block:
             window_feature_learning_layers.append(nn.Conv1d(
@@ -1840,13 +1827,15 @@ class DemoWholeNightModel(nn.Module):
         """
 
         # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
         
         # Create layer structure for Window Feature Learning
         window_feature_learning_layers = []
         for dilation in window_learning_dilations:
             # Residual block:
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             window_feature_learning_layers.append(nn.Conv1d(
                 in_channels = number_window_learning_features, 
                 out_channels = number_window_learning_features, 
@@ -1854,6 +1843,7 @@ class DemoWholeNightModel(nn.Module):
                 dilation = dilation,
                 padding ='same'
                 ))
+            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
             window_feature_learning_layers.append(nn.Dropout(dropout_probability))
         
         self.window_feature_learning = nn.Sequential(
@@ -2133,11 +2123,13 @@ class DemoLocalIntervalModel(nn.Module):
         """
 
         # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
-        
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
+
         # Create layer structure for Window Feature Learning
         window_feature_learning_layers = []
-        window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
         for dilation in window_learning_dilations:
             # Residual block:
             window_feature_learning_layers.append(nn.Conv1d(
@@ -2412,7 +2404,10 @@ class LocalIntervalModel(nn.Module):
         """
 
         # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
         
         # Create layer structure for Window Feature Learning
         window_feature_learning_layers = []
@@ -2746,6 +2741,9 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
     test_loss = 0
     test_confusion_matrix = np.zeros((number_classes, number_classes))
 
+    test_target_true = np.array([], dtype=int)
+    test_target_pred = np.array([], dtype=int)
+
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
     with torch.no_grad():
@@ -2772,6 +2770,9 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
             pred = pred.argmax(1).cpu().numpy()
             slp = slp.cpu().numpy()
 
+            test_target_true = np.concatenate((test_target_true, slp))
+            test_target_pred = np.concatenate((test_target_pred, pred))
+
             for i in range(len(slp)):
                 test_confusion_matrix[slp[i], pred[i]] += 1
 
@@ -2783,7 +2784,7 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
 
     print(f"\nTest Error: \n Accuracy: {(100*accuracy):>0.1f}%, Avg loss: {test_loss:>8f}")
 
-    return test_loss, test_confusion_matrix
+    return test_loss, test_confusion_matrix, test_target_true, test_target_pred
 
 
 # Example usage

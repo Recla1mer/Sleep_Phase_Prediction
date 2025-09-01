@@ -167,7 +167,7 @@ def main_pipeline(
     ==============================
     """
 
-    newly_trained_model = True
+    newly_trained_model = False
     if not os.path.exists(path_to_model_directory + model_state_after_shhs_file):
         main_model_training(
             neural_network_hyperparameters = neural_network_hyperparameters_shhs,
@@ -175,6 +175,7 @@ def main_pipeline(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_file,
             paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
         )
@@ -187,6 +188,7 @@ def main_pipeline(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_gif_file,
             paths_to_validation_data_directories = [path_to_shhs_database, path_to_gif_database],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
         )
@@ -258,6 +260,10 @@ def Reduced_Process_SHHS_Dataset(
     # access parameters used for distributing the data into train, validation, and test pids
     distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
 
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["shhs_min_duration_hours"] * 3600
+    filter_ids = project_configuration["shhs_filter_ids"]
+
     # access the SHHS dataset
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
     
@@ -276,6 +282,12 @@ def Reduced_Process_SHHS_Dataset(
 
     # saving all data from SHHS dataset to the pickle file
     for patient_id in patients:
+        # filter data
+        if patient_id in filter_ids:
+            continue
+        if len(shhs_dataset["rri"][patient_id][:]) / shhs_dataset["rri"].attrs["freq"] < minimum_length_seconds: # type: ignore
+            continue
+
         new_datapoint = {
             "ID": patient_id,
             "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
@@ -337,6 +349,10 @@ def Reduced_Process_GIF_Dataset(
     # access parameters used for distributing the data into train, validation, and test pids
     distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
 
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["gif_min_duration_hours"] * 3600
+    filter_ids = project_configuration["gif_filter_ids"]
+
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
     gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
@@ -354,6 +370,12 @@ def Reduced_Process_GIF_Dataset(
 
     # saving all data from GIF dataset to the pickle file
     for generator_entry in gif_data_generator:
+        # filter data
+        if generator_entry["ID"] in filter_ids:
+            continue
+        if len(generator_entry["RRI"]) / generator_entry["RRI_frequency"] < minimum_length_seconds: # type: ignore
+            continue
+
         new_datapoint = {
             "ID": generator_entry["ID"],
             "RRI": generator_entry["RRI"],
@@ -413,9 +435,11 @@ def copy_and_split_default_database(
     del signal_crop_params
 
 
-default_shhs_path = "Default_SHHS_Data/"
-default_gif_path = "Default_GIF_Data/"
+default_complete_shhs_path = "Default_SHHS_Data_All/"
+default_complete_gif_path = "Default_GIF_Data_All/"
 
+default_reduced_shhs_path = "Default_SHHS_Data_Reduced/"
+default_reduced_gif_path = "Default_GIF_Data_Reduced/"
 
 if True:
     """
@@ -423,6 +447,12 @@ if True:
     Build Default Database
     =======================
     """
+    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+
     limited_project_configuration_file = "default_project_configuration.pkl"
     project_configuration = {
         "RRI_frequency": 4,
@@ -435,19 +465,57 @@ if True:
         "shuffle": True,
         "join_splitted_parts": True,
         "equally_distribute_signal_durations": True,
+        "shhs_min_duration_hours": 0,
+        "shhs_filter_ids": [],
+        "gif_min_duration_hours": 0,
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
     }
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
 
     Reduced_Process_SHHS_Dataset(
         path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = default_shhs_path,
+        path_to_save_processed_data = default_complete_shhs_path,
         path_to_project_configuration = limited_project_configuration_file,
         )
     
     Reduced_Process_GIF_Dataset(
         path_to_gif_dataset = original_gif_data_path,
-        path_to_save_processed_data = default_gif_path,
+        path_to_save_processed_data = default_complete_gif_path,
+        path_to_project_configuration = limited_project_configuration_file
+        )
+    
+    os.remove(limited_project_configuration_file)
+
+    limited_project_configuration_file = "default_project_configuration.pkl"
+    project_configuration = {
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": None,
+        "shuffle": True,
+        "join_splitted_parts": True,
+        "equally_distribute_signal_durations": True,
+        "shhs_min_duration_hours": 7,
+        "shhs_filter_ids": [],
+        "gif_min_duration_hours": 7,
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
+    }
+    with open(limited_project_configuration_file, "wb") as file:
+        pickle.dump(project_configuration, file)
+
+    Reduced_Process_SHHS_Dataset(
+        path_to_shhs_dataset = original_shhs_data_path,
+        path_to_save_processed_data = default_reduced_shhs_path,
+        path_to_project_configuration = limited_project_configuration_file,
+        )
+    
+    Reduced_Process_GIF_Dataset(
+        path_to_gif_dataset = original_gif_data_path,
+        path_to_save_processed_data = default_reduced_gif_path,
         path_to_project_configuration = limited_project_configuration_file
         )
     
@@ -549,6 +617,22 @@ if True:
         }
     }
 
+    filter_shhs_data_parameters = {
+        "shhs_min_duration_hours": 7,
+        "shhs_filter_ids": []
+    }
+
+    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+
+    filter_gif_data_parameters = {
+        "gif_min_duration_hours": 7,
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
+    }
+
     default_project_configuration = dict()
     default_project_configuration.update(sampling_frequency_parameters)
     default_project_configuration.update(signal_cropping_parameters)
@@ -559,8 +643,10 @@ if True:
     default_project_configuration.update(signal_normalization_parameters)
     default_project_configuration.update(dataset_class_transform_parameters)
     default_project_configuration.update(neural_network_model_parameters)
+    default_project_configuration.update(filter_shhs_data_parameters)
+    default_project_configuration.update(filter_gif_data_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters
+    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_shhs_data_parameters, filter_gif_data_parameters, gif_error_code_1, gif_error_code_2, gif_error_code_3, gif_error_code_4, gif_error_code_5
 
     overlap_artifact_as_wake = {
         "number_sleep_stages": 4,
@@ -634,10 +720,10 @@ if True:
     shhs_directory_path = "10h_SHHS_Data/"
     gif_directory_path = "10h_GIF_Data/"
 
-    if not os.path.exists(shhs_directory_path):
+    if not os.path.exists(shhs_directory_path) or not os.path.exists(gif_directory_path):
         copy_and_split_default_database(
-            path_to_default_shhs_database = default_shhs_path,
-            path_to_default_gif_database = default_gif_path,
+            path_to_default_shhs_database = default_reduced_shhs_path,
+            path_to_default_gif_database = default_reduced_gif_path,
             path_to_save_shhs_database = shhs_directory_path,
             path_to_save_gif_database = gif_directory_path,
             project_configuration = default_project_configuration
@@ -735,6 +821,22 @@ if True:
         "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
     }
 
+    filter_shhs_data_parameters = {
+        "shhs_min_duration_hours": 0,
+        "shhs_filter_ids": []
+    }
+
+    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+
+    filter_gif_data_parameters = {
+        "gif_min_duration_hours": 0,
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
+    }
+
     default_project_configuration = dict()
     default_project_configuration.update(sampling_frequency_parameters)
     default_project_configuration.update(signal_cropping_parameters)
@@ -745,8 +847,10 @@ if True:
     default_project_configuration.update(signal_normalization_parameters)
     default_project_configuration.update(dataset_class_transform_parameters)
     default_project_configuration.update(neural_network_model_parameters)
+    default_project_configuration.update(filter_shhs_data_parameters)
+    default_project_configuration.update(filter_gif_data_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters
+    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_shhs_data_parameters, filter_gif_data_parameters, gif_error_code_1, gif_error_code_2, gif_error_code_3, gif_error_code_4, gif_error_code_5
 
     artifact_as_wake = {
         "number_sleep_stages": 4,
@@ -800,7 +904,7 @@ if True:
     }
 
     thirty_second_hyperparameters_gif = {
-        "batch_size": 32, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
+        "batch_size": 8, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
@@ -829,7 +933,7 @@ if True:
     }
 
     sixty_second_hyperparameters_gif = {
-        "batch_size": 32, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
+        "batch_size": 8, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
@@ -858,7 +962,7 @@ if True:
     }
 
     hundred_twenty_second_hyperparameters_gif = {
-        "batch_size": 32, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
+        "batch_size": 8, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 10,
@@ -885,8 +989,8 @@ if True:
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database(
-            path_to_default_shhs_database = default_shhs_path,
-            path_to_default_gif_database = default_gif_path,
+            path_to_default_shhs_database = default_complete_shhs_path,
+            path_to_default_gif_database = default_complete_gif_path,
             path_to_save_shhs_database = shhs_directory_paths[net_adjust_index],
             path_to_save_gif_database = gif_directory_paths[net_adjust_index],
             project_configuration = network_adjustments[net_adjust_index]

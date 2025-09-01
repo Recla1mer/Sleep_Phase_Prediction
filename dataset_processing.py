@@ -3380,6 +3380,223 @@ class SleepDataManager:
 
 
 # import h5py
+# import matplotlib.pyplot as plt
+
+if False:
+    def pool(arr, pool_size, func):
+        """
+        Apply average pooling to the input array.
+
+        RETURNS:
+        ------------------------------
+        pooled: np.ndarray
+            The pooled array.
+        
+        ARGUMENTS:
+        ------------------------------
+        arr: np.ndarray
+            The input array to be pooled.
+        pool_size: int
+            The size of the pooling window.
+        """
+        arr = np.array(arr)
+        arr = arr / np.max(arr)
+
+        step_size = int(pool_size*0.8)
+        pooled_arr = []
+        for i in range(0, len(arr)-pool_size+1, step_size):
+            pooled_arr.append(func(arr[i:i+pool_size]))
+
+        return np.array(pooled_arr)
+    
+
+    print("Compare Yaopeng to my data")
+    # access the GIF dataset
+    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    rri_distances = []
+    mad_distances = []
+
+    min_rri_values = []
+    min_mad_values = []
+
+    max_rri_values = []
+    max_mad_values = []
+
+    rri_pool_min_distances = []
+    rri_pool_max_distances = []
+    rri_pool_mean_distances = []
+
+    mad_pool_min_distances = []
+    mad_pool_max_distances = []
+    mad_pool_mean_distances = []
+
+    unfound = 0
+    found = 0
+
+    total_mad = 0
+    total_rri = 0
+    count_rri = 0
+    count_mad = 0
+
+    for patient_id in patients:
+        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
+        slp_h5 = np.array(slp_h5, dtype = int)
+        rri_h5 = gif_dataset["rri"][patient_id][:] # type: ignore
+        mad_h5 = gif_dataset["mad"][patient_id][:] # type: ignore
+
+        total_mad += np.sum(mad_h5) # type: ignore
+        total_rri += np.sum(rri_h5) # type: ignore
+        count_mad += len(mad_h5) # type: ignore
+        count_rri += len(rri_h5) # type: ignore
+
+        # access my derived dataset
+        gif_generator = load_from_pickle("RAW_Data/gif_separated.pkl")
+
+        slp_mine = list()
+        rri_mine = list()
+        mad_mine = list()
+
+        for data_dict in gif_generator:
+            if patient_id in data_dict["ID"]:
+                slp_mine.append(data_dict["SLP"])
+                rri_mine.append(data_dict["RRI"])
+                mad_mine.append(data_dict["MAD"])
+        
+        if len(slp_mine) == 0:
+            print(f"Patient {patient_id} not found in my dataset.")
+            continue
+        
+        for i in range(len(slp_mine)):
+            this_slp_mine = np.array(slp_mine[i], dtype = int)
+            this_rri_mine = np.array(rri_mine[i], dtype = float)
+            this_mad_mine = np.array(mad_mine[i], dtype = float)
+
+            if np.mean(this_slp_mine) < 0.5:
+                continue
+
+            # add border that skips short segments?
+            if len(this_mad_mine) <= 4*3600:
+                continue
+
+            found_slp = False
+            for j in range(len(slp_h5)-len(this_slp_mine)):
+                upper_border = j + len(this_slp_mine)
+                if upper_border > len(slp_h5):
+                    break
+                if np.sum(np.abs(slp_h5[j:upper_border] - this_slp_mine)) == 0:
+                    found_slp = True
+                    break
+            
+            if found_slp:
+                # plot mad
+                weird = 6
+                
+                # fig, ax = plt.subplots()
+                # ax.plot(this_mad_mine, label="My MAD")
+                # ax.plot(mad_h5[j*30+weird:upper_border*30+weird], label="GIF MAD") # type: ignore
+                # ax.legend()
+                # plt.show()
+
+                pool_size = 30
+
+                rri_h5_pool_max = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.max) # type: ignore
+                rri_h5_pool_min = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.min) # type: ignore
+                rri_h5_pool_mean = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.mean) # type: ignore
+
+                rri_mine_pool_max = pool(this_rri_mine, pool_size*4, np.max)
+                rri_mine_pool_min = pool(this_rri_mine, pool_size*4, np.min)
+                rri_mine_pool_mean = pool(this_rri_mine, pool_size*4, np.mean)
+
+                # pool_max_values_rri = np.array([max(rri_h5_pool_max[q], rri_mine_pool_max[q], 0.0000001) for q in range(len(rri_h5_pool_max))])
+                pool_max_values_rri = np.array([1 for q in range(len(rri_h5_pool_max))])
+
+                # pool_min_values_rri = np.array([min(rri_h5_pool_min[q], rri_mine_pool_min[q]) for q in range(len(rri_h5_pool_min))])
+                # pool_mean_values_rri = np.array([np.mean([rri_h5_pool_mean[q], rri_mine_pool_mean[q]]) for q in range(len(rri_h5_pool_mean))])
+
+                rri_pool_max_distances.extend(np.abs(rri_h5_pool_max - rri_mine_pool_max) / pool_max_values_rri)
+                rri_pool_min_distances.extend(np.abs(rri_h5_pool_min - rri_mine_pool_min) / pool_max_values_rri)
+                rri_pool_mean_distances.extend(np.abs(rri_h5_pool_mean - rri_mine_pool_mean) / pool_max_values_rri)
+
+                mad_h5_pool_max = pool(mad_h5[j*30:upper_border*30], pool_size, np.max) # type: ignore
+                mad_h5_pool_min = pool(mad_h5[j*30:upper_border*30], pool_size, np.min) # type: ignore
+                mad_h5_pool_mean = pool(mad_h5[j*30:upper_border*30], pool_size, np.mean) # type: ignore
+
+                mad_mine_pool_max = pool(this_mad_mine, pool_size, np.max)
+                mad_mine_pool_min = pool(this_mad_mine, pool_size, np.min)
+                mad_mine_pool_mean = pool(this_mad_mine, pool_size, np.mean)
+
+                # pool_max_values_mad = np.array([max(mad_h5_pool_max[q], mad_mine_pool_max[q], 0.0000001) for q in range(len(mad_h5_pool_max))])
+                pool_max_values_mad = np.array([1 for q in range(len(mad_h5_pool_max))])
+
+                # pool_min_values_mad = np.array([min(mad_h5_pool_min[q], mad_mine_pool_min[q]) for q in range(len(mad_h5_pool_min))])
+                # pool_mean_values_mad = np.array([np.mean([mad_h5_pool_mean[q], mad_mine_pool_mean[q]]) for q in range(len(mad_h5_pool_mean))])
+
+                mad_pool_max_distances.extend(np.abs(mad_h5_pool_max - mad_mine_pool_max) / pool_max_values_mad)
+                mad_pool_min_distances.extend(np.abs(mad_h5_pool_min - mad_mine_pool_min) / pool_max_values_mad)
+                mad_pool_mean_distances.extend(np.abs(mad_h5_pool_mean - mad_mine_pool_mean) / pool_max_values_mad)
+
+                """
+                rri_distance = np.abs(rri_h5[j*120:upper_border*120] - this_rri_mine) # type: ignore
+                mad_distance = np.abs(mad_h5[j*30+weird:upper_border*30+weird] - this_mad_mine) # type: ignore
+                better_mad_distance = np.abs([np.mean(mad_h5[j*30+weird+k:j*30+weird+10]) - np.mean(this_mad_mine[k:k+10]) for k in range(0, len(this_mad_mine)-10, 10)]) # type: ignore
+                # print(better_mad_distance)
+                rri_distances.extend(list(rri_distance))
+                # mad_distances.extend(list(mad_distance))
+                mad_distances.extend(list(better_mad_distance))
+
+                min_rri_values.extend([min(rri_h5[j*120+k], this_rri_mine[k]) for k in range(len(this_rri_mine))]) # type: ignore
+                min_mad_values.extend([min(mad_h5[j*30+k], this_mad_mine[k]) for k in range(len(this_mad_mine))]) # type: ignore
+                max_rri_values.extend([max(rri_h5[j*120+k], this_rri_mine[k]) for k in range(len(this_rri_mine))]) # type: ignore
+                max_mad_values.extend([max(mad_h5[j*30+k], this_mad_mine[k]) for k in range(len(this_mad_mine))]) # type: ignore
+                """
+
+                found += len(this_slp_mine)*30
+            else:
+                unfound += len(this_slp_mine)*30
+
+        # print(f"{patient_id}: {np.mean(rri_distances)}, {np.mean(mad_distances)}, {np.abs(np.mean(this_mad_mine)-np.mean(mad_h5[j*30:upper_border*30]))}", end="\r") # type: ignore
+        # break
+
+    # print(f"{np.mean(rri_distances)}, {np.mean(mad_distances)}")
+
+    mean_mad = total_mad / count_mad
+    mean_rri = total_rri / count_rri
+
+    print(f"\nMean MAD: {mean_mad}, Mean RRI: {mean_rri}")
+
+    print(f"\nFound {found} seconds of data, unfound {unfound} seconds of data. Found Ratio: {round(found/(found+unfound), 3)}")
+
+    for i in range(len(min_rri_values)):
+        if min_rri_values[i] == 0:
+            min_rri_values[i] = mean_rri
+        if max_rri_values[i] == 0:
+            max_rri_values[i] = mean_rri
+    
+    for i in range(len(min_mad_values)):
+        if min_mad_values[i] == 0:
+            min_mad_values[i] = mean_mad
+        if max_mad_values[i] == 0:
+            max_mad_values[i] = mean_mad
+    
+    # rri_deviation_to_min = np.mean(np.array(rri_distances) / np.array(min_rri_values))
+    # mad_deviation_to_min = np.mean(np.array(mad_distances) / np.array(min_mad_values))
+    # rri_deviation_to_max = np.mean(np.array(rri_distances) / np.array(max_rri_values))
+    # mad_deviation_to_max = np.mean(np.array(mad_distances) / np.array(max_mad_values))
+
+    # print(f"\nRRI deviation to min: {rri_deviation_to_min}")
+    # print(f"MAD deviation to min: {mad_deviation_to_min}")
+    # print(f"RRI deviation to max: {rri_deviation_to_max}")
+    # print(f"MAD deviation to max: {mad_deviation_to_max}")
+
+    print(f"\nRRI MIN Pool Mean Deviation: {np.mean(rri_pool_min_distances)}")
+    print(f"RRI MAX Pool Mean Deviation: {np.mean(rri_pool_max_distances)}")
+    print(f"RRI MEAN Pool Mean Deviation: {np.mean(rri_pool_mean_distances)}")
+
+    print(f"\nMAD MIN Pool Mean Deviation: {np.mean(mad_pool_min_distances)}")
+    print(f"MAD MAX Pool Mean Deviation: {np.mean(mad_pool_max_distances)}")
+    print(f"MAD MEAN Pool Mean Deviation: {np.mean(mad_pool_mean_distances)}")
 
 if False:
     patient_id = "SL003"

@@ -30,6 +30,8 @@ project_configuration_file = "Project_Configuration.pkl"
 
 model_state_after_shhs_file = "Model_State_SHHS.pth"
 model_state_after_shhs_gif_file = "Model_State.pth"
+best_model_state_after_shhs_file = "Best_Model_State_SHHS.pth"
+best_model_state_after_shhs_gif_file = "Best_Model_State.pth"
 
 loss_per_epoch_shhs_file = "Loss_per_Epoch_SHHS.pkl"
 loss_per_epoch_gif_file = "Loss_per_Epoch_GIF.pkl"
@@ -168,7 +170,25 @@ neural_network_hyperparameters_gif = {
     }
 }
 
-del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, neural_network_hyperparameters_shhs, neural_network_hyperparameters_gif
+# parameters used to filter the SHHS dataset
+filter_shhs_data_parameters = {
+    "shhs_min_duration_hours": 7,
+    "shhs_filter_ids": []
+}
+
+gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+
+# parameters used to filter the GIF dataset
+filter_gif_data_parameters = {
+    "gif_min_duration_hours": 7,
+    "gif_filter_ids": gif_error_code_4 + gif_error_code_5
+}
+
+del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, neural_network_hyperparameters_shhs, neural_network_hyperparameters_gif, filter_shhs_data_parameters, filter_gif_data_parameters, gif_error_code_1, gif_error_code_2, gif_error_code_3, gif_error_code_4, gif_error_code_5
 
 def check_project_configuration(parameters: dict):
     """
@@ -194,7 +214,8 @@ def check_project_configuration(parameters: dict):
         "feature_transform", "target_transform",
         "reshape_to_overlapping_windows", "windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order",
         "normalize_rri", "normalize_mad", "normalization_technique", "normalization_mode", "normalization_max", "normalization_min",
-        "neural_network_model", "number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "rri_datapoints", "mad_datapoints"
+        "neural_network_model", "number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "rri_datapoints", "mad_datapoints",
+        "shhs_min_duration_hours", "shhs_filter_ids", "gif_min_duration_hours", "gif_filter_ids"
     ]
 
     unknown_keys = [key for key in parameters if key not in known_keys]
@@ -379,6 +400,10 @@ def Process_SHHS_Dataset(
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
 
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["shhs_min_duration_hours"] * 3600
+    filter_ids = project_configuration["shhs_filter_ids"]
+
     # access the SHHS dataset
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
     
@@ -397,6 +422,12 @@ def Process_SHHS_Dataset(
 
     # saving all data from SHHS dataset to the pickle file
     for patient_id in patients:
+        # filter data
+        if patient_id in filter_ids:
+            continue
+        if len(shhs_dataset["rri"][patient_id][:]) / shhs_dataset["rri"].attrs["freq"] < minimum_length_seconds: # type: ignore
+            continue
+
         new_datapoint = {
             "ID": patient_id,
             "RRI": shhs_dataset["rri"][patient_id][:], # type: ignore
@@ -573,6 +604,10 @@ def Process_GIF_Dataset(
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
 
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["gif_min_duration_hours"] * 3600
+    filter_ids = project_configuration["gif_filter_ids"]
+
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
     gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
@@ -590,6 +625,12 @@ def Process_GIF_Dataset(
 
     # saving all data from GIF dataset to the pickle file
     for generator_entry in gif_data_generator:
+        # filter data
+        if generator_entry["ID"] in filter_ids:
+            continue
+        if len(generator_entry["RRI"]) / generator_entry["RRI_frequency"] < minimum_length_seconds: # type: ignore
+            continue
+
         new_datapoint = {
             "ID": generator_entry["ID"],
             "RRI": generator_entry["RRI"],
@@ -736,6 +777,7 @@ def main_model_training(
         path_to_project_configuration: str,
         path_to_model_state,
         path_to_updated_model_state: str,
+        path_to_best_model_state: str,
         paths_to_validation_data_directories: list,
         path_to_loss_per_epoch: str,
     ):
@@ -924,6 +966,9 @@ def main_model_training(
     test_avg_loss = [[] for _ in range(len(paths_to_validation_data_directories))]
     test_confusion_matrices = [[] for _ in range(len(paths_to_validation_data_directories))]
 
+    best_f1 = 0
+    best_epoch = 0
+
     for t in range(number_epochs):
         # clearing previous epoch progress bars
         if t > 0:
@@ -948,8 +993,10 @@ def main_model_training(
         train_avg_loss.append(train_loss)
         train_confusion_matrices.append(train_confusion_matrix)
 
+        validation_f1_scores = []
+
         for i, validation_dataloader in enumerate(validation_dataloaders):
-            test_loss, test_confusion_matrix = test_loop(
+            test_loss, test_confusion_matrix, test_target_true, test_target_pred = test_loop(
                 dataloader = validation_dataloader,
                 model = neural_network_model,
                 device = device,
@@ -958,8 +1005,16 @@ def main_model_training(
                 number_classes = number_classes
             )
 
+            validation_f1_scores.append(f1_score(test_target_true, test_target_pred, zero_division=np.nan, average='macro')) # type: ignore
+
             test_avg_loss[i].append(test_loss)
             test_confusion_matrices[i].append(test_confusion_matrix)
+        
+        # check current performance
+        if np.nanmean(validation_f1_scores) > best_f1:
+            best_f1 = np.nanmean(validation_f1_scores)
+            best_epoch = t+1
+            torch.save(neural_network_model.state_dict(), path_to_best_model_state)
 
     """
     ----------------------------------
@@ -1820,6 +1875,7 @@ def run_model_training(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_file,
             paths_to_validation_data_directories = [path_to_shhs_directory, path_to_gif_directory],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
             )
@@ -1853,6 +1909,7 @@ def run_model_training(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_gif_file,
             paths_to_validation_data_directories = [path_to_shhs_directory, path_to_gif_directory],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
             )
@@ -2213,6 +2270,22 @@ if __name__ == "__main__":
         }
     }
 
+    filter_shhs_data_parameters = {
+        "shhs_min_duration_hours": 7,
+        "shhs_filter_ids": []
+    }
+
+    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+
+    filter_gif_data_parameters = {
+        "gif_min_duration_hours": 7,
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
+    }
+
     project_configuration = dict()
     project_configuration.update(sampling_frequency_parameters)
     project_configuration.update(signal_cropping_parameters)
@@ -2223,8 +2296,10 @@ if __name__ == "__main__":
     project_configuration.update(signal_normalization_parameters)
     project_configuration.update(dataset_class_transform_parameters)
     project_configuration.update(neural_network_model_parameters)
+    project_configuration.update(filter_shhs_data_parameters)
+    project_configuration.update(filter_gif_data_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters
+    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_shhs_data_parameters, filter_gif_data_parameters, gif_error_code_1, gif_error_code_2, gif_error_code_3, gif_error_code_4, gif_error_code_5
 
     check_project_configuration(project_configuration)
 
