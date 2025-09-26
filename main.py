@@ -23,7 +23,8 @@ Setting Global Paths and File Names
 # paths to the data
 original_shhs_data_path = "Raw_Data/SHHS_dataset.h5"
 # original_gif_data_path = "Raw_Data/GIF_dataset.h5"
-original_gif_data_path = "Raw_Data/gif_separated.pkl"
+original_gif_ssg_data_path = "Raw_Data/gif_sleep_stages.pkl"
+original_gif_sae_data_path = "Raw_Data/gif_sleep_apnea_events.pkl"
 
 # file names
 project_configuration_file = "Project_Configuration.pkl"
@@ -68,7 +69,7 @@ padding_parameters = {
 value_mapping_parameters = {
     "rri_inlier_interval": (0.3, 2),
     "mad_inlier_interval": (None, None),
-    "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
+    "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
 }
 
 # parameters that set train, validation, and test sizes and how data is shuffled, see 'separate_train_test_validation' function of 'SleepDataManager' class in dataset_processing.py
@@ -129,14 +130,14 @@ signal_normalization_parameters = {
 
 # neural network model parameters, see 'DemoWholeNightModel' and 'DemoLocalSleepStageModel' class in neural_network_model.py
 neural_network_model_parameters = {
-    "neural_network_model": SleepStageModel,
+    "neural_network_model": LongSequenceModel,
     # parameters necessary for neural network models based on whole night signals AND short time signals
-    "number_sleep_stages": 4,
+    "number_target_classes": 4,
     "rri_convolutional_channels": [1, 8, 16, 32, 64],
     "mad_convolutional_channels": [1, 8, 16, 32, 64],
     "max_pooling_layers": 5,
-    "number_window_learning_features": 128,
-    "window_learning_dilations": [2, 4, 8, 16, 32],
+    "fully_connected_features": 128,
+    "convolution_dilations": [2, 4, 8, 16, 32],
     # parameters necessary for neural network models only based on whole night signals (do not append if using a model based on short time signals)
     "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
     "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
@@ -151,10 +152,10 @@ neural_network_hyperparameters_shhs = {
     "batch_size": 8,
     "number_epochs": 40,
     "lr_scheduler_parameters": {
-        "number_updates_to_max_lr": 10,
-        "start_learning_rate": 2.5 * 1e-5,
-        "max_learning_rate": 1 * 1e-4,
-        "end_learning_rate": 5 * 1e-5
+        "number_updates_to_max_lr": 4,
+        "start_learning_rate": 1 * 1e-5,
+        "max_learning_rate": 1 * 1e-3,
+        "end_learning_rate": 1 * 1e-6
     }
 }
 
@@ -163,10 +164,10 @@ neural_network_hyperparameters_gif = {
     "batch_size": 8,
     "number_epochs": 100,
     "lr_scheduler_parameters": {
-        "number_updates_to_max_lr": 25,
-        "start_learning_rate": 2.5 * 1e-5,
-        "max_learning_rate": 1 * 1e-4,
-        "end_learning_rate": 1 * 1e-5
+        "number_updates_to_max_lr": 4,
+        "start_learning_rate": 1 * 1e-5,
+        "max_learning_rate": 1 * 1e-3,
+        "end_learning_rate": 1 * 1e-6
     }
 }
 
@@ -209,12 +210,12 @@ def check_project_configuration(parameters: dict):
         "RRI_frequency", "MAD_frequency", "SLP_frequency",
         "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
-        "rri_inlier_interval", "mad_inlier_interval", "sleep_stage_label",
+        "rri_inlier_interval", "mad_inlier_interval", "target_classes",
         "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
         "feature_transform", "target_transform",
         "reshape_to_overlapping_windows", "windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order",
         "normalize_rri", "normalize_mad", "normalization_technique", "normalization_mode", "normalization_max", "normalization_min",
-        "neural_network_model", "number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "rri_datapoints", "mad_datapoints",
+        "neural_network_model", "number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "rri_datapoints", "mad_datapoints",
         "shhs_min_duration_hours", "shhs_filter_ids", "gif_min_duration_hours", "gif_filter_ids"
     ]
 
@@ -225,7 +226,7 @@ def check_project_configuration(parameters: dict):
     # Check if all necessary parameters are provided
     required_keys = [
         "RRI_frequency", "MAD_frequency", "SLP_frequency",
-        "rri_inlier_interval", "mad_inlier_interval", "sleep_stage_label",
+        "rri_inlier_interval", "mad_inlier_interval", "target_classes",
         "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
         "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
@@ -252,7 +253,7 @@ def check_project_configuration(parameters: dict):
 
     # Check if all parameters for the neural network model are correctly provided
     neural_network_model = parameters["neural_network_model"]
-    nnm_params = {key: parameters[key] for key in parameters if key in ["number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+    nnm_params = {key: parameters[key] for key in parameters if key in ["number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
     neural_network_model = neural_network_model(**nnm_params)
     
     # Check if all necessary parameters for reshaping the signal to overlapping windows are provided
@@ -320,13 +321,13 @@ def check_project_configuration(parameters: dict):
     
     # check if number sleep stages matches the sleep stage label
     sleep_stages = []
-    for key in parameters["sleep_stage_label"]:
-        value = parameters["sleep_stage_label"][key]
+    for key in parameters["target_classes"]:
+        value = parameters["target_classes"][key]
         if value not in sleep_stages:
             sleep_stages.append(value)
     
-    if len(sleep_stages) != parameters["number_sleep_stages"]:
-        raise ValueError("Number of sleep stages does not match the sleep stage label. Adjust parameters accordingly.")
+    if len(sleep_stages) != parameters["number_target_classes"]:
+        raise ValueError("Number of sleep stages does not match the target classes. Adjust parameters accordingly.")
     
     # check parameters that should be equal
     if parameters["reshape_to_overlapping_windows"]:
@@ -345,13 +346,13 @@ Applying SleepDataManager Class To Our Data
 
 import h5py
 
-def Process_SHHS_Dataset(
+def Process_SHHS_SSG_Dataset(
         path_to_shhs_dataset: str,
         path_to_save_processed_data: str,
         path_to_project_configuration: str,
     ):
     """
-    This function processes our SHHS dataset. It is designed to be a more specific. So, if you are not using
+    This function processes our SHHS dataset for Sleep Stage Annotations (SSA). It is designed to be a more specific. So, if you are not using
     the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
     quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
     to process a dataset.
@@ -384,7 +385,7 @@ def Process_SHHS_Dataset(
         return
 
     # initializing the database
-    shhs_data_manager = SleepDataManager(directory_path = path_to_save_processed_data)
+    shhs_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -408,7 +409,7 @@ def Process_SHHS_Dataset(
     shhs_dataset = h5py.File(path_to_shhs_dataset, 'r')
     
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    shhs_sleep_stage_label = {"wake": [0], "LS": [1,2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    shhs_target_classes = {"wake": [0], "LS": [1,2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # accessing patient ids:
     patients = list(shhs_dataset['slp'].keys()) # type: ignore
@@ -434,7 +435,7 @@ def Process_SHHS_Dataset(
             "SLP": shhs_dataset["slp"][patient_id][:], # type: ignore
             "RRI_frequency": shhs_dataset["rri"].attrs["freq"], # type: ignore
             "SLP_frequency": shhs_dataset["slp"].attrs["freq"], # type: ignore
-            "sleep_stage_label": copy.deepcopy(shhs_sleep_stage_label)
+            "target_classes": copy.deepcopy(shhs_target_classes)
         }
 
         shhs_data_manager.save(new_datapoint, unique_id=True)
@@ -481,8 +482,8 @@ def Process_GIF_Dataset_h5(
     ------------------------------
     path_to_gif_dataset: str
         the path to the GIF dataset
-    
-    Others: See 'Process_SHHS_Dataset' function
+
+    Others: See 'Process_SHHS_Sleep_Dataset' function
     """
 
     # abort if destination path exists to avoid accidental overwriting
@@ -490,7 +491,7 @@ def Process_GIF_Dataset_h5(
         return
 
     # initializing the database
-    gif_data_manager = SleepDataManager(directory_path = path_to_save_processed_data)
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -510,7 +511,7 @@ def Process_GIF_Dataset_h5(
     gif_dataset = h5py.File(path_to_gif_dataset, 'r')
 
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    gif_target_classes = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # accessing patient ids:
     patients = list(gif_dataset['stage'].keys()) # type: ignore
@@ -532,7 +533,7 @@ def Process_GIF_Dataset_h5(
             "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
             "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
             "SLP_frequency": 1/30, # type: ignore
-            "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
+            "target_classes": copy.deepcopy(gif_target_classes)
         }
 
         gif_data_manager.save(new_datapoint, unique_id=True)
@@ -555,13 +556,13 @@ def Process_GIF_Dataset_h5(
         gif_data_manager.separate_train_test_validation(**distribution_params)
 
 
-def Process_GIF_Dataset(
+def Process_GIF_SSG_Dataset(
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
         path_to_project_configuration: str
     ):
     """
-    This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
+    This function processes our GIF dataset for Sleep Stage Annotations (SSA). It is designed to be a more specific. So, if you are not using
     the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
     quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
     to process a dataset.
@@ -579,8 +580,8 @@ def Process_GIF_Dataset(
     ------------------------------
     path_to_gif_dataset: str
         the path to the GIF dataset
-    
-    Others: See 'Process_SHHS_Dataset' function
+
+    Others: See 'Process_SHHS_Sleep_Dataset' function
     """
 
     # abort if destination path exists to avoid accidental overwriting
@@ -588,7 +589,7 @@ def Process_GIF_Dataset(
         return
 
     # initializing the database
-    gif_data_manager = SleepDataManager(directory_path = path_to_save_processed_data)
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -608,8 +609,8 @@ def Process_GIF_Dataset(
     minimum_length_seconds = project_configuration["gif_min_duration_hours"] * 3600
     filter_ids = project_configuration["gif_filter_ids"]
 
-    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_sleep_stage_label = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    # define the target classes (attention: a different dataset will most likely have different labels)
+    gif_target_classes = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     gif_data_generator = load_from_pickle(path_to_gif_dataset)
     gif_length = 0
@@ -639,7 +640,114 @@ def Process_GIF_Dataset(
             "RRI_frequency": generator_entry["RRI_frequency"],
             "MAD_frequency": generator_entry["MAD_frequency"],
             "SLP_frequency": generator_entry["SLP_frequency"],
-            "sleep_stage_label": copy.deepcopy(gif_sleep_stage_label)
+            "target_classes": copy.deepcopy(gif_target_classes)
+        }
+
+        gif_data_manager.save(new_datapoint, unique_id=True)
+        progress_bar.update()
+
+    # if all splitted parts resulting from cropping an original datapoint are supposed to end up in the same pid,
+    # we'll apply the signal cropping after pid distribution, otherwise before.
+
+    if distribution_params["join_splitted_parts"]:
+        # Train-, Validation- and Test-Pid Distribution
+        gif_data_manager.separate_train_test_validation(**distribution_params)
+
+        # Cropping datapoints with overlength (resulting in multiple splitted parts)
+        gif_data_manager.crop_oversized_data(**signal_crop_params)
+    else:
+        # Cropping datapoints with overlength (resulting in multiple splitted parts)
+        gif_data_manager.crop_oversized_data(**signal_crop_params)
+
+        # Train-, Validation- and Test-Pid Distribution
+        gif_data_manager.separate_train_test_validation(**distribution_params)
+
+
+def Process_GIF_SAE_Dataset(
+        path_to_gif_dataset: str,
+        path_to_save_processed_data: str,
+        path_to_project_configuration: str
+    ):
+    """
+    This function processes our GIF dataset for Sleep Apnea Events (SAE). It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the GIF dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_gif_dataset: str
+        the path to the GIF dataset
+
+    Others: See 'Process_SHHS_Sleep_Dataset' function
+    """
+
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
+
+    # initializing the database
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # access sampling frequency parameters
+    freq_params = {key: project_configuration[key] for key in ["RRI_frequency", "MAD_frequency", "SLP_frequency"]} # sampling_frequency_parameters
+    gif_data_manager.change_uniform_frequencies(freq_params)
+
+    # access parameters used for distributing the data into train, validation, and test pids
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+
+    # access parameters used for cropping the data
+    signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
+
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["gif_min_duration_hours"] * 3600
+    filter_ids = project_configuration["gif_filter_ids"]
+
+    # define the target classes (attention: a different dataset will most likely have different labels)
+    gif_target_classes = {"Normal": [0], "Apnea": [1], "Obstructive Apnea": [2], "Central Apnea": [3], "Mixed Apnea": [4], "Hypopnea": [5], "Obstructive Hypopnea": [6], "Central Hypopnea": [7]}
+
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
+    gif_length = 0
+    for _ in gif_data_generator:
+        gif_length += 1
+    del gif_data_generator
+
+    gif_data_generator = load_from_pickle(path_to_gif_dataset)
+
+    # showing progress bar
+    print("\nEnsuring sampling frequency uniformity in the datapoints from the GIF dataset:")
+    progress_bar = DynamicProgressBar(total = gif_length)
+
+    # saving all data from GIF dataset to the pickle file
+    for generator_entry in gif_data_generator:
+        # filter data
+        if generator_entry["ID"] in filter_ids:
+            continue
+        if len(generator_entry["RRI"]) / generator_entry["RRI_frequency"] < minimum_length_seconds: # type: ignore
+            continue
+
+        new_datapoint = {
+            "ID": generator_entry["ID"],
+            "RRI": generator_entry["RRI"],
+            "MAD": generator_entry["MAD"],
+            "SLP": np.array(generator_entry["SAE"]).astype(int),
+            "RRI_frequency": generator_entry["RRI_frequency"],
+            "MAD_frequency": generator_entry["MAD_frequency"],
+            "SLP_frequency": generator_entry["SAE_frequency"],
+            "target_classes": copy.deepcopy(gif_target_classes)
         }
 
         gif_data_manager.save(new_datapoint, unique_id=True)
@@ -711,8 +819,8 @@ def Process_NAKO_Dataset(
     ------------------------------
     path_to_nako_dataset: str
         the path to the NAKO dataset
-    
-    Others: See 'Process_SHHS_Dataset' function
+
+    Others: See 'Process_SHHS_Sleep_Dataset' function
     """
 
     # abort if destination path exists to avoid accidental overwriting
@@ -720,7 +828,7 @@ def Process_NAKO_Dataset(
         return
 
     # initializing the database
-    nako_data_manager = SleepDataManager(directory_path = path_to_save_processed_data)
+    nako_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -840,18 +948,18 @@ def main_model_training(
     # access neural network initialization parameters
     neural_network_model = project_configuration["neural_network_model"]
 
-    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
-    number_classes = project_configuration["number_sleep_stages"]
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+    number_classes = project_configuration["number_target_classes"]
 
     # initialize parameters adjusting the data preprocessing
     CustomDatasetKeywords = dict()
 
     # retrieve dictionary needed to map sleep stage labels
-    data_manager = SleepDataManager(directory_path = path_to_training_data_directory)
-    current_sleep_stage_label = data_manager.database_configuration["sleep_stage_label"]
+    data_manager = BigDataManager(directory_path = path_to_training_data_directory)
+    current_target_classes = data_manager.database_configuration["target_classes"]
     slp_label_mapping = get_slp_label_mapping(
-        current_labels = current_sleep_stage_label,
-        desired_labels = project_configuration["sleep_stage_label"],
+        current_labels = current_target_classes,
+        desired_labels = project_configuration["target_classes"],
     )
     CustomDatasetKeywords["slp_label_mapping"] = slp_label_mapping
     del data_manager
@@ -880,9 +988,9 @@ def main_model_training(
 
     # add transform parameters
     CustomDatasetKeywords.update({key: project_configuration[key] for key in ["feature_transform", "target_transform"]}) # dataset_class_transform_parameters
-    
-    training_dataset = CustomSleepDataset(path_to_data_directory = path_to_training_data_directory, pid = "train", **CustomDatasetKeywords)
-    validation_datasets = [CustomSleepDataset(path_to_data_directory = path, pid = "validation", **CustomDatasetKeywords) for path in paths_to_validation_data_directories]
+
+    training_dataset = AccessTransformDataset(path_to_data_directory = path_to_training_data_directory, pid = "train", **CustomDatasetKeywords)
+    validation_datasets = [AccessTransformDataset(path_to_data_directory = path, pid = "validation", **CustomDatasetKeywords) for path in paths_to_validation_data_directories]
 
     del CustomDatasetKeywords, project_configuration
     
@@ -969,14 +1077,14 @@ def main_model_training(
     best_f1 = 0
     best_epoch = 0
 
-    for t in range(number_epochs):
+    for t in range(1, number_epochs+1):
         # clearing previous epoch progress bars
-        if t > 0:
+        if t > 1:
             print(clearing_sequence, end='')
 
         print("")
         print("-"*10)
-        print(f"Epoch {t+1}:")
+        print(f"Epoch {t}:")
         print("-"*10)
 
         train_loss, train_confusion_matrix = train_loop(
@@ -1078,35 +1186,35 @@ def main_model_predicting(
     These dictionaries have the following format:
     {
         "Predicted_Probabilities": 
-            - shape: (number datapoints, number_sleep_stages) 
-            - probabilities for each sleep stage,
+            - shape: (number datapoints, number_target_classes) 
+            - probabilities for each target class,
         "Predicted": 
             - shape: (number datapoints) 
-            - predicted sleep stage with highest probability,
+            - predicted target class with highest probability,
         "Actual": 
             - shape: (number datapoints) 
-            - actual sleep stages,
+            - actual target class,
         "Predicted_in_windows": 
             - shape: (number datapoints, windows_per_signal) 
-            - predicted sleep stages with highest probability, signal still as overlapping windows (output of neural network), 
+            - predicted target classes with highest probability, signal still as overlapping windows (output of neural network), 
         "Actual_in_windows":
             - shape: (number datapoints, windows_per_signal) 
-            - actual sleep stages, signal still as overlapping windows (used by the neural network),
+            - actual target classes, signal still as overlapping windows (used by the neural network),
     }
 
-    If the database was not split, the algorithm assumes you want to collect the predicted sleep stages and 
+    If the database was not split, the algorithm assumes you want to collect the predicted target classes and 
     saves them directly to the database for easy access. Each appropriate datapoint is updated with the
-    predicted sleep stages:
+    predicted target classes:
     {
         "SLP_predicted_probability":
-            - shape: (windows_per_signal, number_sleep_stages) 
-            - probabilities for each sleep stage,
+            - shape: (windows_per_signal, number_target_classes) 
+            - probabilities for each target class,
         "SLP_predicted":
             - shape: (windows_per_signal) 
-            - predicted sleep stage with highest probability,
+            - predicted target class with highest probability,
     }
 
-    Note:   The algorithm already crops the sleep stages to the correct length of the original signal. This is
+    Note:   The algorithm already crops the target classes to the correct length of the original signal. This is
             important as the original signal might has been padded to fit the requirements of the neural network.
 
 
@@ -1146,7 +1254,7 @@ def main_model_predicting(
     """
 
     # accessing database
-    data_manager = SleepDataManager(directory_path = path_to_data_directory, pid = pid)
+    data_manager = BigDataManager(directory_path = path_to_data_directory, pid = pid)
     pid_file_path = data_manager.pid_paths[data_manager.current_pid]
 
     # retrieve rri, mad, and slp frequencies
@@ -1172,13 +1280,13 @@ def main_model_predicting(
     # access neural network initialization parameters
     neural_network_model = project_configuration["neural_network_model"]
 
-    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_sleep_stages", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "number_window_learning_features", "window_learning_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
 
     # access target and feature value mapping parameters:
-    current_sleep_stage_label = data_manager.database_configuration["sleep_stage_label"]
+    current_target_classes = data_manager.database_configuration["target_classes"]
     slp_label_mapping = get_slp_label_mapping(
-        current_labels = current_sleep_stage_label,
-        desired_labels = project_configuration["sleep_stage_label"],
+        current_labels = current_target_classes,
+        desired_labels = project_configuration["target_classes"],
     )
 
     rri_inlier_interval = project_configuration["rri_inlier_interval"]
@@ -1376,10 +1484,10 @@ def main_model_predicting(
 
                     # reshape windows to original signal structure
                     # Lot of stuff happening below, so i explain the process:
-                    # predictions_in_windows is a 2D array with shape (windows_per_signal, number_sleep_stages)
+                    # predictions_in_windows is a 2D array with shape (windows_per_signal, number_target_classes)
                     predictions_probability = np.empty((original_signal_length, 0))
                     for i in range(predictions_in_windows.shape[1]):
-                        # get a list of probabilities for this sleep stage
+                        # get a list of probabilities for this target class
                         this_slp_stage_pred_probability = copy.deepcopy(predictions_in_windows[:, i])
                         # transform every probability to a list with the size of the SLP windows, with every entry 
                         # being the probability
@@ -1554,7 +1662,7 @@ def print_model_performance(
         project_configuration = pickle.load(f)
     
     # access dictionary that maps sleep stages (display labels) to integers
-    sleep_stage_to_label = project_configuration["sleep_stage_label"]
+    sleep_stage_to_label = project_configuration["target_classes"]
 
     # Create a list of the integer labels, sorted
     integer_labels = np.array([value for value in sleep_stage_to_label.values()])
@@ -1752,7 +1860,7 @@ operations is executed within the following functions.
 """
 
 
-def run_model_training(
+def run_ssg_model_training(
         path_to_model_directory: str,
         path_to_shhs_directory: str,
         path_to_gif_directory: str,
@@ -1811,7 +1919,7 @@ def run_model_training(
 
     # process SHHS data
     if user_response == "y":
-        Process_SHHS_Dataset(
+        Process_SHHS_SSG_Dataset(
             path_to_shhs_dataset = original_shhs_data_path,
             path_to_save_processed_data = path_to_shhs_directory,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
@@ -1840,8 +1948,8 @@ def run_model_training(
 
     # process GIF data
     if user_response == "y":
-        Process_GIF_Dataset(
-            path_to_gif_dataset = original_gif_data_path,
+        Process_GIF_SSG_Dataset(
+            path_to_gif_dataset = original_gif_ssg_data_path,
             path_to_save_processed_data = path_to_gif_directory,
             path_to_project_configuration = path_to_model_directory + project_configuration_file
             )
@@ -1915,7 +2023,7 @@ def run_model_training(
             )
 
 
-def run_model_performance_evaluation(
+def run_model_performance_evaluation_SSG(
         path_to_model_directory: str,
         path_to_shhs_directory: str,
         path_to_gif_directory: str,
@@ -2002,6 +2110,88 @@ def run_model_performance_evaluation(
         additional_score_function_args = {"zero_division": np.nan},
         number_of_decimals = 3
     )
+
+    """
+    ---------
+    GIF Data
+    ---------
+    """
+
+    # path to save the predictions
+    path_to_save_gif_results = path_to_model_directory + model_performance_file[:-4] + "_GIF.pkl"
+    gif_validation_pid_results_path = path_to_save_gif_results[:-4] + "_Validation_Pid.pkl"
+    # gif_training_pid_results_path = path_to_save_gif_results[:-4] + "_Training_Pid.pkl"
+    # gif_test_pid_results_path = path_to_save_gif_results[:-4] + "_Test_Pid.pkl"
+
+    # check if predictions already exist
+    user_response = "y"
+    if os.path.exists(gif_validation_pid_results_path):
+        # ask the user if they want to overwrite
+        user_response = retrieve_user_response(
+            message = "ATTENTION: You are about to predict sleep stages for the GIF validation pid and " +
+                "save the results to an existing file. If you skip the prediction, performance values will " +
+                "be calculated from the existing results, saving significant computation time. Do you still " +
+                "want to overwrite the existing file and re-run the prediction? (y/n)", 
+            allowed_responses = ["y", "n"]
+        )
+
+        if user_response == "y":
+            delete_files([gif_validation_pid_results_path])
+
+    # make predictions for the relevant files
+    if user_response == "y":
+        main_model_predicting(
+            path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            path_to_data_directory = path_to_gif_directory,
+            pid = "validation",
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_save_results = gif_validation_pid_results_path,
+        )
+
+    # calculate and print performance results
+    print_headline("Performance on GIF Data:", symbol_sequence="=")
+
+    print_model_performance(
+        paths_to_pkl_files = [gif_validation_pid_results_path],
+        path_to_project_configuration = path_to_model_directory + project_configuration_file,
+        prediction_result_key = "Predicted", # or: "Predicted_in_windows"
+        actual_result_key = "Actual", # or: "Actual_in_windows"
+        additional_score_function_args = {"zero_division": np.nan},
+        number_of_decimals = 3
+    )
+
+
+def run_model_performance_evaluation_SAE(
+        path_to_model_directory: str,
+        path_to_gif_directory: str,
+    ):
+    """
+    Corresponds to the 2nd main functionality: Evaluating the neural network model's performance.
+
+    In order to do that, this function will first predict the sleep stages for the SHHS and GIF validation
+    datasets using the trained model and save the results to a pkl-file. Then, the performance of the model
+    will be calculated from these results and printed to the console.
+
+    Before executing the functions to predict the results, the system checks whether those already exist in 
+    the specified paths. Due to the potentially long computation time, the user will be prompted to confirm 
+    whether they want to overwrite the existing data.
+
+    Most of the parameters are hardcoded in the functions called below. This ensures that the results of
+    the predictions for different models are stored analogously. 
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_model_directory: str
+        the path to the directory where all results are stored
+    path_to_processed_shhs: str
+        the path to the file where the processed SHHS data is stored
+    path_to_processed_gif: str
+        the path to the file where the processed GIF data is stored
+    """
 
     """
     ---------
@@ -2196,7 +2386,7 @@ if __name__ == "__main__":
     value_mapping_parameters = {
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
-        "sleep_stage_label": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
+        "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
     }
 
     pid_distribution_parameters = {
@@ -2232,13 +2422,13 @@ if __name__ == "__main__":
     }
 
     neural_network_model_parameters = {
-        "neural_network_model": SleepStageModel,
-        "number_sleep_stages": 4,
+        "neural_network_model": LongSequenceModel,
+        "number_target_classes": 4,
         "rri_convolutional_channels": [1, 8, 16, 32, 64],
         "mad_convolutional_channels": [1, 8, 16, 32, 64],
         "max_pooling_layers": 5,
-        "number_window_learning_features": 128,
-        "window_learning_dilations": [2, 4, 8, 16, 32],
+        "fully_connected_features": 128,
+        "convolution_dilations": [2, 4, 8, 16, 32],
         #
         "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
         "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
@@ -2252,21 +2442,21 @@ if __name__ == "__main__":
         "batch_size": 8,
         "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 10,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 5 * 1e-5
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
     neural_network_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 100,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 25,
-            "start_learning_rate": 2.5 * 1e-5,
-            "max_learning_rate": 1 * 1e-4,
-            "end_learning_rate": 1 * 1e-5
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
         }
     }
 
@@ -2315,7 +2505,7 @@ if __name__ == "__main__":
     ==============================
     """
 
-    run_model_training(
+    run_ssg_model_training(
         path_to_model_directory = model_directory_path,
         path_to_shhs_directory = shhs_directory_path,
         path_to_gif_directory = gif_directory_path,
@@ -2329,7 +2519,7 @@ if __name__ == "__main__":
     ===========================
     """
 
-    run_model_performance_evaluation(
+    run_model_performance_evaluation_SSG(
         path_to_model_directory = model_directory_path,
         path_to_shhs_directory = shhs_directory_path,
         path_to_gif_directory = gif_directory_path,
@@ -2359,7 +2549,7 @@ if __name__ == "__main__":
     =========================
     """
 
-    results_data_manager = SleepDataManager(directory_path = processed_unknown_dataset_path)
+    results_data_manager = BigDataManager(directory_path = processed_unknown_dataset_path)
     
     # accessing random datapoint
     random_datapoint = results_data_manager.load(random.randint(0, len(results_data_manager) - 1))

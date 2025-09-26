@@ -43,8 +43,6 @@ chb_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055
 chb_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
 chb_error_code_5 = ['SL016', 'SL040', 'SL145', 'SL199', 'SL246', 'SL268', 'SL290', 'SL316', 'SL332', 'SL365', 'SL392', 'SL426', 'SL433', 'SL438']
 
-print(total)
-
 def alter_gif():
     for path in ["Raw_Data/gif_separated.pkl", "Raw_Data/gif_5min.pkl"]:
         gif_generator = load_from_pickle(path)
@@ -121,8 +119,9 @@ def plot_learning_rate_scheduler(
     # Default values
     kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
     kwargs.setdefault("title", "")
-    kwargs.setdefault("xlabel", "")
-    kwargs.setdefault("ylabel", "")
+    kwargs.setdefault("xlabel", "Epoch")
+    kwargs.setdefault("ylabel", "Learning Rate")
+    kwargs.setdefault("yscale", "linear") # or "log"
     kwargs.setdefault("xticks", None)
     kwargs.setdefault("yticks", None)
     kwargs.setdefault("loc", "best")
@@ -148,13 +147,15 @@ def plot_learning_rate_scheduler(
 
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
     ax.grid(kwargs["grid"])
 
     number_updates = scheduler.number_updates_total
 
-    x_data = np.arange(1, number_updates)
+    x_data = np.arange(1, number_updates+1)
     y_data = np.array([scheduler(update) for update in x_data])
-
+    print(y_data[0], y_data[-1], np.max(y_data))
+    
     ax.plot(
         x_data,
         y_data,
@@ -234,6 +235,7 @@ def plot_crop_shift_length(
 
 def plot_length_distribution(
     pickle_name = "shhs_gif_plot.pkl",
+    include_shhs = True,
     include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
     label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
     hour_thresholds = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
@@ -254,14 +256,17 @@ def plot_length_distribution(
     kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
     kwargs.setdefault("yscale", "linear")
     kwargs.setdefault("grid", True)
+    kwargs.setdefault("legend", True)
 
     sns_args = dict(
         kde=kwargs["kde"],
+        bins=kwargs["bins"],
         binwidth=kwargs["binwidth"],
         edgecolor=kwargs["edgecolor"],
         common_bins=kwargs["common_bins"],
         multiple=kwargs["multiple"],
-        alpha=kwargs["alpha"]
+        alpha=kwargs["alpha"],
+        legend=kwargs["legend"]
     )
 
     with open(pickle_name, "rb") as f:
@@ -277,12 +282,22 @@ def plot_length_distribution(
     for i in range(len(GIF)):
         print(f"{label_gifs[i]} min length: {np.min(GIF[i]) / 3600:.2f} hours")
         print(f"{label_gifs[i]} max length: {np.max(GIF[i]) / 3600:.2f} hours")
+    print(f"SHHS mean length: {np.mean(SHHS) / 3600:.2f} hours, std: {np.std(SHHS) / 3600:.2f} hours")
 
     for threshold in np.array(hour_thresholds) * 3600:
         print(f"SHHS length > {threshold/3600} hours: {np.sum(SHHS > threshold)} / {len(SHHS)} ({np.sum(SHHS > threshold) / len(SHHS) * 100:.2f}%)")
         for i in range(len(GIF)):
             print(f"{label_gifs[i]} length > {threshold/3600} hours: {np.sum(GIF[i] > threshold)} / {len(GIF[i])} ({np.sum(GIF[i] > threshold) / len(GIF[i]) * 100:.2f}%)")
+    for i in range(len(GIF)):
+        print(f"{label_gifs[i]} mean length: {np.mean(GIF[i]) / 3600:.2f} hours, std: {np.std(GIF[i]) / 3600:.2f} hours")
 
+    if not include_shhs:
+        matplotlib.rcParams["axes.prop_cycle"] = matplotlib.rcParams["axes.prop_cycle"][1:]
+        SHHS = np.array([])
+
+    if len(include_gifs) == 0:
+        GIF = np.array([[]])
+    
     lengths = np.concatenate((SHHS, GIF[0])) / 3600  # convert to hours
     for i in range(1, len(GIF)):
         lengths = np.concatenate((lengths, GIF[i] / 3600))  # convert to hours
@@ -310,6 +325,11 @@ def plot_length_distribution(
     
     ax.set_title(kwargs["title"])
     plt.show()
+
+    if not include_shhs:
+        matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler( # type: ignore
+            "color", bnb.plt.get_default_colors()
+        )
 
 
 def plot_length_distribution_nako(
@@ -367,11 +387,18 @@ def plot_length_distribution_nako(
         print(f"Follow-up length > {threshold/3600} hours: {np.sum(follow_up > threshold)} / {len(follow_up)} ({np.sum(follow_up > threshold) / len(follow_up) * 100:.2f}%)")
 
     lengths = np.concatenate((baseline, follow_up)) / 3600  # convert to hours
+    for i in range(len(lengths)-1, -1, -1):
+        if lengths[i] > 27:
+            continue
+            lengths = np.delete(lengths, i)
+    print(f"GNC mean length: {np.mean(lengths):.2f} hours, std: {np.std(lengths):.2f} hours")
+    print(f"GNC min length: {np.min(lengths):.2f} hours")
+    print(f"GNC max length: {np.max(lengths):.2f} hours")
 
     label = np.concatenate((np.array(["Baseline" for _ in range(len(baseline))]), np.array(["Follow-up" for _ in range(len(follow_up))])))
     pd_dataframe = pd.DataFrame({
         "lengths": lengths,
-        "Dataset": label
+        "Dataset": label[:len(lengths)]
     })
 
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
@@ -729,7 +756,10 @@ def data_shhs_distribution(results_file_path: str, path_to_shhs_dataset: str, pa
 
         # saving all data from GIF dataset to the pickle file
         for data_dict in gif_generator:
-            if data_dict["ID"] in chb_error_code_4 or data_dict["ID"] in chb_error_code_5:
+            check_id = data_dict["ID"]
+            if "_" in data_dict["ID"]:
+                check_id = data_dict["ID"].split("_")[0]
+            if check_id in chb_error_code_4 or check_id in chb_error_code_5:
                 continue
             data = np.array(data_dict["SLP"]).astype(int) # type: ignore
 
@@ -798,6 +828,125 @@ def data_shhs_distribution(results_file_path: str, path_to_shhs_dataset: str, pa
         pickle.dump(save_dict, f)
 
 
+def nako_info():
+    dataframe = pd.read_csv("datasets_plot_info/report-alter.csv", sep=";")
+    dataframe_2 = pd.read_csv("datasets_plot_info/report-alter-1.csv", sep=";")
+    print(dataframe.head())
+    print(dataframe_2.head())
+    total = np.sum(dataframe["m"]) + np.sum(dataframe_2["m"]) + np.sum(dataframe["f"]) + np.sum(dataframe_2["f"])
+    male = np.sum(dataframe["m"]) + np.sum(dataframe_2["m"])
+    female = np.sum(dataframe["f"]) + np.sum(dataframe_2["f"])
+    print(male, female, male/female, male/total, female/total)
+    age = []
+    for i in range(len(dataframe)):
+        try:
+            for _ in range(int(dataframe["m"][i])):
+                age.append(dataframe["age"][i])
+        except:
+            continue
+
+    for i in range(len(dataframe_2)):
+        try:
+            for _ in range(int(dataframe_2["m"][i])):
+                age.append(dataframe_2["age"][i])
+        except:
+            continue
+
+    print(np.mean(age), np.std(age), np.min(age), np.max(age))
+
+
+def plot_apnea_duration_distribution(
+    pickle_name = "gif_apnea_info.pkl",
+    transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
+    include_labels = ['Hypopnea', 'Obstructive Apnea', 'Mixed Apnea', 'Central Apnea', 'Central Hypopnea', 'Obstructive Hypopnea', 'Apnea'],
+    check_times = [5, 10, 15, 16, 17, 20, 25, 30, 60, 120, 200],
+    crop_outside = [0, 24*3600],
+    **kwargs
+    ):
+    
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "Apnea Event Duration (s)")
+    kwargs.setdefault("ylabel", "Count")
+    kwargs.setdefault("edgecolor", "black")
+    kwargs.setdefault("kde", True)
+    kwargs.setdefault("bins", 'auto')
+    kwargs.setdefault("binwidth", None)
+    kwargs.setdefault("common_bins", True)
+    kwargs.setdefault("multiple", "layer") # “layer”, “dodge”, “stack”, “fill”
+    kwargs.setdefault("linewidth", 1)
+    kwargs.setdefault("alpha", 0.5)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("yscale", "linear")
+    kwargs.setdefault("grid", True)
+    kwargs.setdefault("legend", True)
+
+    sns_args = dict(
+        kde=kwargs["kde"],
+        bins=kwargs["bins"],
+        binwidth=kwargs["binwidth"],
+        edgecolor=kwargs["edgecolor"],
+        common_bins=kwargs["common_bins"],
+        multiple=kwargs["multiple"],
+        alpha=kwargs["alpha"],
+        legend=kwargs["legend"],
+        # linewidth=kwargs["linewidth"]
+    )
+
+    with open(pickle_name, "rb") as f:
+        pickle_data_loaded = pickle.load(f)
+    
+    original_classes = pickle_data_loaded["apnea_classes"]
+    original_durations = pickle_data_loaded["durations"]
+
+    collected_durations = []
+    collected_classes = []
+
+    for i in range(len(include_labels)):
+        sae_class = include_labels[i]
+        
+        for j in range(len(transform)):
+            target_class = transform[j][1]
+            if target_class == sae_class:
+                source_class = transform[j][0]
+                for k in range(len(original_classes)):
+                    if original_classes[k] == source_class:
+                        collected_durations.extend(original_durations[k])
+                        collected_classes.extend([sae_class for _ in original_durations[k]])
+    
+    for time in check_times:
+        count = 0
+        for duration in collected_durations:
+            if duration >= time:
+                count += 1
+        print(f"Apnea events with duration >= {time} seconds: {count} / {len(collected_durations)} ({count / len(collected_durations) * 100:.2f}%)")
+    
+    for i in range(len(collected_durations)-1, -1, -1):
+        if collected_durations[i] < crop_outside[0] or collected_durations[i] > crop_outside[1]:
+            del collected_durations[i]
+            del collected_classes[i]
+
+    pd_dataframe = pd.DataFrame({
+        "durations": collected_durations,
+        "Apnea Event": collected_classes
+    })
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax = sns.histplot(data=pd_dataframe, x="durations", hue="Apnea Event", **sns_args)
+    ax.set(xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
+    ax.grid(kwargs["grid"])
+    ax.set_axisbelow(True)
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+    
+    ax.set_title(kwargs["title"])
+    plt.show()
+
+
 tex_correction = 0.5
 tex_look = {
     "text.usetex": True,
@@ -842,17 +991,34 @@ cm_to_inch = 1/2.54
 linewidth = 459.6215*pt_to_inch
 
 # fig_ratio = 3.4 / 2.7
-fig_ratio = 4 / 3
 
 if __name__ == "__main__":
     matplotlib.rcParams.update(tex_look)
-    # linewidth*=0.3
-    linewidth*=0.48
-    # linewidth*=0.5
+    
+    # multi-plots
+    # fig_ratio = 4 / 3
+    # linewidth *= 0.48 # 0.48, 0.5, 0.3
+
+    # standalone plots
+    fig_ratio = 3 / 2
+    fig_ratio = 2 / 1
+    linewidth *= 0.8
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
     # MA Plots
     if True:
+        plot_apnea_duration_distribution(
+            pickle_name = "gif_apnea_info.pkl",
+            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
+            # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+            xlim = [0, 100],
+            bins = np.arange(0, 301, 2),
+        )
+
+    if False:
+
+        # nako_info()
 
         # plot_crop_shift_length()
 
@@ -866,55 +1032,85 @@ if __name__ == "__main__":
         #         end_learning_rate = 5 * 1e-5,
         #     ))
         
-        # shhs
-        # plot_learning_rate_scheduler(
-        #     scheduler=CosineScheduler(
-        #         number_updates_total = 40,
-        #         number_updates_to_max_lr = 4,
-        #         start_learning_rate = 1e-5,
-        #         max_learning_rate = 1e-3,
-        #         end_learning_rate = 1e-6,
-        #     ))
-        
-        # gif
-        # plot_learning_rate_scheduler(
-        #     scheduler=CosineScheduler(
-        #         number_updates_total = 100,
-        #         number_updates_to_max_lr = 10,
-        #         start_learning_rate = 1e-5,
-        #         max_learning_rate = 1e-3,
-        #         end_learning_rate = 1e-6,
-        #     ))
+        # mine
+        plot_learning_rate_scheduler(
+            scheduler=CosineScheduler(
+                number_updates_total = 40,
+                number_updates_to_max_lr = 4,
+                start_learning_rate = 1e-5,
+                max_learning_rate = 1e-3,
+                end_learning_rate = 1e-6,
+            )
+        )
 
         # data_shhs_distribution(
-        #     results_file_path="slp_overview_all_removed_error_4_only_max.pkl",
+        #     results_file_path="slp_overview_all_removed_error_4.pkl",
         #     path_to_shhs_dataset="Raw_Data/SHHS_dataset.h5",
         #     path_to_gif_pkl_datasets=["Raw_Data/gif_separated_only_max.pkl", "Raw_Data/gif_5min_only_max.pkl"],
         #     path_to_gif_h5="Raw_Data/GIF_dataset.h5",
         #     include_aso_only=False
         # )
         # data_shhs_distribution(
-        #     results_file_path="slp_overview_aso_all_removed_error_4.pkl",
+        #     results_file_path="slp_overview_all_removed_error_4.pkl",
         #     path_to_shhs_dataset="Raw_Data/SHHS_dataset.h5",
-        #     path_to_gif_pkl_datasets=["Raw_Data/gif_separated.pkl", "Raw_Data/gif_5min.pkl"],
+        #     path_to_gif_pkl_datasets=["Raw_Data/gif_separated.pkl"],
         #     path_to_gif_h5="Raw_Data/GIF_dataset.h5",
         #     include_aso_only=True
         # )
 
+        # plot_length_distribution_nako(xlim=[0,48])
+
         plot_length_distribution(
             pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
-            include_gifs = ["gif_5min", "gif_separated", "GIF_dataset"],
-            label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
+            include_shhs = True,
+            include_gifs = ["gif_separated", "GIF_dataset"],
+            label_gifs = ["CHB (sep)", "CHB (Ma et al.)"],
             hour_thresholds = [7],
             binwidth = 0.5
         )
 
         plot_length_distribution(
-            pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4_only_max.pkl",
-            include_gifs = ["gif_5min_only_max", "gif_separated_only_max", "GIF_dataset"],
-            label_gifs = ["Gaps Fused", "Gaps Separated", "Yao"],
+            pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
+            include_shhs = True,
+            include_gifs = ["gif_separated"],
+            label_gifs = ["CHB"],
             hour_thresholds = [7],
-            binwidth = 0.5
+            bins = np.arange(0, 14, 0.5),
+            xlim = [-0.7, 13.2]
+        )
+
+        plot_length_distribution(
+            pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
+            include_shhs = True,
+            include_gifs = ["gif_separated"],
+            label_gifs = ["CHB"],
+            hour_thresholds = [7],
+            bins = np.arange(0, 14, 0.5),
+            xlim = [-0.7, 13.2],
+            ylim = [0, 225],
+            legend = False,
+            ylabel = "",
+            xlabel = ""
+        )
+
+        plot_length_distribution(
+            pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
+            include_shhs = False,
+            include_gifs = ["gif_separated"],
+            label_gifs = ["CHB"],
+            hour_thresholds = [2, 3, 4, 5, 6, 7, 8, 9],
+            bins = np.arange(0, 14, 0.5),
+            xlim = [-0.7, 13.2]
+        )
+
+        plot_length_distribution(
+            pickle_name = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
+            include_shhs = True,
+            include_gifs = [],
+            label_gifs = [],
+            hour_thresholds = [7],
+            bins = np.arange(0, 14, 0.5),
+            xlim = [-0.7, 13.2]
         )
 
         # plot_length_distribution(
@@ -929,8 +1125,8 @@ if __name__ == "__main__":
 
         plot_sleep_stages_distribution(
             results_file_path = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
-            include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
-            label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+            include_gifs=["gif_separated", "GIF_dataset"],
+            label_gifs=["Gaps Separated", "Yao"],
             sleep_labels = ["Wake", "N1", "N2", "DS", "REM", "Artifact"],
             sleep_mapping = [[0,0], [1,1], [2,2], [3,3], [4,5], [5,4], [6,5]],
             stat="percentage",  # "count" or "percentage"
@@ -939,8 +1135,8 @@ if __name__ == "__main__":
 
         plot_sleep_stages_distribution(
             results_file_path = "datasets_plot_info/slp_overview_all_removed_error_4.pkl",
-            include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
-            label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+            include_gifs=["gif_separated"],
+            label_gifs=["CHB"],
             sleep_labels = ["Wake", "LS", "DS", "REM", "Artifact"],
             sleep_mapping = [[0,0], [1,1], [2,1], [3,2], [4,4], [5,3], [6,4]],
             stat="percentage",  # "count" or "percentage"
@@ -949,8 +1145,8 @@ if __name__ == "__main__":
 
         plot_sleep_stages_distribution(
             results_file_path = "datasets_plot_info/slp_overview_aso_all_removed_error_4.pkl",
-            include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
-            label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+            include_gifs=["gif_separated", "GIF_dataset"],
+            label_gifs=["Gaps Separated", "Yao"],
             sleep_labels = ["Wake", "N1", "N2", "DS", "REM", "Artifact"],
             sleep_mapping = [[0,0], [1,1], [2,2], [3,3], [4,5], [5,4], [6,5]],
             stat="percentage",  # "count" or "percentage"
@@ -959,8 +1155,8 @@ if __name__ == "__main__":
 
         plot_sleep_stages_distribution(
             results_file_path = "datasets_plot_info/slp_overview_aso_all_removed_error_4.pkl",
-            include_gifs=["gif_5min", "gif_separated", "GIF_dataset"],
-            label_gifs=["Gaps Fused", "Gaps Separated", "Yao"],
+            include_gifs=["gif_separated"],
+            label_gifs=["CHB"],
             sleep_labels = ["Wake", "LS", "DS", "REM", "Artifact"],
             sleep_mapping = [[0,0], [1,1], [2,1], [3,2], [4,4], [5,3], [6,4]],
             stat="percentage",  # "count" or "percentage"

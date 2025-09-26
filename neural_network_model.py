@@ -130,7 +130,7 @@ def final_data_preprocessing(
     return signal
 
 
-class CustomSleepDataset(Dataset):
+class AccessTransformDataset(Dataset):
     """
     Custom Dataset class for our Sleep Stage Data. The class is used to load data from a file and
     prepare it for training a neural network (reshape signal into windows).
@@ -213,7 +213,7 @@ class CustomSleepDataset(Dataset):
         """
         
         # access data file, datapoint offsets (for faster loading) and sampling frequencies:
-        self.data_manager = SleepDataManager(
+        self.data_manager = BigDataManager(
             directory_path = path_to_data_directory,
             pid = pid,
         )
@@ -395,1284 +395,13 @@ def calculate_pooling_layer_start(
     return rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling
 
 
-class Window_Learning(nn.Module):
-    """
-    Window Learning part for YaoModel. 
-    Consists of a series of dilated convolutional layers with residual connections.
-
-    Same structure as ResBlock in: https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
-    """
-    def __init__(
-            self, 
-            number_window_learning_features: int, 
-            window_branch_convolutional_kernel_size: int,
-            window_learning_dilations: list,
-            negative_slope_leaky_relu: float,
-            dropout_probability: float
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        number_window_learning_features : int
-            Number of features learned from Signal Learning, by default 128
-        window_branch_convolutional_kernel_size : int
-            Kernel size for convolutional layers during Window Learning, by default 7
-        window_learning_dilations : list
-            dilations for convolutional layers during Window Learning, by default [2, 4, 8, 16, 32]
-        negative_slope_leaky_relu : float
-            Negative slope for LeakyReLU activation function, by default 0.15
-        dropout_probability : float
-            Probability for dropout, by default 0.2
-        """
-
-        super(Window_Learning, self).__init__()
-
-        window_layers = []
-        for d in window_learning_dilations:
-            window_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features,
-                out_channels = number_window_learning_features,
-                kernel_size = window_branch_convolutional_kernel_size,
-                dilation = d,
-                padding = 'same'
-            ))
-            window_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_branch = nn.Sequential(
-            *window_layers
-        )
-
-    def forward(self, x):
-        out = self.window_branch(x)
-        return x + out
-
-
-class Window_Learning_New(nn.Module):
-    """
-    Window Learning part for YaoModel. 
-    Consists of a series of dilated convolutional layers with residual connections.
-
-    Same structure as ResBlock in: https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
-    """
-    def __init__(
-            self, 
-            number_window_learning_features: int, 
-            window_branch_convolutional_kernel_size: int,
-            window_learning_dilations: list,
-            negative_slope_leaky_relu: float,
-            dropout_probability: float
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        number_window_learning_features : int
-            Number of features learned from Signal Learning, by default 128
-        window_branch_convolutional_kernel_size : int
-            Kernel size for convolutional layers during Window Learning, by default 7
-        window_learning_dilations : list
-            dilations for convolutional layers during Window Learning, by default [2, 4, 8, 16, 32]
-        negative_slope_leaky_relu : float
-            Negative slope for LeakyReLU activation function, by default 0.15
-        dropout_probability : float
-            Probability for dropout, by default 0.2
-        """
-
-        super(Window_Learning_New, self).__init__()
-
-        window_layers = []
-        for d in window_learning_dilations:
-            window_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features,
-                out_channels = number_window_learning_features,
-                kernel_size = window_branch_convolutional_kernel_size,
-                dilation = d,
-                padding = 'same'
-            ))
-            window_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_branch = nn.Sequential(
-            *window_layers
-        )
-
-    def forward(self, x):
-        out = self.window_branch(x)
-        return x + out
-
-
-class YaoModel(nn.Module):
-    """
-    Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
-    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/ for our way of data preprocessing.
-    
-    Differences to the original architecture:
-    - Number of datapoints per window does not equal 2^x (x being an integer)
-        - Reason:   SLP stage was sampled with 1/30 Hz, which made it impossible to have a window size of 
-                    2^x which fits the sleep stage labels perfectly
-        - Advantage:    Every window better represents the actual sleep stage
-        - Disadvantage: Less repetitions of original structure possible 
-                        (because each step requires to be dividable by 2)
-    - Signal Feature Learning of MAD has different structure:
-        - Before:       Same structure for RRI and MAD: Conv, LeakyReLU, MaxPool, ...
-        - Now:          Different structure for MAD: Conv, LeakyReLU, Conv, LeakyReLU, MaxPool, ...
-        - Reason:       RRI length = 4 * MAD length, so MAD can not be divided by 2 as often as RRI
-                        (due to difference above, not many repetitions of original structure possible)
-        - Advantage:    MAD signal can be processed more effectively, similar to original structure
-    - Window Feature Learning has different structure:
-        - Before:   2x ResBlock [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:      1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Note:     Window_Learning = ResBlock (Residual Block ?)
-        - Reason:   Simplification of structure to reduce number of parameters
-    
-    ATTENTION:  It is advisable to choose the number of convolutional channels so that:
-                2^(len_RRI_Conv_Channels - 1) / 2^[(len_MAD_Conv_Channels - 1)/2] = len_RRI_signal / len_MAD_signal
-
-                This ensures that from RRI and MAD the same number of values remain after Signal Learning.
-    """
-    def __init__(
-            self, 
-            datapoints_per_rri_window: int,
-            datapoints_per_mad_window: int,
-            windows_per_signal: int,
-            rri_convolutional_channels: list,
-            mad_convolutional_channels: list,
-            max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        rri_datapoints: int
-            Number of RRI data points
-        mad_datapoints: int
-            Number of MAD data points
-        windows_per_signal: int
-            Number of windows in each signal
-        rri_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
-        mad_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
-        max_pooling_layers: int
-            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
-            Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
-        """
-
-        self.datapoints_per_rri_window = datapoints_per_rri_window
-        self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_signal = windows_per_signal
-        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
-            rri_datapoints = datapoints_per_rri_window,
-            mad_datapoints = datapoints_per_mad_window,
-            rri_convolutional_channels = rri_convolutional_channels,
-            mad_convolutional_channels = mad_convolutional_channels,
-            max_pooling_layers = max_pooling_layers
-        )
-
-        super(YaoModel, self).__init__()
-
-        # Parameters
-        negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
-
-        rri_branch_convolutional_kernel_size = 3
-        rri_branch_max_pooling_kernel_size = 2
-
-        mad_branch_convolutional_kernel_size = 3
-        mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        """
-        -----------------
-        RRI Branch
-        -----------------
-        """
-
-        # Create layer structure for RRI branch
-        rri_branch_layers = []
-        for num_channel_pos in range(1, len(rri_convolutional_channels)):
-            # Convolutional layer:
-            rri_branch_layers.append(nn.Conv1d(
-                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
-                out_channels = rri_convolutional_channels[num_channel_pos], 
-                kernel_size = rri_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Activation function:
-            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= rri_start_pooling:
-                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
-            # Batch normalization:
-            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
-
-        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
-
-        """
-        -----------------
-        MAD Branch
-        -----------------
-        """
-
-        # Create layer structure for MAD branch
-        mad_branch_layers = []
-        for num_channel_pos in range(1, len(mad_convolutional_channels)):
-            # Convolutional layer:
-            mad_branch_layers.append(nn.Conv1d(
-                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
-                out_channels = mad_convolutional_channels[num_channel_pos], 
-                kernel_size = mad_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Activation function:
-            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= mad_start_pooling:
-                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
-            # Batch normalization:
-            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
-        
-        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
-
-        """
-        =================================================
-        Combining Features Obtained From Signal Learning
-        =================================================
-        """
-
-        # Calculating number of remaining values after each branch: 
-
-        # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
-
-        # MaxPooling is chosen so that the size of the data is halved
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
-        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
-
-        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
-
-        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
-            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-
-        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
-
-        self.flatten = nn.Flatten()
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
-        
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_window_learning_features, 
-                kernel_size = window_branch_convolutional_kernel_size, 
-                dilation = dilation,
-                padding='same'
-                ))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_feature_learning = nn.Sequential(
-            Window_Learning(
-                number_window_learning_features = number_window_learning_features, 
-                window_branch_convolutional_kernel_size = window_branch_convolutional_kernel_size, 
-                window_learning_dilations = window_learning_dilations, 
-                negative_slope_leaky_relu = negative_slope_leaky_relu, 
-                dropout_probability = dropout_probability
-                ),
-            nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_sleep_stages, 
-                kernel_size = 1
-                )
-            )
-
-        """
-        ======================================================
-        Save Output Shape Of MAD Branch (for data without MAD)
-        ======================================================
-        """
-
-        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
-
-        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
-
-
-    def forward(self, rri_signal, mad_signal = None):
-        """
-        =============================================
-        Checking And Preparing Data For Forward Pass
-        =============================================
-        """
-
-        # Check Dimensions of RRI signal
-        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
-        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
-
-        # Reshape RRI signal
-        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
-        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
-
-        if mad_signal is not None:
-            # Check Dimensions of MAD signal
-            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
-            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
-
-            # Reshape MAD signal
-            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        # Process RRI Signal
-        rri_features = self.rri_signal_learning(rri_signal)
-        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
-
-        # Process MAD Signal or create 0 tensor if MAD signal is not provided
-        if mad_signal is None:
-            num_windows_mad = self.windows_per_signal
-            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
-        else:
-            mad_features = self.mad_signal_learning(mad_signal)
-        
-        """
-        =======================
-        Create Window Features
-        =======================
-        """
-
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
-
-        # Flatten features
-        window_features = self.flatten(window_features)
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer
-        output = self.linear(window_features)
-
-        # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_signal, -1)
-        output = output.transpose(1, 2).contiguous()
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-
-        # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
-
-        return output
-
-
-class YaoModelNew(nn.Module):
-    """
-    Deep Convolutional Neural Network for Sleep Stage Prediction. Tried to reproduce the architecture of:
-    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/ for our way of data preprocessing.
-    
-    Differences to the original architecture:
-    - Number of datapoints per window does not equal 2^x (x being an integer)
-        - Reason:   SLP stage was sampled with 1/30 Hz, which made it impossible to have a window size of 
-                    2^x which fits the sleep stage labels perfectly
-        - Advantage:    Every window better represents the actual sleep stage
-        - Disadvantage: Less repetitions of original structure possible 
-                        (because each step requires to be dividable by 2)
-    - Signal Feature Learning of MAD has different structure:
-        - Before:       Same structure for RRI and MAD: Conv, LeakyReLU, MaxPool, ...
-        - Now:          Different structure for MAD: Conv, LeakyReLU, Conv, LeakyReLU, MaxPool, ...
-        - Reason:       RRI length = 4 * MAD length, so MAD can not be divided by 2 as often as RRI
-                        (due to difference above, not many repetitions of original structure possible)
-        - Advantage:    MAD signal can be processed more effectively, similar to original structure
-    - Window Feature Learning has different structure:
-        - Before:   2x ResBlock [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:      1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Note:     Window_Learning = ResBlock (Residual Block ?)
-        - Reason:   Simplification of structure to reduce number of parameters
-    
-    ATTENTION:  It is advisable to choose the number of convolutional channels so that:
-                2^(len_RRI_Conv_Channels - 1) / 2^[(len_MAD_Conv_Channels - 1)/2] = len_RRI_signal / len_MAD_signal
-
-                This ensures that from RRI and MAD the same number of values remain after Signal Learning.
-    """
-    def __init__(
-            self, 
-            datapoints_per_rri_window: int,
-            datapoints_per_mad_window: int,
-            windows_per_signal: int,
-            rri_convolutional_channels: list,
-            mad_convolutional_channels: list,
-            max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        rri_datapoints: int
-            Number of RRI data points
-        mad_datapoints: int
-            Number of MAD data points
-        windows_per_signal: int
-            Number of windows in each signal
-        rri_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
-        mad_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
-        max_pooling_layers: int
-            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
-            Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
-        """
-
-        self.datapoints_per_rri_window = datapoints_per_rri_window
-        self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_signal = windows_per_signal
-
-        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
-            rri_datapoints = datapoints_per_rri_window,
-            mad_datapoints = datapoints_per_mad_window,
-            rri_convolutional_channels = rri_convolutional_channels,
-            mad_convolutional_channels = mad_convolutional_channels,
-            max_pooling_layers = max_pooling_layers
-        )
-
-        super(YaoModelNew, self).__init__()
-
-        # Parameters
-        negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
-
-        rri_branch_convolutional_kernel_size = 3
-        rri_branch_max_pooling_kernel_size = 2
-
-        mad_branch_convolutional_kernel_size = 3
-        mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        """
-        -----------------
-        RRI Branch
-        -----------------
-        """
-
-        # Create layer structure for RRI branch
-        rri_branch_layers = []
-        for num_channel_pos in range(1, len(rri_convolutional_channels)):
-            # Convolutional layer:
-            rri_branch_layers.append(nn.Conv1d(
-                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
-                out_channels = rri_convolutional_channels[num_channel_pos], 
-                kernel_size = rri_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Batch normalization:
-            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
-            # Activation function:
-            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= rri_start_pooling:
-                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
-
-        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
-
-        """
-        -----------------
-        MAD Branch
-        -----------------
-        """
-
-        # Create layer structure for MAD branch
-        mad_branch_layers = []
-        for num_channel_pos in range(1, len(mad_convolutional_channels)):
-            # Convolutional layer:
-            mad_branch_layers.append(nn.Conv1d(
-                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
-                out_channels = mad_convolutional_channels[num_channel_pos], 
-                kernel_size = mad_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Batch normalization:
-            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
-            # Activation function:
-            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= mad_start_pooling:
-                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
-        
-        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
-
-        """
-        =================================================
-        Combining Features Obtained From Signal Learning
-        =================================================
-        """
-
-        # Calculating number of remaining values after each branch: 
-
-        # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
-
-        # MaxPooling is chosen so that the size of the data is halved
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
-        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
-
-        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
-
-        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
-            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-
-        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
-
-        self.flatten = nn.Flatten()
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer after concatenation
-        self.linear = nn.Sequential(
-            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
-            nn.LeakyReLU(negative_slope_leaky_relu)
-        )
-        
-        self.window_feature_learning = nn.Sequential(
-            Window_Learning_New(
-                number_window_learning_features = number_window_learning_features, 
-                window_branch_convolutional_kernel_size = window_branch_convolutional_kernel_size, 
-                window_learning_dilations = window_learning_dilations, 
-                negative_slope_leaky_relu = negative_slope_leaky_relu, 
-                dropout_probability = dropout_probability
-                ),
-            nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_sleep_stages, 
-                kernel_size = 1
-                )
-            )
-
-        """
-        ======================================================
-        Save Output Shape Of MAD Branch (for data without MAD)
-        ======================================================
-        """
-
-        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
-
-        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
-
-
-    def forward(self, rri_signal, mad_signal = None):
-        """
-        =============================================
-        Checking And Preparing Data For Forward Pass
-        =============================================
-        """
-
-        # Check Dimensions of RRI signal
-        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
-        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
-
-        # Reshape RRI signal
-        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
-        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
-
-        if mad_signal is not None:
-            # Check Dimensions of MAD signal
-            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
-            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
-
-            # Reshape MAD signal
-            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        # Process RRI Signal
-        rri_features = self.rri_signal_learning(rri_signal)
-        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
-
-        # Process MAD Signal or create 0 tensor if MAD signal is not provided
-        if mad_signal is None:
-            num_windows_mad = self.windows_per_signal
-            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
-        else:
-            mad_features = self.mad_signal_learning(mad_signal)
-        
-        """
-        =======================
-        Create Window Features
-        =======================
-        """
-
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
-
-        # Flatten features
-        window_features = self.flatten(window_features)
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer
-        output = self.linear(window_features)
-
-        # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_signal, -1)
-        output = output.transpose(1, 2).contiguous()
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-
-        # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
-
-        return output
-
-
-# conv, relu, conv, relu, pool
-class SleepStageModel(nn.Module):
-    """
-    Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
-    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
-
-    While YaoModel tried to recreate the architecture as good as possible, this time the architecture is 
-    modified subtly (not only to fit to the way the data is preprocessed).
-    
-    Differences to the original architecture:
-    - Window Feature Learning has different structure:
-        - Before:       1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:          2x (LeakyRelu, Conv, Dropout, ...), Conv
-        - Reason:       Adding the input after applying structure on input seemed shady
-        - Disadvantage: Loss is higher at beginning (by about 23%)
-        - Advantage:    Loss decreases quicker
-    """
-    def __init__(
-            self, 
-            datapoints_per_rri_window: int,
-            datapoints_per_mad_window: int,
-            windows_per_signal: int,
-            rri_convolutional_channels: list,
-            mad_convolutional_channels: list,
-            max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        rri_datapoints: int
-            Number of RRI data points
-        mad_datapoints: int
-            Number of MAD data points
-        windows_per_signal: int
-            Number of windows in each signal
-        rri_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
-        mad_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
-        max_pooling_layers: int
-            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
-            Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
-        """
-
-        self.datapoints_per_rri_window = datapoints_per_rri_window
-        self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_signal = windows_per_signal
-
-        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
-            rri_datapoints = datapoints_per_rri_window,
-            mad_datapoints = datapoints_per_mad_window,
-            rri_convolutional_channels = rri_convolutional_channels,
-            mad_convolutional_channels = mad_convolutional_channels,
-            max_pooling_layers = max_pooling_layers
-        )
-
-        super(SleepStageModel, self).__init__()
-
-        # Parameters
-        negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
-
-        rri_branch_convolutional_kernel_size = 3
-        rri_branch_max_pooling_kernel_size = 2
-
-        mad_branch_convolutional_kernel_size = 3
-        mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        """
-        -----------------
-        RRI Branch
-        -----------------
-        """
-
-        # Create layer structure for RRI branch
-        rri_branch_layers = []
-        for num_channel_pos in range(1, len(rri_convolutional_channels)):
-            # Convolutional layer:
-            rri_branch_layers.append(nn.Conv1d(
-                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
-                out_channels = rri_convolutional_channels[num_channel_pos], 
-                kernel_size = rri_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Activation function:
-            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= rri_start_pooling:
-                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
-            # Batch normalization:
-            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
-
-        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
-
-        """
-        -----------------
-        MAD Branch
-        -----------------
-        """
-
-        # Create layer structure for MAD branch
-        mad_branch_layers = []
-        for num_channel_pos in range(1, len(mad_convolutional_channels)):
-            # Convolutional layer:
-            mad_branch_layers.append(nn.Conv1d(
-                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
-                out_channels = mad_convolutional_channels[num_channel_pos], 
-                kernel_size = mad_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Activation function:
-            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= mad_start_pooling:
-                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
-            # Batch normalization:
-            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
-        
-        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
-
-        """
-        =================================================
-        Combining Features Obtained From Signal Learning
-        =================================================
-        """
-
-        # Calculating number of remaining values after each branch: 
-
-        # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
-
-        # MaxPooling is chosen so that the size of the data is halved
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
-        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
-
-        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
-
-        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
-            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-
-        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
-
-        self.flatten = nn.Flatten()
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer after concatenation
-        self.linear = nn.Linear(remaining_values_after_signal_learning, number_window_learning_features)
-        
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_window_learning_features, 
-                kernel_size = window_branch_convolutional_kernel_size, 
-                dilation = dilation,
-                padding ='same'
-                ))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_feature_learning = nn.Sequential(
-            *window_feature_learning_layers,
-            *window_feature_learning_layers,
-            nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_sleep_stages, 
-                kernel_size = 1
-                )
-            )
-
-        """
-        =======================================================
-        Save Output Shape Of MAD Branch (for data without MAD)
-        =======================================================
-        """
-
-        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
-
-        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
-
-
-    def forward(self, rri_signal, mad_signal = None):
-        """
-        =============================================
-        Checking And Preparing Data For Forward Pass
-        =============================================
-        """
-
-        # Check Dimensions of RRI signal
-        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
-        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
-
-        # Reshape RRI signal
-        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
-        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
-
-        if mad_signal is not None:
-            # Check Dimensions of MAD signal
-            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
-            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
-
-            # Reshape MAD signal
-            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        # Process RRI Signal
-        rri_features = self.rri_signal_learning(rri_signal)
-
-        # Process MAD Signal or create 0 tensor if MAD signal is not provided
-        if mad_signal is None:
-            num_windows_mad = self.windows_per_signal
-            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
-        else:
-            mad_features = self.mad_signal_learning(mad_signal)
-        
-        """
-        =======================
-        Create Window Features
-        =======================
-        """
-
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
-
-        # Flatten features
-        window_features = self.flatten(window_features)
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer
-        output = self.linear(window_features)
-
-        # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_signal, -1)
-        output = output.transpose(1, 2).contiguous()
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-
-        # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
-
-        return output
-
-        """
-        # Reshape for fully connected layers
-        combined_features = combined_features.view(batch_size, -1)  # Combine windows and features dimensions
-
-        # Fully connected layers
-        output = self.fc(combined_features)
-        return output
-        """
-
-
-class SleepStageModelNew(nn.Module):
-    """
-    Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
-    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
-
-    While YaoModel tried to recreate the architecture as good as possible, this time the architecture is 
-    modified subtly (not only to fit to the way the data is preprocessed).
-    
-    Differences to the original architecture:
-    - Window Feature Learning has different structure:
-        - Before:       1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:          2x (LeakyRelu, Conv, Dropout, ...), Conv
-        - Reason:       Adding the input after applying structure on input seemed shady
-        - Disadvantage: Loss is higher at beginning (by about 23%)
-        - Advantage:    Loss decreases quicker
-    """
-    def __init__(
-            self, 
-            datapoints_per_rri_window: int,
-            datapoints_per_mad_window: int,
-            windows_per_signal: int,
-            rri_convolutional_channels: list,
-            mad_convolutional_channels: list,
-            max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
-            ):
-        """
-        ARGUMENTS:
-        ------------------------------
-        rri_datapoints: int
-            Number of RRI data points
-        mad_datapoints: int
-            Number of MAD data points
-        windows_per_signal: int
-            Number of windows in each signal
-        rri_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
-        mad_convolutional_channels: list
-            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
-        max_pooling_layers: int
-            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
-            Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
-        """
-
-        self.datapoints_per_rri_window = datapoints_per_rri_window
-        self.datapoints_per_mad_window = datapoints_per_mad_window
-        self.windows_per_signal = windows_per_signal
-
-        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
-            rri_datapoints = datapoints_per_rri_window,
-            mad_datapoints = datapoints_per_mad_window,
-            rri_convolutional_channels = rri_convolutional_channels,
-            mad_convolutional_channels = mad_convolutional_channels,
-            max_pooling_layers = max_pooling_layers
-        )
-
-        super(SleepStageModelNew, self).__init__()
-
-        # Parameters
-        negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
-
-        rri_branch_convolutional_kernel_size = 3
-        rri_branch_max_pooling_kernel_size = 2
-
-        mad_branch_convolutional_kernel_size = 3
-        mad_branch_max_pooling_kernel_size = 2
-
-        window_branch_convolutional_kernel_size = 7
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        """
-        -----------------
-        RRI Branch
-        -----------------
-        """
-
-        # Create layer structure for RRI branch
-        rri_branch_layers = []
-        for num_channel_pos in range(1, len(rri_convolutional_channels)):
-            # Convolutional layer:
-            rri_branch_layers.append(nn.Conv1d(
-                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
-                out_channels = rri_convolutional_channels[num_channel_pos], 
-                kernel_size = rri_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Batch normalization:
-            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
-            # Activation function:
-            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= rri_start_pooling:
-                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
-
-        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
-
-        """
-        -----------------
-        MAD Branch
-        -----------------
-        """
-
-        # Create layer structure for MAD branch
-        mad_branch_layers = []
-        for num_channel_pos in range(1, len(mad_convolutional_channels)):
-            # Convolutional layer:
-            mad_branch_layers.append(nn.Conv1d(
-                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
-                out_channels = mad_convolutional_channels[num_channel_pos], 
-                kernel_size = mad_branch_convolutional_kernel_size, 
-                padding='same'
-                ))
-            # Batch normalization:
-            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
-            # Activation function:
-            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            # Pooling layer:
-            if num_channel_pos >= mad_start_pooling:
-                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
-        
-        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
-
-        """
-        =================================================
-        Combining Features Obtained From Signal Learning
-        =================================================
-        """
-
-        # Calculating number of remaining values after each branch: 
-
-        # Padding is chosen so that conv layer does not change size 
-        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
-
-        # MaxPooling is chosen so that the size of the data is halved
-        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
-        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
-
-        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
-
-        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
-            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
-
-        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
-
-        self.flatten = nn.Flatten()
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer after concatenation
-        self.linear = nn.Sequential(
-            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
-            nn.LeakyReLU(negative_slope_leaky_relu)
-        )
-        
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_window_learning_features, 
-                kernel_size = window_branch_convolutional_kernel_size, 
-                dilation = dilation,
-                padding ='same'
-                ))
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_feature_learning = nn.Sequential(
-            *window_feature_learning_layers,
-            *window_feature_learning_layers,
-            nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_sleep_stages, 
-                kernel_size = 1
-                )
-            )
-
-        """
-        =======================================================
-        Save Output Shape Of MAD Branch (for data without MAD)
-        =======================================================
-        """
-
-        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
-        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
-
-        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
-            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
-        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
-
-
-    def forward(self, rri_signal, mad_signal = None):
-        """
-        =============================================
-        Checking And Preparing Data For Forward Pass
-        =============================================
-        """
-
-        # Check Dimensions of RRI signal
-        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
-        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
-        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
-
-        # Reshape RRI signal
-        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
-        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
-
-        if mad_signal is not None:
-            # Check Dimensions of MAD signal
-            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
-            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
-            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
-
-            # Reshape MAD signal
-            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
-
-        """
-        ========================
-        Signal Feature Learning
-        ========================
-        """
-
-        # Process RRI Signal
-        rri_features = self.rri_signal_learning(rri_signal)
-
-        # Process MAD Signal or create 0 tensor if MAD signal is not provided
-        if mad_signal is None:
-            num_windows_mad = self.windows_per_signal
-            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
-        else:
-            mad_features = self.mad_signal_learning(mad_signal)
-        
-        """
-        =======================
-        Create Window Features
-        =======================
-        """
-
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
-
-        # Flatten features
-        window_features = self.flatten(window_features)
-
-        """
-        ========================
-        Window Feature Learning
-        ========================
-        """
-
-        # Fully connected layer
-        output = self.linear(window_features)
-
-        # Reshape for convolutional layers
-        output = output.reshape(batch_size, self.windows_per_signal, -1)
-        output = output.transpose(1, 2).contiguous()
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-
-        # Reshape for output
-        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
-
-        return output
-
-
-# conv, relu, conv, relu, pool
-class DemoWholeNightModel(nn.Module):
+class DemoLongSequenceModel(nn.Module):
     """
     Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
     https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
 
     ATTENTION:  This model should not be used. It continuosly prints out the shape of the data during the
-                forward pass. Therefore, it is only useful for debugging purposes. The model will reshape the
-                data similarly to the SleepStageModel, YaoModel and SleepStageModelNew.
+                forward pass. Therefore, it is only useful for debugging purposes.
 
     """
     def __init__(
@@ -1683,9 +412,9 @@ class DemoWholeNightModel(nn.Module):
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
             max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
+            fully_connected_features: int,
+            convolution_dilations: list,
+            number_target_classes: int
             ):
         """
         ARGUMENTS:
@@ -1702,12 +431,12 @@ class DemoWholeNightModel(nn.Module):
             Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
         max_pooling_layers: int
             Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
+        number_fully_connected_features: int
             Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
+        convolution_dilations: list
+            dilations for subsequent convolutional layers during Joint Representation Learning
+        number_target_classes: int
+            Number of predictable target classes
         """
 
         self.datapoints_per_rri_window = datapoints_per_rri_window
@@ -1724,7 +453,7 @@ class DemoWholeNightModel(nn.Module):
 
         print(f"RRI Poolings: {rri_poolings}, RRI Start Pooling: {rri_start_pooling}, MAD Poolings: {mad_poolings}, MAD Start Pooling: {mad_start_pooling}")
 
-        super(DemoWholeNightModel, self).__init__()
+        super(DemoLongSequenceModel, self).__init__()
 
         # Parameters
         negative_slope_leaky_relu = 0.15
@@ -1821,39 +550,40 @@ class DemoWholeNightModel(nn.Module):
         self.flatten = nn.Flatten()
 
         """
-        ========================
-        Window Feature Learning
-        ========================
+        ==============================
+        Joint Representation Learning
+        ==============================
         """
 
         # Fully connected layer after concatenation
         self.linear = nn.Sequential(
-            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
             nn.LeakyReLU(negative_slope_leaky_relu)
         )
         
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        for dilation in window_learning_dilations:
+        # Create layer structure for dilated convolutional layers
+        dilated_convolutional_layers = []
+        for dilation in convolution_dilations:
             # Residual block:
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_window_learning_features, 
-                kernel_size = window_branch_convolutional_kernel_size, 
+            dilated_convolutional_layers.append(nn.Conv1d(
+                in_channels = fully_connected_features,
+                out_channels = fully_connected_features,
+                kernel_size = window_branch_convolutional_kernel_size,
                 dilation = dilation,
                 padding ='same'
                 ))
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
+            dilated_convolutional_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            dilated_convolutional_layers.append(nn.Dropout(dropout_probability))
+
+        self.dilated_convolution = nn.Sequential(
+            *dilated_convolutional_layers,
+            *dilated_convolutional_layers
+            )
         
-        self.window_feature_learning = nn.Sequential(
-            *window_feature_learning_layers,
-            *window_feature_learning_layers,
-            nn.Conv1d(
-                in_channels = number_window_learning_features, 
-                out_channels = number_sleep_stages, 
-                kernel_size = 1
-                )
+        self.final = nn.Conv1d(
+            in_channels = fully_connected_features,
+            out_channels = number_target_classes,
+            kernel_size = 1
             )
 
         """
@@ -1920,9 +650,9 @@ class DemoWholeNightModel(nn.Module):
         print(f"MAD features: {mad_features.size()}")  # Debugging line
         
         """
-        =======================
-        Create Window Features
-        =======================
+        ======================
+        Structural Operations
+        ======================
         """
 
         # Concatenate features
@@ -1934,9 +664,9 @@ class DemoWholeNightModel(nn.Module):
         print(f"Flattened window features: {window_features.size()}")  # Debugging line
 
         """
-        ========================
-        Window Feature Learning
-        ========================
+        ==============================
+        Joint Representation Learning
+        ==============================
         """
 
         # Fully connected layer
@@ -1950,9 +680,13 @@ class DemoWholeNightModel(nn.Module):
         output = output.transpose(1, 2).contiguous()
         print(f"Output transposed: {output.size()}")
 
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-        print(f"Output after window feature learning: {output.size()}")  # Debugging line
+        # Dilated Convolutional layers
+        output = self.dilated_convolution(output)
+        print(f"Output after dilated convolutions: {output.size()}")  # Debugging line
+
+        # Final Convolutional layer to transform to number of target classes
+        output = self.final(output)
+        print(f"Output after final convolution: {output.size()}")  # Debugging line
 
         # Reshape for output
         output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
@@ -1961,21 +695,625 @@ class DemoWholeNightModel(nn.Module):
         return output
 
 
-class DemoLocalIntervalModel(nn.Module):
+class Dilated_Residual_Block(nn.Module):
+    """
+    Dilated Learning part for LongSequenceResidualModel. 
+    Consists of a series of dilated convolutional layers with residual connections.
+
+    Same structure as ResBlock in: https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
+    """
+    def __init__(
+            self, 
+            learning_features: int, 
+            kernel_size: int,
+            convolution_dilations: list,
+            negative_slope_leaky_relu: float,
+            dropout_probability: float
+            ):
+        """
+        ARGUMENTS:
+        ------------------------------
+        number_learning_features : int
+            Number of features learned from Signal Learning, by default 128
+        kernel_size : int
+            Kernel size for convolutional layers during Dilated Learning, by default 7
+        convolution_dilations : list
+            dilations for convolutional layers during Dilated Learning, by default [2, 4, 8, 16, 32]
+        negative_slope_leaky_relu : float
+            Negative slope for LeakyReLU activation function, by default 0.15
+        dropout_probability : float
+            Probability for dropout, by default 0.2
+        """
+
+        super(Dilated_Residual_Block, self).__init__()
+
+        window_layers = []
+        for d in convolution_dilations:
+            window_layers.append(nn.Conv1d(
+                in_channels = learning_features,
+                out_channels = learning_features,
+                kernel_size = kernel_size,
+                dilation = d,
+                padding = 'same'
+            ))
+            window_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            window_layers.append(nn.Dropout(dropout_probability))
+        
+        self.window_branch = nn.Sequential(
+            *window_layers
+        )
+
+    def forward(self, x):
+        out = self.window_branch(x)
+        return x + out
+
+
+class LongSequenceResidualModel(nn.Module):
+    """
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by the architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/.
+    """
+    def __init__(
+            self, 
+            datapoints_per_rri_window: int,
+            datapoints_per_mad_window: int,
+            windows_per_signal: int,
+            rri_convolutional_channels: list,
+            mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            fully_connected_features: int,
+            convolution_dilations: list,
+            number_target_classes: int
+            ):
+        """
+        ARGUMENTS:
+        ------------------------------
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        fully_connected_features: int
+            Number of features learned from Signal Learning
+        convolution_dilations: list
+            dilations for subsequent convolutional layers during Joint Representation Learning
+        number_target_classes: int
+            Number of predictable target classes
+        """
+
+        self.datapoints_per_rri_window = datapoints_per_rri_window
+        self.datapoints_per_mad_window = datapoints_per_mad_window
+        self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
+
+        super(LongSequenceResidualModel, self).__init__()
+
+        # Parameters
+        negative_slope_leaky_relu = 0.15
+        dropout_probability = 0.2
+
+        rri_branch_convolutional_kernel_size = 3
+        rri_branch_max_pooling_kernel_size = 2
+
+        mad_branch_convolutional_kernel_size = 3
+        mad_branch_max_pooling_kernel_size = 2
+
+        window_branch_convolutional_kernel_size = 7
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        """
+        -----------------
+        RRI Branch
+        -----------------
+        """
+
+        # Create layer structure for RRI branch
+        rri_branch_layers = []
+        for num_channel_pos in range(1, len(rri_convolutional_channels)):
+            # Convolutional layer:
+            rri_branch_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
+                out_channels = rri_convolutional_channels[num_channel_pos], 
+                kernel_size = rri_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+
+        """
+        -----------------
+        MAD Branch
+        -----------------
+        """
+
+        # Create layer structure for MAD branch
+        mad_branch_layers = []
+        for num_channel_pos in range(1, len(mad_convolutional_channels)):
+            # Convolutional layer:
+            mad_branch_layers.append(nn.Conv1d(
+                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
+                out_channels = mad_convolutional_channels[num_channel_pos], 
+                kernel_size = mad_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= mad_start_pooling:
+                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
+        
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+
+        """
+        =================================================
+        Combining Features Obtained From Signal Learning
+        =================================================
+        """
+
+        # Calculating number of remaining values after each branch: 
+
+        # Padding is chosen so that conv layer does not change size 
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
+
+        # MaxPooling is chosen so that the size of the data is halved
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
+
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
+
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
+            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
+
+        self.flatten = nn.Flatten()
+
+        """
+        ==============================
+        Joint Representation Learning
+        ==============================
+        """
+
+        # Fully connected layer after concatenation
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
+        
+        # Convolutional layers with dilations and residual connections
+        self.dilated_convolution = nn.Sequential(
+            Dilated_Residual_Block(
+                learning_features = fully_connected_features, 
+                kernel_size = window_branch_convolutional_kernel_size, 
+                convolution_dilations = convolution_dilations, 
+                negative_slope_leaky_relu = negative_slope_leaky_relu, 
+                dropout_probability = dropout_probability
+                ),
+            Dilated_Residual_Block(
+                learning_features = fully_connected_features, 
+                kernel_size = window_branch_convolutional_kernel_size, 
+                convolution_dilations = convolution_dilations, 
+                negative_slope_leaky_relu = negative_slope_leaky_relu, 
+                dropout_probability = dropout_probability
+                ),
+            )
+        
+        # Final convolutional layer to reduce to number of target classes
+        self.final = nn.Conv1d(
+            in_channels = fully_connected_features, 
+            out_channels = number_target_classes,
+            kernel_size = 1
+            )
+
+        """
+        ======================================================
+        Save Output Shape Of MAD Branch (for data without MAD)
+        ======================================================
+        """
+
+        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
+
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
+
+
+    def forward(self, rri_signal, mad_signal = None):
+        """
+        =============================================
+        Checking And Preparing Data For Forward Pass
+        =============================================
+        """
+
+        # Check Dimensions of RRI signal
+        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
+        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
+        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
+
+        # Reshape RRI signal
+        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
+        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
+
+        if mad_signal is not None:
+            # Check Dimensions of MAD signal
+            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
+            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
+            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
+
+            # Reshape MAD signal
+            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        # Process RRI Signal
+        rri_features = self.rri_signal_learning(rri_signal)
+        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
+
+        # Process MAD Signal or create 0 tensor if MAD signal is not provided
+        if mad_signal is None:
+            num_windows_mad = self.windows_per_signal
+            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
+        else:
+            mad_features = self.mad_signal_learning(mad_signal)
+        
+        """
+        ======================
+        Structural Operations
+        ======================
+        """
+
+        # Concatenate features
+        rri_mad_concatenated = torch.cat((rri_features, mad_features), dim=-1)
+
+        # Flatten features
+        rri_mad_concatenated = self.flatten(rri_mad_concatenated)
+
+        """
+        ==============================
+        Joint Representation Learning
+        ==============================
+        """
+
+        # Fully connected layer
+        output = self.linear(rri_mad_concatenated)
+
+        # Reshape for convolutional layers
+        output = output.reshape(batch_size, self.windows_per_signal, -1)
+        output = output.transpose(1, 2).contiguous()
+
+        # Dilated Convolutional layers
+        output = self.dilated_convolution(output)
+
+        # Final layer to reduce to number of target classes
+        output = self.final(output)
+
+        # Reshape output
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
+
+        return output
+
+
+class LongSequenceModel(nn.Module):
+    """
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by the architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/.
+
+    No residual connections compared to LongSequenceResidualModel.
+    """
+    def __init__(
+            self, 
+            datapoints_per_rri_window: int,
+            datapoints_per_mad_window: int,
+            windows_per_signal: int,
+            rri_convolutional_channels: list,
+            mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            fully_connected_features: int,
+            convolution_dilations: list,
+            number_target_classes: int
+            ):
+        """
+        ARGUMENTS:
+        ------------------------------
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        windows_per_signal: int
+            Number of windows in each signal
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        fully_connected_features: int
+            Number of features learned from Signal Learning
+        convolution_dilations: list
+            dilations for subsequent convolutional layers during Joint Representation Learning
+        number_target_classes: int
+            Number of predictable target classes
+        """
+
+        self.datapoints_per_rri_window = datapoints_per_rri_window
+        self.datapoints_per_mad_window = datapoints_per_mad_window
+        self.windows_per_signal = windows_per_signal
+
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = datapoints_per_rri_window,
+            mad_datapoints = datapoints_per_mad_window,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
+
+        super(LongSequenceModel, self).__init__()
+
+        # Parameters
+        negative_slope_leaky_relu = 0.15
+        dropout_probability = 0.2
+
+        rri_branch_convolutional_kernel_size = 3
+        rri_branch_max_pooling_kernel_size = 2
+
+        mad_branch_convolutional_kernel_size = 3
+        mad_branch_max_pooling_kernel_size = 2
+
+        window_branch_convolutional_kernel_size = 7
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        """
+        -----------------
+        RRI Branch
+        -----------------
+        """
+
+        # Create layer structure for RRI branch
+        rri_branch_layers = []
+        for num_channel_pos in range(1, len(rri_convolutional_channels)):
+            # Convolutional layer:
+            rri_branch_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
+                out_channels = rri_convolutional_channels[num_channel_pos], 
+                kernel_size = rri_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= rri_start_pooling:
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+
+        """
+        -----------------
+        MAD Branch
+        -----------------
+        """
+
+        # Create layer structure for MAD branch
+        mad_branch_layers = []
+        for num_channel_pos in range(1, len(mad_convolutional_channels)):
+            # Convolutional layer:
+            mad_branch_layers.append(nn.Conv1d(
+                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
+                out_channels = mad_convolutional_channels[num_channel_pos], 
+                kernel_size = mad_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= mad_start_pooling:
+                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
+        
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+
+        """
+        =================================================
+        Combining Features Obtained From Signal Learning
+        =================================================
+        """
+
+        # Calculating number of remaining values after each branch: 
+
+        # Padding is chosen so that conv layer does not change size 
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
+
+        # MaxPooling is chosen so that the size of the data is halved
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
+
+        remaining_feature_branch_values = datapoints_per_rri_window * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
+
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
+            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
+
+        self.flatten = nn.Flatten()
+
+        """
+        ==============================
+        Joint Representation Learning
+        ==============================
+        """
+
+        # Fully connected layer after concatenation
+        self.linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
+        
+        # Create layer structure for dilated convolution
+        dilated_convolution_learning_layers = []
+        for dilation in convolution_dilations:
+            # Residual block:
+            dilated_convolution_learning_layers.append(nn.Conv1d(
+                in_channels = fully_connected_features,
+                out_channels = fully_connected_features,
+                kernel_size = window_branch_convolutional_kernel_size,
+                dilation = dilation,
+                padding ='same'
+                ))
+            dilated_convolution_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            dilated_convolution_learning_layers.append(nn.Dropout(dropout_probability))
+
+        self.dilated_convolution = nn.Sequential(
+            *dilated_convolution_learning_layers,
+            *dilated_convolution_learning_layers
+            )
+        
+        # Final convolutional layer to reduce to number of target classes
+        self.final = nn.Conv1d(
+            in_channels = fully_connected_features, 
+            out_channels = number_target_classes,
+            kernel_size = 1
+            )
+
+        """
+        ======================================================
+        Save Output Shape Of MAD Branch (for data without MAD)
+        ======================================================
+        """
+
+        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
+        self.mad_values_after_signal_learning = datapoints_per_mad_window // (2 ** mad_poolings)
+
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
+
+
+    def forward(self, rri_signal, mad_signal = None):
+        """
+        =============================================
+        Checking And Preparing Data For Forward Pass
+        =============================================
+        """
+
+        # Check Dimensions of RRI signal
+        batch_size, _, num_windows_rri, samples_in_window_rri = rri_signal.size()
+        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
+        assert num_windows_rri == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_rri}."
+
+        # Reshape RRI signal
+        rri_signal = rri_signal.view(batch_size * num_windows_rri, 1, samples_in_window_rri)  # Combine batch and windows dimensions
+        # rri_signal = rri_signal.reshape(-1, 1, samples_in_window_rri) # analogous to the above line
+
+        if mad_signal is not None:
+            # Check Dimensions of MAD signal
+            _, _, num_windows_mad, samples_in_window_mad = mad_signal.size()
+            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
+            assert num_windows_mad == self.windows_per_signal, f"Expected {self.windows_per_signal} windows in each batch, but got {num_windows_mad}."
+
+            # Reshape MAD signal
+            mad_signal = mad_signal.view(batch_size * num_windows_mad, 1, samples_in_window_mad)  # Combine batch and windows dimensions
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        # Process RRI Signal
+        rri_features = self.rri_signal_learning(rri_signal)
+        #ecg_features = ecg_features.view(batch_size, num_windows, -1)  # Separate batch and windows dimensions
+
+        # Process MAD Signal or create 0 tensor if MAD signal is not provided
+        if mad_signal is None:
+            num_windows_mad = self.windows_per_signal
+            mad_features = torch.zeros(batch_size * num_windows_mad, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
+        else:
+            mad_features = self.mad_signal_learning(mad_signal)
+        
+        """
+        ======================
+        Structural Operations
+        ======================
+        """
+
+        # Concatenate features
+        rri_mad_concatenated = torch.cat((rri_features, mad_features), dim=-1)
+
+        # Flatten features
+        rri_mad_concatenated = self.flatten(rri_mad_concatenated)
+
+        """
+        ==============================
+        Joint Representation Learning
+        ==============================
+        """
+
+        # Fully connected layer
+        output = self.linear(rri_mad_concatenated)
+
+        # Reshape for convolutional layers
+        output = output.reshape(batch_size, self.windows_per_signal, -1)
+        output = output.transpose(1, 2).contiguous()
+
+        # Dilated Convolutional layers
+        output = self.dilated_convolution(output)
+
+        # Final layer to reduce to number of target classes
+        output = self.final(output)
+
+        # Reshape output
+        output = output.transpose(1, 2).contiguous().reshape(batch_size * self.windows_per_signal, -1)
+
+        return output
+
+
+class DemoShortSequenceModel(nn.Module):
     """
     Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
     https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
 
-    While YaoModel tried to recreate the architecture as good as possible, this time the architecture is 
-    modified subtly (not only to fit to the way the data is preprocessed).
-    
-    Differences to the original architecture:
-    - Window Feature Learning has different structure:
-        - Before:       1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:          2x (LeakyRelu, Conv, Dropout, ...), Conv
-        - Reason:       Adding the input after applying structure on input seemed shady
-        - Disadvantage: Loss is higher at beginning (by about 23%)
-        - Advantage:    Loss decreases quicker
+    ATTENTION:  This model should not be used. It continuosly prints out the shape of the data during the
+                forward pass. Therefore, it is only useful for debugging purposes.
     """
     def __init__(
             self, 
@@ -1984,9 +1322,8 @@ class DemoLocalIntervalModel(nn.Module):
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
             max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
+            fully_connected_features: int,
+            number_target_classes: int
             ):
         """
         ARGUMENTS:
@@ -2001,12 +1338,10 @@ class DemoLocalIntervalModel(nn.Module):
             Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
         max_pooling_layers: int
             Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
+        fully_connected_features: int
             Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
+        number_target_classes: int
+            Number of predictable target classes
         """
 
         self.datapoints_per_rri_window = rri_datapoints
@@ -2022,11 +1357,10 @@ class DemoLocalIntervalModel(nn.Module):
 
         print(f"RRI Poolings: {rri_poolings}, RRI Start Pooling: {rri_start_pooling}, MAD Poolings: {mad_poolings}, MAD Start Pooling: {mad_start_pooling}")
 
-        super(DemoLocalIntervalModel, self).__init__()
+        super(DemoShortSequenceModel, self).__init__()
 
         # Parameters
         negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
 
         rri_branch_convolutional_kernel_size = 3
         rri_branch_max_pooling_kernel_size = 2
@@ -2117,38 +1451,19 @@ class DemoLocalIntervalModel(nn.Module):
         self.flatten = nn.Flatten()
 
         """
-        ========================
-        Window Feature Learning
-        ========================
+        ==============================
+        Joint Representation Learning
+        ==============================
         """
 
-        # Fully connected layer after concatenation
+        # Fully Connected Layer after Concatenation
         self.linear = nn.Sequential(
-            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
             nn.LeakyReLU(negative_slope_leaky_relu)
         )
-
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = 1, 
-                out_channels = 1, 
-                kernel_size = number_window_learning_features, 
-                dilation = dilation,
-                padding ='same'
-                ))
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
         
-        self.window_feature_learning = nn.Sequential(
-            *window_feature_learning_layers,
-            *window_feature_learning_layers,
-            )
-        
-        # Final Fully connected layer
-        self.final = nn.Linear(number_window_learning_features, number_sleep_stages)
+        # Final Fully Connected Layer
+        self.final = nn.Linear(fully_connected_features, number_target_classes)
 
         """
         =======================================================
@@ -2203,62 +1518,40 @@ class DemoLocalIntervalModel(nn.Module):
         print(f"MAD features: {mad_features.size()}")  # Debugging line
         
         """
-        =======================
-        Create Window Features
-        =======================
+        ======================
+        Structural Operations
+        ======================
         """
 
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
-        print(f"Window features (RRI and MAD concatenated): {window_features.size()}")  # Debugging line
+        # Concatenate Features
+        rri_mad_concatenated = torch.cat((rri_features, mad_features), dim=-1)
+        print(f"Window features (RRI and MAD concatenated): {rri_mad_concatenated.size()}")  # Debugging line
 
-        # Flatten features
-        window_features = self.flatten(window_features)
-        print(f"Flattened window features: {window_features.size()}")  # Debugging line
+        # Flatten Features
+        rri_mad_concatenated = self.flatten(rri_mad_concatenated)
+        print(f"Flattened window features: {rri_mad_concatenated.size()}")  # Debugging line
 
         """
-        ========================
-        Window Feature Learning
-        ========================
+        ==============================
+        Joint Representation Learning
+        ==============================
         """
 
-        # Fully connected layer
-        output = self.linear(window_features)
+        # Fully Connected Layer
+        output = self.linear(rri_mad_concatenated)
         print(f"Output after linear layer: {output.size()}")
 
-        # Reshape for convolutional layers
-        output = output.unsqueeze(1)
-        print(f"Output reshaped for convolutional layers: {output.size()}")  # Debugging line
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-        print(f"Output after window feature learning: {output.size()}")  # Debugging line
-
-        # Reshape for final fully connected layer
-        output = output.squeeze(1)
-        print(f"Output reshaped for final layer: {output.size()}")
-        
+        # Final Fully Connected Layer
         output = self.final(output)
         print(f"Output after final layer: {output.size()}")
 
         return output
 
 
-class LocalIntervalModel(nn.Module):
+class ShortSequenceModel(nn.Module):
     """
     Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
     https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
-
-    While YaoModel tried to recreate the architecture as good as possible, this time the architecture is 
-    modified subtly (not only to fit to the way the data is preprocessed).
-    
-    Differences to the original architecture:
-    - Window Feature Learning has different structure:
-        - Before:       1x Window_Learning [input + (LeakyReLU, Conv, Dropout, ...) applied on input], Conv
-        - Now:          2x (LeakyRelu, Conv, Dropout, ...), Conv
-        - Reason:       Adding the input after applying structure on input seemed shady
-        - Disadvantage: Loss is higher at beginning (by about 23%)
-        - Advantage:    Loss decreases quicker
     """
     def __init__(
             self, 
@@ -2267,9 +1560,8 @@ class LocalIntervalModel(nn.Module):
             rri_convolutional_channels: list,
             mad_convolutional_channels: list,
             max_pooling_layers: int,
-            number_window_learning_features: int,
-            window_learning_dilations: list,
-            number_sleep_stages: int
+            fully_connected_features: int,
+            number_target_classes: int
             ):
         """
         ARGUMENTS:
@@ -2284,12 +1576,10 @@ class LocalIntervalModel(nn.Module):
             Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
         max_pooling_layers: int
             Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
-        number_window_learning_features: int
+        fully_connected_features: int
             Number of features learned from Signal Learning
-        window_learning_dilations: list
-            dilations for subsequent convolutional layers during Window Learning
-        number_sleep_stages: int
-            Number of predictable sleep stages
+        number_target_classes: int
+            Number of predictable target classes
         """
 
         self.datapoints_per_rri_window = rri_datapoints
@@ -2303,11 +1593,10 @@ class LocalIntervalModel(nn.Module):
             max_pooling_layers = max_pooling_layers
         )
 
-        super(LocalIntervalModel, self).__init__()
+        super(ShortSequenceModel, self).__init__()
 
         # Parameters
         negative_slope_leaky_relu = 0.15
-        dropout_probability = 0.2
 
         rri_branch_convolutional_kernel_size = 3
         rri_branch_max_pooling_kernel_size = 2
@@ -2398,39 +1687,19 @@ class LocalIntervalModel(nn.Module):
         self.flatten = nn.Flatten()
 
         """
-        ========================
-        Window Feature Learning
-        ========================
+        ==============================
+        Joint Representation Learning
+        ==============================
         """
 
-        # Fully connected layer after concatenation
+        # Fully Connected Layer after Concatenation
         self.linear = nn.Sequential(
-            nn.Linear(remaining_values_after_signal_learning, number_window_learning_features),
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
             nn.LeakyReLU(negative_slope_leaky_relu)
         )
         
-        # Create layer structure for Window Feature Learning
-        window_feature_learning_layers = []
-        window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-        for dilation in window_learning_dilations:
-            # Residual block:
-            window_feature_learning_layers.append(nn.Conv1d(
-                in_channels = 1, 
-                out_channels = 1, 
-                kernel_size = number_window_learning_features, 
-                dilation = dilation,
-                padding ='same'
-                ))
-            window_feature_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
-            window_feature_learning_layers.append(nn.Dropout(dropout_probability))
-        
-        self.window_feature_learning = nn.Sequential(
-            *window_feature_learning_layers,
-            *window_feature_learning_layers,
-            )
-        
-        # Final Fully connected layer
-        self.final = nn.Linear(number_window_learning_features, number_sleep_stages)
+        # Final Fully Connected Layer
+        self.final = nn.Linear(fully_connected_features, number_target_classes)
 
         """
         =======================================================
@@ -2478,16 +1747,174 @@ class LocalIntervalModel(nn.Module):
             mad_features = self.mad_signal_learning(mad_signal)
         
         """
-        =======================
-        Create Window Features
-        =======================
+        ======================
+        Structural Operations
+        ======================
         """
 
-        # Concatenate features
-        window_features = torch.cat((rri_features, mad_features), dim=-1)
+        # Concatenate Features
+        rri_mad_concatenated = torch.cat((rri_features, mad_features), dim=-1)
 
-        # Flatten features
-        window_features = self.flatten(window_features)
+        # Flatten Features
+        rri_mad_concatenated = self.flatten(rri_mad_concatenated)
+
+        """
+        ==============================
+        Joint Representation Learning
+        ==============================
+        """
+
+        # Fully Connected Layer
+        output = self.linear(rri_mad_concatenated)
+
+        # Final Fully Connected Layer
+        output = self.final(output)
+
+        return output
+
+
+class DemoResidualModel(nn.Module):
+    """
+    Deep Convolutional Neural Network for Sleep Stage Prediction. Inspired by architecture of:
+    https://github.com/AlexMa123/DCNN-SHHS/blob/main/DCNN_SHHS/
+
+    ATTENTION:  This model should not be used. It continuosly prints out the shape of the data during the
+                forward pass. Therefore, it is only useful for debugging purposes.
+    """
+    def __init__(
+            self,
+            rri_datapoints: int,
+            mad_datapoints: int,
+            rri_convolutional_channels: list,
+            mad_convolutional_channels: list,
+            max_pooling_layers: int,
+            fully_connected_features: int,
+            number_target_classes: int
+            ):
+        """
+        ARGUMENTS:
+        ------------------------------
+        rri_datapoints: int
+            Number of RRI data points
+        mad_datapoints: int
+            Number of MAD data points
+        rri_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to RRI signal
+        mad_convolutional_channels: list
+            Number of output channels in subsequent 1D-convolutional layers applied to MAD signal
+        max_pooling_layers: int
+            Number of maximum pooling layers applied to RRI signal inbetween beforementioned convolutional layers
+        fully_connected_features: int
+            Number of features learned from Signal Learning
+        number_sleep_stages: int
+            Number of predictable sleep stages
+        """
+
+        self.datapoints_per_rri_window = rri_datapoints
+        self.datapoints_per_mad_window = mad_datapoints
+
+        rri_poolings, rri_start_pooling, mad_poolings, mad_start_pooling = calculate_pooling_layer_start(
+            rri_datapoints = rri_datapoints,
+            mad_datapoints = mad_datapoints,
+            rri_convolutional_channels = rri_convolutional_channels,
+            mad_convolutional_channels = mad_convolutional_channels,
+            max_pooling_layers = max_pooling_layers
+        )
+
+        print(f"RRI Poolings: {rri_poolings}, RRI Start Pooling: {rri_start_pooling}, MAD Poolings: {mad_poolings}, MAD Start Pooling: {mad_start_pooling}")
+
+        super(DemoResidualModel, self).__init__()
+
+        # Parameters
+        negative_slope_leaky_relu = 0.15
+
+        rri_branch_convolutional_kernel_size = 3
+        rri_branch_max_pooling_kernel_size = 2
+
+        mad_branch_convolutional_kernel_size = 3
+        mad_branch_max_pooling_kernel_size = 2
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        """
+        -----------------
+        RRI Branch
+        -----------------
+        """
+
+        # Create layer structure for RRI branch
+        rri_branch_layers = []
+        for num_channel_pos in range(1, len(rri_convolutional_channels)):
+            # Convolutional layer:
+            rri_branch_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[num_channel_pos - 1], 
+                out_channels = rri_convolutional_channels[num_channel_pos], 
+                kernel_size = rri_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            # rri_branch_layers.append(nn.BatchNorm1d(rri_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            rri_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= rri_start_pooling:  # Last two layers have pooling
+                rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
+
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+
+        """
+        -----------------
+        MAD Branch
+        -----------------
+        """
+
+        # Create layer structure for MAD branch
+        mad_branch_layers = []
+        for num_channel_pos in range(1, len(mad_convolutional_channels)):
+            # Convolutional layer:
+            mad_branch_layers.append(nn.Conv1d(
+                in_channels = mad_convolutional_channels[num_channel_pos - 1], 
+                out_channels = mad_convolutional_channels[num_channel_pos], 
+                kernel_size = mad_branch_convolutional_kernel_size, 
+                padding='same'
+                ))
+            # Batch normalization:
+            # mad_branch_layers.append(nn.BatchNorm1d(mad_convolutional_channels[num_channel_pos]))
+            # Activation function:
+            mad_branch_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            # Pooling layer:
+            if num_channel_pos >= mad_start_pooling:
+                mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
+        
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+
+        """
+        =================================================
+        Combining Features Obtained From Signal Learning
+        =================================================
+        """
+
+        # Calculating number of remaining values after each branch: 
+
+        # Padding is chosen so that conv layer does not change size 
+        # -> datapoints before branch must be multiplied by the number of channels of the last conv layer
+
+        # MaxPooling is chosen so that the size of the data is halved
+        # -> datapoints after rri branch must be divided by (2 ** number of pooling layers applied to rri branch)
+        # -> number of pooling operations for mad branch were chosen so that result matches the shape of the rri branchs result
+
+        remaining_feature_branch_values = rri_datapoints * rri_convolutional_channels[-1] // (2 ** (rri_poolings))
+
+        if int(remaining_feature_branch_values) != remaining_feature_branch_values:
+            raise ValueError("Number of remaining values after RRI branch must be an integer. Something went wrong.")
+
+        remaining_values_after_signal_learning = 2 * int(remaining_feature_branch_values)
+
+        self.flatten = nn.Flatten(start_dim=0)
 
         """
         ========================
@@ -2495,19 +1922,110 @@ class LocalIntervalModel(nn.Module):
         ========================
         """
 
-        # Fully connected layer
-        output = self.linear(window_features)
+        # Fully connected layer after concatenation
+        self.rri_mad_linear = nn.Sequential(
+            nn.Linear(remaining_values_after_signal_learning, fully_connected_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
 
-        # Reshape for convolutional layers
-        output = output.unsqueeze(1)
-
-        # Convolutional layers
-        output = self.window_feature_learning(output)
-
-        # Reshape for final fully connected layer
-        output = output.squeeze(1)
+        self.residual_linear = nn.Sequential(
+            nn.Linear(fully_connected_features*2, fully_connected_features),
+            nn.LeakyReLU(negative_slope_leaky_relu)
+        )
         
+        # Final Fully connected layer
+        self.final = nn.Linear(fully_connected_features, number_target_classes)
+
+        """
+        =======================================================
+        Save Output Shape Of MAD Branch (for data without MAD)
+        =======================================================
+        """
+
+        self.mad_channels_after_signal_learning = mad_convolutional_channels[-1]
+        self.mad_values_after_signal_learning = mad_datapoints // (2 ** mad_poolings)
+
+        if int(self.mad_values_after_signal_learning) != self.mad_values_after_signal_learning:
+            raise ValueError("Number of remaining values after MAD branch must be an integer. Something went wrong.")
+        self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
+
+
+    def forward(self, residual_features, residual_features_depth, rri_signal, mad_signal = None):
+        """
+        =============================================
+        Checking And Preparing Data For Forward Pass
+        =============================================
+        """
+
+        # Check Dimensions of RRI signal
+        _, samples_in_window_rri = rri_signal.size()
+        assert samples_in_window_rri == self.datapoints_per_rri_window, f"Expected {self.datapoints_per_rri_window} data points in each RRI window, but got {samples_in_window_rri}."
+
+        if mad_signal is not None:
+            # Check Dimensions of MAD signal
+            _, samples_in_window_mad = mad_signal.size()
+            assert samples_in_window_mad == self.datapoints_per_mad_window, f"Expected {self.datapoints_per_mad_window} data points in each MAD window, but got {samples_in_window_mad}."
+
+        """
+        ========================
+        Signal Feature Learning
+        ========================
+        """
+
+        print(f"RRI input signal: {rri_signal.size()}")  # Debugging line
+        
+        # Process RRI Signal
+        rri_features = self.rri_signal_learning(rri_signal)
+        print(f"RRI features: {rri_features.size()}")  # Debugging line
+
+        print(f"MAD input signal: {mad_signal.size() if mad_signal is not None else 'None'}")  # Debugging line
+
+        # Process MAD Signal or create 0 tensor if MAD signal is not provided
+        if mad_signal is None:
+            mad_features = torch.zeros(batch_size, self.mad_channels_after_signal_learning, self.mad_values_after_signal_learning, device=rri_signal.device) # type: ignore
+        else:
+            mad_features = self.mad_signal_learning(mad_signal)
+
+        print(f"MAD features: {mad_features.size()}")  # Debugging line
+        
+        """
+        ===========================
+        Concatenate Signal Features
+        ===========================
+        """
+
+        # Concatenate features
+        rri_and_mad = torch.cat((rri_features, mad_features), dim=-1)
+        print(f"RRI and MAD concatenated: {rri_and_mad.size()}")  # Debugging line
+
+        # Flatten features
+        rri_and_mad = self.flatten(rri_and_mad)
+        print(f"Flattened concatenated features: {rri_and_mad.size()}")  # Debugging line
+
+        """
+        ==================
+        Combined Learning
+        ==================
+        """
+
+        # Fully connected layer
+        rri_and_mad_fully_connected = self.rri_mad_linear(rri_and_mad)
+        print(f"Output after linear layer: {rri_and_mad_fully_connected.size()}")
+
+        # Extract residual features output
+        output_residual_features = residual_features + rri_and_mad_fully_connected
+        print(f"Residual Features output: {output_residual_features.size()}")
+
+        # Concatenate residual features with output
+        included_residual_features = torch.cat((residual_features / residual_features_depth, rri_and_mad_fully_connected), dim=0)
+        print(f"Included residual features: {included_residual_features.size()}")
+
+        # Fully connected layer
+        output = self.residual_linear(included_residual_features)
+        print(f"Output after linear layer: {output.size()}")
+
         output = self.final(output)
+        print(f"Output after final layer: {output.size()}")
 
         return output
 
@@ -2568,7 +2086,7 @@ class CosineScheduler:
         """
 
         increase = self.max_learning_rate - self.start_learning_rate
-        increase *= epoch / self.number_increase_lr
+        increase *= (epoch-1) / (self.number_increase_lr-1)
         return increase
 
     def cosine_lr_decay(self, epoch):
@@ -2799,7 +2317,7 @@ if __name__ == "__main__":
     print("="*80)
     # creating dataset file and data manager instance on it
     random_directory_path = "Testing_NNM/"
-    random_data_manager = SleepDataManager(directory_path = random_directory_path)
+    random_data_manager = BigDataManager(directory_path = random_directory_path)
     random_sleep_stage_labels = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # creating and saving random data to file
@@ -2858,7 +2376,7 @@ if __name__ == "__main__":
     print("")
 
     # Create dataset
-    dataset = CustomSleepDataset(
+    dataset = AccessTransformDataset(
         path_to_data_directory = random_directory_path,
         pid = "main",
         slp_label_mapping = slp_label_mapping,
@@ -2929,23 +2447,23 @@ if __name__ == "__main__":
     print(f"Using {device} device")
 
     """
-    Full Night Sleep Stage Models:
+    Long-Sequence Models:
     """
-    print("\nFull Night Sleep Stage Models:")
+    print("\nLong-Sequence Models:")
     print("-"*80)
 
     # Define the Neural Network
-    DCNN = DemoWholeNightModel(
+    DCNN = DemoLongSequenceModel(
         datapoints_per_rri_window = 480, 
         datapoints_per_mad_window = 120,
         windows_per_signal = 1197,
         rri_convolutional_channels = [1, 8, 16, 32, 64],
         mad_convolutional_channels = [1, 8, 16, 32, 64],
         max_pooling_layers = 5,
-        number_window_learning_features = 128,
-        window_learning_dilations = [2, 4, 8, 16, 32],
-        number_sleep_stages = 4
-        ) # SleepStageModel, YaoModel, SleepStageModelNew
+        fully_connected_features = 128,
+        convolution_dilations = [2, 4, 8, 16, 32],
+        number_target_classes = 4
+        ) # LongSequenceModel, LongSequenceResidualModel
     DCNN.to(device)
 
     # Create example data
@@ -2964,24 +2482,23 @@ if __name__ == "__main__":
     print(output.shape)
 
     """
-    Local (Short Time) Sleep Stage Models:
+    Short-Sequence Models:
     """
 
-    print("\nLocal (Short Time) Sleep Stage Models:")
+    print("\nShort-Sequence Models:")
     print("-"*80)
 
     seconds = 120
 
     # Define the Neural Network
-    DCNN = DemoLocalIntervalModel(
+    DCNN = DemoShortSequenceModel(
         rri_datapoints = seconds * 4,  # 4 Hz sampling rate
         mad_datapoints = seconds,  # 1 Hz sampling rate
         rri_convolutional_channels = [1, 8, 16, 32, 64],
         mad_convolutional_channels = [1, 8, 16, 32, 64],
         max_pooling_layers = 5,
-        number_window_learning_features = 128,
-        window_learning_dilations = [2, 4, 8, 16, 32],
-        number_sleep_stages = 4
+        fully_connected_features = 128,
+        number_target_classes = 4
         )
     DCNN.to(device)
 
@@ -2997,6 +2514,46 @@ if __name__ == "__main__":
 
     # Pass data through the model
     output = DCNN(rri_example, mad_example)
+    print("-"*80)
+    print(output.shape)
+
+    print("="*80)
+
+    """
+    Local (Short Time) Sleep Stage Models:
+    """
+
+    print("\nResidual Models:")
+    print("-"*80)
+
+    seconds = 120
+    fully_connected_features = 128
+
+    # Define the Neural Network
+    DCNN = DemoResidualModel(
+        rri_datapoints = seconds * 4,  # 4 Hz sampling rate
+        mad_datapoints = seconds,  # 1 Hz sampling rate
+        rri_convolutional_channels = [1, 8, 16, 32, 64],
+        mad_convolutional_channels = [1, 8, 16, 32, 64],
+        max_pooling_layers = 5,
+        fully_connected_features = fully_connected_features,
+        number_target_classes = 4
+        )
+    DCNN.to(device)
+
+    # Create example data
+    rri_example = torch.rand((1, seconds * 4), device=device)
+    mad_example = torch.rand((1, seconds), device=device)
+    residual_features = torch.rand((fully_connected_features), device=device)
+    # mad_example = None # uncomment to test data without MAD signal
+
+    # Send data to device
+    rri_example = rri_example.to(device)
+    if mad_example is not None:
+        mad_example = mad_example.to(device)
+
+    # Pass data through the model
+    output = DCNN(residual_features, 1, rri_example, mad_example)
     print("-"*80)
     print(output.shape)
 

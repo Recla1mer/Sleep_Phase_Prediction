@@ -908,6 +908,8 @@ def find_suitable_window_parameters(
     for num_win in range(number_windows_range[0], number_windows_range[1]):
         for win_size in range(window_size_range[0], window_size_range[1]):
             window_overlap = calculate_overlap(signal_length, num_win, win_size)
+            if window_overlap < 0:
+                continue
             if int(window_overlap) == window_overlap and win_size - window_overlap >= minimum_window_size_overlap_difference:
                 if not window_parameters_found:
                     window_parameters_found = True
@@ -1586,7 +1588,7 @@ Data Manager Class
 ===================
 """
 
-class SleepDataManager:
+class BigDataManager:
     # Define class variables
     signal_keys = ["RRI", "MAD", "SLP", "SLP_predicted", "SLP_predicted_probability"]
     signal_frequency_keys = ["RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_frequency", "SLP_frequency"] # same order is important
@@ -1595,7 +1597,7 @@ class SleepDataManager:
     database_configuration["RRI_frequency"] = 4
     database_configuration["MAD_frequency"] = 1
     database_configuration["SLP_frequency"] = 1/30
-    database_configuration["sleep_stage_label"] = None
+    database_configuration["target_classes"] = None
 
     database_configuration["signal_length_seconds"] = None
     database_configuration["shift_length_seconds_interval"] = None
@@ -1708,7 +1710,7 @@ class SleepDataManager:
         if "ID" not in new_data:
             raise ValueError("The ID key: \"ID\" must be provided in the datapoint.")
         
-        valid_datapoint_keys = ["ID", "sleep_stage_label", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability"]
+        valid_datapoint_keys = ["ID", "target_classes", "RRI", "MAD", "SLP", "RRI_frequency", "MAD_frequency", "SLP_frequency", "SLP_predicted", "SLP_predicted_probability"]
         
         # Check if ID key is misleading
         if new_data["ID"] in valid_datapoint_keys:
@@ -1738,17 +1740,17 @@ class SleepDataManager:
                 raise ValueError(f"If you want to add a {signal_key} Signal (key: \"{signal_key}\"), then you must also provide the sampling frequency: \"{signal_frequency_key}\" !")
             
         # Check if declaration of sleep stage labels was provided when SLP signal is provided
-        if "SLP" in new_data and "sleep_stage_label" not in new_data:
-            raise ValueError("If you provide a SLP signal, you must also provide the sleep stage labels!")
+        if "SLP" in new_data and "target_classes" not in new_data:
+            raise ValueError("If you provide a SLP signal, you must also provide the target classes!")
 
-        if "sleep_stage_label" in new_data:
-            # initialize sleep stage label if not set yet
-            if self.database_configuration["sleep_stage_label"] is None:
-                self.database_configuration["sleep_stage_label"] = new_data["sleep_stage_label"]
+        if "target_classes" in new_data:
+            # initialize target classes if not set yet
+            if self.database_configuration["target_classes"] is None:
+                self.database_configuration["target_classes"] = new_data["target_classes"]
                 save_to_pickle(self.database_configuration, self.configuration_path)
-            if self.database_configuration["sleep_stage_label"] != new_data["sleep_stage_label"]:
-                raise ValueError("The sleep stage label in the new datapoint does not match the uniform one of your previously saved datapoints.")
-            del new_data["sleep_stage_label"]
+            if self.database_configuration["target_classes"] != new_data["target_classes"]:
+                raise ValueError("The target classes in the new datapoint do not match the uniform one of your previously saved datapoints.")
+            del new_data["target_classes"]
 
         """
         -------------------------------
@@ -1952,7 +1954,7 @@ class SleepDataManager:
             "RRI_frequency": int,       # required if RRI signal is provided
             "MAD_frequency": int,       # required if MAD signal is provided
             "SLP_frequency": int,       # required if SLP signal is provided
-            "sleep_stage_label": list   # required if SLP signal is provided
+            "target_classes": list   # required if SLP signal is provided
         }
 
         RETURNS:
@@ -2263,7 +2265,7 @@ class SleepDataManager:
             self._remove_offsets()
             
             # restore database configuration to default values
-            self.database_configuration["sleep_stage_label"] = None
+            self.database_configuration["target_classes"] = None
             self.database_configuration["signal_length_seconds"] = None
             self.database_configuration["shift_length_seconds_interval"] = None
             save_to_pickle(self.database_configuration, self.configuration_path)
@@ -3188,7 +3190,7 @@ class SleepDataManager:
         
         self._remove_offsets()
 
-        self.database_configuration["sleep_stage_label"] = None
+        self.database_configuration["target_classes"] = None
         self.database_configuration["signal_length_seconds"] = None
         self.database_configuration["shift_length_seconds_interval"] = None
         self.database_configuration["number_datapoints"] = [0 for _ in range(len(self.pid_paths))]
@@ -3377,528 +3379,3 @@ class SleepDataManager:
         current_file_path = self.pid_paths[self.current_pid]
 
         return f"File path: {current_file_path}\nDatabase Configuration: {self.database_configuration}"
-
-
-# import h5py
-# import matplotlib.pyplot as plt
-
-if False:
-    def pool(arr, pool_size, func):
-        """
-        Apply average pooling to the input array.
-
-        RETURNS:
-        ------------------------------
-        pooled: np.ndarray
-            The pooled array.
-        
-        ARGUMENTS:
-        ------------------------------
-        arr: np.ndarray
-            The input array to be pooled.
-        pool_size: int
-            The size of the pooling window.
-        """
-        arr = np.array(arr)
-        arr = arr / np.max(arr)
-
-        step_size = int(pool_size*0.8)
-        pooled_arr = []
-        for i in range(0, len(arr)-pool_size+1, step_size):
-            pooled_arr.append(func(arr[i:i+pool_size]))
-
-        return np.array(pooled_arr)
-    
-
-    print("Compare Yaopeng to my data")
-    # access the GIF dataset
-    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    rri_distances = []
-    mad_distances = []
-
-    min_rri_values = []
-    min_mad_values = []
-
-    max_rri_values = []
-    max_mad_values = []
-
-    rri_pool_min_distances = []
-    rri_pool_max_distances = []
-    rri_pool_mean_distances = []
-
-    mad_pool_min_distances = []
-    mad_pool_max_distances = []
-    mad_pool_mean_distances = []
-
-    unfound = 0
-    found = 0
-
-    total_mad = 0
-    total_rri = 0
-    count_rri = 0
-    count_mad = 0
-
-    for patient_id in patients:
-        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-        slp_h5 = np.array(slp_h5, dtype = int)
-        rri_h5 = gif_dataset["rri"][patient_id][:] # type: ignore
-        mad_h5 = gif_dataset["mad"][patient_id][:] # type: ignore
-
-        total_mad += np.sum(mad_h5) # type: ignore
-        total_rri += np.sum(rri_h5) # type: ignore
-        count_mad += len(mad_h5) # type: ignore
-        count_rri += len(rri_h5) # type: ignore
-
-        # access my derived dataset
-        gif_generator = load_from_pickle("RAW_Data/gif_separated.pkl")
-
-        slp_mine = list()
-        rri_mine = list()
-        mad_mine = list()
-
-        for data_dict in gif_generator:
-            if patient_id in data_dict["ID"]:
-                slp_mine.append(data_dict["SLP"])
-                rri_mine.append(data_dict["RRI"])
-                mad_mine.append(data_dict["MAD"])
-        
-        if len(slp_mine) == 0:
-            print(f"Patient {patient_id} not found in my dataset.")
-            continue
-        
-        for i in range(len(slp_mine)):
-            this_slp_mine = np.array(slp_mine[i], dtype = int)
-            this_rri_mine = np.array(rri_mine[i], dtype = float)
-            this_mad_mine = np.array(mad_mine[i], dtype = float)
-
-            if np.mean(this_slp_mine) < 0.5:
-                continue
-
-            # add border that skips short segments?
-            if len(this_mad_mine) <= 4*3600:
-                continue
-
-            found_slp = False
-            for j in range(len(slp_h5)-len(this_slp_mine)):
-                upper_border = j + len(this_slp_mine)
-                if upper_border > len(slp_h5):
-                    break
-                if np.sum(np.abs(slp_h5[j:upper_border] - this_slp_mine)) == 0:
-                    found_slp = True
-                    break
-            
-            if found_slp:
-                # plot mad
-                weird = 6
-                
-                # fig, ax = plt.subplots()
-                # ax.plot(this_mad_mine, label="My MAD")
-                # ax.plot(mad_h5[j*30+weird:upper_border*30+weird], label="GIF MAD") # type: ignore
-                # ax.legend()
-                # plt.show()
-
-                pool_size = 30
-
-                rri_h5_pool_max = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.max) # type: ignore
-                rri_h5_pool_min = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.min) # type: ignore
-                rri_h5_pool_mean = pool(rri_h5[j*120:upper_border*120], pool_size*4, np.mean) # type: ignore
-
-                rri_mine_pool_max = pool(this_rri_mine, pool_size*4, np.max)
-                rri_mine_pool_min = pool(this_rri_mine, pool_size*4, np.min)
-                rri_mine_pool_mean = pool(this_rri_mine, pool_size*4, np.mean)
-
-                # pool_max_values_rri = np.array([max(rri_h5_pool_max[q], rri_mine_pool_max[q], 0.0000001) for q in range(len(rri_h5_pool_max))])
-                pool_max_values_rri = np.array([1 for q in range(len(rri_h5_pool_max))])
-
-                # pool_min_values_rri = np.array([min(rri_h5_pool_min[q], rri_mine_pool_min[q]) for q in range(len(rri_h5_pool_min))])
-                # pool_mean_values_rri = np.array([np.mean([rri_h5_pool_mean[q], rri_mine_pool_mean[q]]) for q in range(len(rri_h5_pool_mean))])
-
-                rri_pool_max_distances.extend(np.abs(rri_h5_pool_max - rri_mine_pool_max) / pool_max_values_rri)
-                rri_pool_min_distances.extend(np.abs(rri_h5_pool_min - rri_mine_pool_min) / pool_max_values_rri)
-                rri_pool_mean_distances.extend(np.abs(rri_h5_pool_mean - rri_mine_pool_mean) / pool_max_values_rri)
-
-                mad_h5_pool_max = pool(mad_h5[j*30:upper_border*30], pool_size, np.max) # type: ignore
-                mad_h5_pool_min = pool(mad_h5[j*30:upper_border*30], pool_size, np.min) # type: ignore
-                mad_h5_pool_mean = pool(mad_h5[j*30:upper_border*30], pool_size, np.mean) # type: ignore
-
-                mad_mine_pool_max = pool(this_mad_mine, pool_size, np.max)
-                mad_mine_pool_min = pool(this_mad_mine, pool_size, np.min)
-                mad_mine_pool_mean = pool(this_mad_mine, pool_size, np.mean)
-
-                # pool_max_values_mad = np.array([max(mad_h5_pool_max[q], mad_mine_pool_max[q], 0.0000001) for q in range(len(mad_h5_pool_max))])
-                pool_max_values_mad = np.array([1 for q in range(len(mad_h5_pool_max))])
-
-                # pool_min_values_mad = np.array([min(mad_h5_pool_min[q], mad_mine_pool_min[q]) for q in range(len(mad_h5_pool_min))])
-                # pool_mean_values_mad = np.array([np.mean([mad_h5_pool_mean[q], mad_mine_pool_mean[q]]) for q in range(len(mad_h5_pool_mean))])
-
-                mad_pool_max_distances.extend(np.abs(mad_h5_pool_max - mad_mine_pool_max) / pool_max_values_mad)
-                mad_pool_min_distances.extend(np.abs(mad_h5_pool_min - mad_mine_pool_min) / pool_max_values_mad)
-                mad_pool_mean_distances.extend(np.abs(mad_h5_pool_mean - mad_mine_pool_mean) / pool_max_values_mad)
-
-                """
-                rri_distance = np.abs(rri_h5[j*120:upper_border*120] - this_rri_mine) # type: ignore
-                mad_distance = np.abs(mad_h5[j*30+weird:upper_border*30+weird] - this_mad_mine) # type: ignore
-                better_mad_distance = np.abs([np.mean(mad_h5[j*30+weird+k:j*30+weird+10]) - np.mean(this_mad_mine[k:k+10]) for k in range(0, len(this_mad_mine)-10, 10)]) # type: ignore
-                # print(better_mad_distance)
-                rri_distances.extend(list(rri_distance))
-                # mad_distances.extend(list(mad_distance))
-                mad_distances.extend(list(better_mad_distance))
-
-                min_rri_values.extend([min(rri_h5[j*120+k], this_rri_mine[k]) for k in range(len(this_rri_mine))]) # type: ignore
-                min_mad_values.extend([min(mad_h5[j*30+k], this_mad_mine[k]) for k in range(len(this_mad_mine))]) # type: ignore
-                max_rri_values.extend([max(rri_h5[j*120+k], this_rri_mine[k]) for k in range(len(this_rri_mine))]) # type: ignore
-                max_mad_values.extend([max(mad_h5[j*30+k], this_mad_mine[k]) for k in range(len(this_mad_mine))]) # type: ignore
-                """
-
-                found += len(this_slp_mine)*30
-            else:
-                unfound += len(this_slp_mine)*30
-
-        # print(f"{patient_id}: {np.mean(rri_distances)}, {np.mean(mad_distances)}, {np.abs(np.mean(this_mad_mine)-np.mean(mad_h5[j*30:upper_border*30]))}", end="\r") # type: ignore
-        # break
-
-    # print(f"{np.mean(rri_distances)}, {np.mean(mad_distances)}")
-
-    mean_mad = total_mad / count_mad
-    mean_rri = total_rri / count_rri
-
-    print(f"\nMean MAD: {mean_mad}, Mean RRI: {mean_rri}")
-
-    print(f"\nFound {found} seconds of data, unfound {unfound} seconds of data. Found Ratio: {round(found/(found+unfound), 3)}")
-
-    for i in range(len(min_rri_values)):
-        if min_rri_values[i] == 0:
-            min_rri_values[i] = mean_rri
-        if max_rri_values[i] == 0:
-            max_rri_values[i] = mean_rri
-    
-    for i in range(len(min_mad_values)):
-        if min_mad_values[i] == 0:
-            min_mad_values[i] = mean_mad
-        if max_mad_values[i] == 0:
-            max_mad_values[i] = mean_mad
-    
-    # rri_deviation_to_min = np.mean(np.array(rri_distances) / np.array(min_rri_values))
-    # mad_deviation_to_min = np.mean(np.array(mad_distances) / np.array(min_mad_values))
-    # rri_deviation_to_max = np.mean(np.array(rri_distances) / np.array(max_rri_values))
-    # mad_deviation_to_max = np.mean(np.array(mad_distances) / np.array(max_mad_values))
-
-    # print(f"\nRRI deviation to min: {rri_deviation_to_min}")
-    # print(f"MAD deviation to min: {mad_deviation_to_min}")
-    # print(f"RRI deviation to max: {rri_deviation_to_max}")
-    # print(f"MAD deviation to max: {mad_deviation_to_max}")
-
-    print(f"\nRRI MIN Pool Mean Deviation: {np.mean(rri_pool_min_distances)}")
-    print(f"RRI MAX Pool Mean Deviation: {np.mean(rri_pool_max_distances)}")
-    print(f"RRI MEAN Pool Mean Deviation: {np.mean(rri_pool_mean_distances)}")
-
-    print(f"\nMAD MIN Pool Mean Deviation: {np.mean(mad_pool_min_distances)}")
-    print(f"MAD MAX Pool Mean Deviation: {np.mean(mad_pool_max_distances)}")
-    print(f"MAD MEAN Pool Mean Deviation: {np.mean(mad_pool_mean_distances)}")
-
-if False:
-    patient_id = "SL003"
-
-    # access the GIF dataset
-    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-    slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-    slp_h5 = np.array(slp_h5, dtype = int)
-
-    # access the SLP file
-    path = "/Users/propeter/Downloads/stuff/PSG/" + patient_id + ".slp"
-    file = open(path, "rb")
-    slp = file.readlines()
-    slp_stages = list()
-    for line in slp:
-        slp_stages.append(line.decode("utf-8").strip().split("\t")[0]) # type: ignore
-    slp_stages.pop(0) # remove header
-    slp_stages.pop(-1)
-    slp_stages = np.array(slp_stages, dtype = int)
-    file.close()
-
-    # find match
-    found_match_bool = False
-    for i in range(0, len(slp_h5) - len(slp_stages)): # type: ignore
-        if np.sum(slp_h5[i:i+len(slp_stages)] - slp_stages) == 0:
-            found_match_bool = True
-            break
-    
-    print("Len h5:", len(slp_h5)*30/3600, "Len", len(slp_stages)*30/3600) # type: ignore
-
-    if found_match_bool:
-        print("Lights out: ", i*30/3600)
-        print("Lights on: ", (i + len(slp_stages))*30/3600)
-
-
-if False:
-    # slp = np.array([0, 1, 2, 3, 4, 5, 6])
-    # slp[slp>=1] = slp[slp>=1] - 1
-    # slp[slp==4] = 3
-    # slp[slp==5] = 0
-    # slp[slp==-1] = 0 # set artifact as wake stage
-    # print(slp)
-
-
-    slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    file_names = os.listdir("Raw_Data/PSG_GIF/")
-    for file_name in file_names:
-        if not file_name.endswith(".slp"):
-            continue
-
-        file = open("Raw_Data/PSG_GIF/" + file_name, "rb")
-        slp = file.readlines()
-        slp_stages = list()
-        for line in slp:
-            slp_stages.append(line.decode("utf-8").strip().split("\t")[0]) # type: ignore
-        slp_stages.pop(0) # remove header
-        slp_stages.pop(-1)
-        file.close()
-
-        slp_stages = np.array(slp_stages, dtype = int)
-
-        for stage in slp_stages:
-            slp_amount[stage] += 1
-
-    print("SLP stages:", slp_amount)
-    print("Relative SLP stages:", [round(amount / sum(slp_amount), 3) for amount in slp_amount])
-
-    # access the GIF dataset
-    gif_generator = load_from_pickle("RAW_Data/gif_separated.pkl")
-
-    gif_slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    for data_dict in gif_generator:
-        slp_mine = data_dict["SLP"]
-        slp_mine = np.array(slp_mine, dtype = int)
-        
-        for i in range(len(slp_mine)):
-            if slp_mine[i] in [1, 2, 3, 5]:
-                break
-        
-        slp_mine = slp_mine[i:] # remove everything before the first sleep stage
-
-        for i in range(len(slp_mine)-1, -1, -1):
-            if slp_mine[i] in [1, 2, 3, 5]:
-                break
-        
-        slp_mine = slp_mine[:i+1] # remove everything after the last sleep stage
-
-        for stage in slp_mine:
-            gif_slp_amount[stage] += 1
-
-    # access the GIF dataset
-    # gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    # patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    # gif_slp_amount = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    # for patient_id in patients:
-    #     slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-    #     slp_h5 = np.array(slp_h5, dtype = int)
-
-    #     for stage in slp_h5:
-    #         gif_slp_amount[stage] += 1
-
-    print("SLP stages in GIF dataset:", gif_slp_amount)
-    print("Relative SLP stages in GIF dataset:", [round(amount / sum(gif_slp_amount), 3) for amount in gif_slp_amount])
-
-    print("Difference in SLP stages between PSG and GIF dataset:", [np.abs(slp_amount[i] - gif_slp_amount[i]) for i in range(len(slp_amount)) if slp_amount[i] != 0])
-    print("Relative difference in SLP stages between PSG and GIF dataset:", [round(np.abs(slp_amount[i] - gif_slp_amount[i]) / slp_amount[i], 3) for i in range(len(slp_amount)) if slp_amount[i] != 0])
-
-
-if False:
-
-    # access the GIF dataset
-    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    total = 0
-    found_match = 0
-
-    all_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-    all_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    no_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-    no_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    mean_before_match = []
-    max_after_match = []
-
-    for patient_id in patients:
-        total += 1
-        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-        slp_h5 = np.array(slp_h5, dtype = int)
-
-        # access slp
-        path = "/Users/propeter/Downloads/stuff/PSG/" + patient_id + ".slp"
-        file = open(path, "rb")
-        slp = file.readlines()
-        slp_stages = list()
-        for line in slp:
-            slp_stages.append(line.decode("utf-8").strip().split("\t")[0]) # type: ignore
-        slp_stages.pop(0) # remove header
-        slp_stages.pop(-1)
-        file.close()
-
-        # print(len(gif_dataset["stage"][patient_id]), len(gif_dataset["rri"][patient_id])/120, len(gif_dataset["mad"][patient_id])/30, len(gif_dataset["mad"][patient_id])/3600) # type: ignore
-        slp_stages = np.array(slp_stages, dtype = int)
-
-        found_match_bool = False
-        for i in range(0, len(slp_h5) - len(slp_stages)): # type: ignore
-            if np.sum(slp_h5[i:i+len(slp_stages)] - slp_stages) == 0:
-                # print("Start index", i, i*30/3600)
-                # print("End index", i + len(slp_stages), "of", len(slp_h5))
-                found_match += 1
-                found_match_bool = True
-                break
-        
-        if i == 0:
-            i = 1
-        
-        if found_match_bool:
-            mean_before_match.append(np.max(slp_h5[:i])) # type: ignore
-            try:
-                max_after_match.append(np.max(slp_h5[i+len(slp_stages)+5:])) # type: ignore
-            except:
-                max_after_match.append(np.max(slp_h5[i+len(slp_stages):]))
-            for stage in slp_stages:
-                all_stages[stage] += 1
-            for stage in slp_h5:
-                all_stages_h5[stage] += 1
-        else:
-            for stage in slp_stages:
-                no_stages[stage] += 1
-            for stage in slp_h5:
-                no_stages_h5[stage] += 1
-
-    print("Total patients:", total)
-    print("Found matches:", found_match)
-
-    print("SLP stages in PSG dataset:", all_stages)
-    print("SLP stages in PSG dataset (H5):", all_stages_h5)
-
-    print("Relative SLP stages in PSG dataset:", [round(amount / sum(all_stages), 3) for amount in all_stages])
-    print("Relative SLP stages in PSG dataset (H5):", [round(amount / sum(all_stages_h5), 3) for amount in all_stages_h5])
-
-    print("SLP stages in PSG dataset without match:", no_stages)
-    print("SLP stages in PSG dataset without match (H5):", no_stages_h5)
-    print("Relative SLP stages in PSG dataset without match:", [round(amount / sum(no_stages), 3) for amount in no_stages])
-    print("Relative SLP stages in PSG dataset without match (H5):", [round(amount / sum(no_stages_h5), 3) for amount in no_stages_h5])
-
-    print(mean_before_match)
-    print(max_after_match)
-
-    raise SystemExit
-
-    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
-
-    # accessing patient ids:
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    for patient_id in patients:
-        print(patient_id)
-        print(np.mean(gif_dataset["rri"][patient_id][:120*300]))
-        print(gif_dataset["stage"][patient_id][:300]) #type: ignore
-        print("")
-
-
-if False:
-
-    # access the GIF dataset
-    gif_dataset = h5py.File("RAW_Data/GIF_dataset.h5", 'r')
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    total = 0
-    found_match = 0
-
-    all_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-    all_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    no_stages = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-    no_stages_h5 = [0 for _ in range(10)] # 0: wake, 1: LS, 2: DS, 3: REM, 4: artifact
-
-    mean_before_match = []
-    max_after_match = []
-
-    for patient_id in patients:
-        total += 1
-        slp_h5 = gif_dataset["stage"][patient_id][:] # type: ignore
-        slp_h5 = np.array(slp_h5, dtype = int)
-
-        # access slp
-        path = "/Users/propeter/Downloads/stuff/PSG/" + patient_id + ".slp"
-        file = open(path, "rb")
-        slp = file.readlines()
-        slp_stages = list()
-        for line in slp:
-            slp_stages.append(line.decode("utf-8").strip().split("\t")[0]) # type: ignore
-        slp_stages.pop(0) # remove header
-        slp_stages.pop(-1)
-        file.close()
-
-        # print(len(gif_dataset["stage"][patient_id]), len(gif_dataset["rri"][patient_id])/120, len(gif_dataset["mad"][patient_id])/30, len(gif_dataset["mad"][patient_id])/3600) # type: ignore
-        slp_stages = np.array(slp_stages, dtype = int)
-
-        found_match_bool = False
-        for i in range(0, len(slp_h5) - len(slp_stages)): # type: ignore
-            if np.sum(slp_h5[i:i+len(slp_stages)] - slp_stages) == 0:
-                # print("Start index", i, i*30/3600)
-                # print("End index", i + len(slp_stages), "of", len(slp_h5))
-                found_match += 1
-                found_match_bool = True
-                break
-        
-        if i == 0:
-            i = 1
-        
-        if found_match_bool:
-            mean_before_match.append(np.max(slp_h5[:i])) # type: ignore
-            try:
-                max_after_match.append(np.max(slp_h5[i+len(slp_stages)+5:])) # type: ignore
-            except:
-                max_after_match.append(np.max(slp_h5[i+len(slp_stages):]))
-            for stage in slp_stages:
-                all_stages[stage] += 1
-            for stage in slp_h5:
-                all_stages_h5[stage] += 1
-        else:
-            for stage in slp_stages:
-                no_stages[stage] += 1
-            for stage in slp_h5:
-                no_stages_h5[stage] += 1
-
-    print("Total patients:", total)
-    print("Found matches:", found_match)
-
-    print("SLP stages in PSG dataset:", all_stages)
-    print("SLP stages in PSG dataset (H5):", all_stages_h5)
-
-    print("Relative SLP stages in PSG dataset:", [round(amount / sum(all_stages), 3) for amount in all_stages])
-    print("Relative SLP stages in PSG dataset (H5):", [round(amount / sum(all_stages_h5), 3) for amount in all_stages_h5])
-
-    print("SLP stages in PSG dataset without match:", no_stages)
-    print("SLP stages in PSG dataset without match (H5):", no_stages_h5)
-    print("Relative SLP stages in PSG dataset without match:", [round(amount / sum(no_stages), 3) for amount in no_stages])
-    print("Relative SLP stages in PSG dataset without match (H5):", [round(amount / sum(no_stages_h5), 3) for amount in no_stages_h5])
-
-    print(mean_before_match)
-    print(max_after_match)
-
-    raise SystemExit
-
-    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_sleep_stage_label = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
-
-    # accessing patient ids:
-    patients = list(gif_dataset['stage'].keys()) # type: ignore
-
-    for patient_id in patients:
-        print(patient_id)
-        print(np.mean(gif_dataset["rri"][patient_id][:120*300]))
-        print(gif_dataset["stage"][patient_id][:300]) #type: ignore
-        print("")
