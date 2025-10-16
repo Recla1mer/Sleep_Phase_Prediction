@@ -1928,6 +1928,9 @@ class DemoResidualModel(nn.Module):
             nn.LeakyReLU(negative_slope_leaky_relu)
         )
 
+        self.residual_features_depth = 0  # To scale residual features
+        self.residual_features = torch.zeros((fully_connected_features), device=device)
+
         self.residual_linear = nn.Sequential(
             nn.Linear(fully_connected_features*2, fully_connected_features),
             nn.LeakyReLU(negative_slope_leaky_relu)
@@ -1950,7 +1953,7 @@ class DemoResidualModel(nn.Module):
         self.mad_values_after_signal_learning = int(self.mad_values_after_signal_learning)
 
 
-    def forward(self, residual_features, residual_features_depth, rri_signal, mad_signal = None):
+    def forward(self, rri_signal, mad_signal = None):
         """
         =============================================
         Checking And Preparing Data For Forward Pass
@@ -2013,12 +2016,18 @@ class DemoResidualModel(nn.Module):
         print(f"Output after linear layer: {rri_and_mad_fully_connected.size()}")
 
         # Extract residual features output
-        output_residual_features = residual_features + rri_and_mad_fully_connected
+        output_residual_features = self.residual_features + rri_and_mad_fully_connected
         print(f"Residual Features output: {output_residual_features.size()}")
 
         # Concatenate residual features with output
-        included_residual_features = torch.cat((residual_features / residual_features_depth, rri_and_mad_fully_connected), dim=0)
+        if self.residual_features_depth == 0:
+            included_residual_features = torch.cat((self.residual_features, rri_and_mad_fully_connected), dim=0)
+        else:
+            included_residual_features = torch.cat((self.residual_features / self.residual_features_depth, rri_and_mad_fully_connected), dim=0)
         print(f"Included residual features: {included_residual_features.size()}")
+
+        self.residual_features = output_residual_features
+        self.residual_features_depth += 1
 
         # Fully connected layer
         output = self.residual_linear(included_residual_features)
@@ -2028,6 +2037,13 @@ class DemoResidualModel(nn.Module):
         print(f"Output after final layer: {output.size()}")
 
         return output
+    
+    def reset_residual_features(self):
+        """
+        Reset residual features to zero. Should be called at the beginning of each new datapoint.
+        """
+        self.residual_features_depth = 0
+        self.residual_features = torch.zeros_like(self.residual_features)
 
 
 """
@@ -2259,8 +2275,8 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
     test_loss = 0
     test_confusion_matrix = np.zeros((number_classes, number_classes))
 
-    test_target_true = np.array([], dtype=int)
-    test_target_pred = np.array([], dtype=int)
+    # test_target_true = np.array([], dtype=int)
+    # test_target_pred = np.array([], dtype=int)
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
@@ -2288,8 +2304,8 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
             pred = pred.argmax(1).cpu().numpy()
             slp = slp.cpu().numpy()
 
-            test_target_true = np.concatenate((test_target_true, slp))
-            test_target_pred = np.concatenate((test_target_pred, pred))
+            # test_target_true = np.concatenate((test_target_true, slp))
+            # test_target_pred = np.concatenate((test_target_pred, pred))
 
             for i in range(len(slp)):
                 test_confusion_matrix[slp[i], pred[i]] += 1
@@ -2302,7 +2318,8 @@ def test_loop(dataloader, model, device, loss_fn, batch_size, number_classes):
 
     print(f"\nTest Error: \n Accuracy: {(100*accuracy):>0.1f}%, Avg loss: {test_loss:>8f}")
 
-    return test_loss, test_confusion_matrix, test_target_true, test_target_pred
+    # return test_loss, test_confusion_matrix, test_target_true, test_target_pred
+    return test_loss, test_confusion_matrix
 
 
 # Example usage
@@ -2330,7 +2347,7 @@ if __name__ == "__main__":
             "MAD_frequency": 1,
             "SLP": np.random.randint(5, size=1200), # 10 hours with 1/30 Hz sampling rate
             "SLP_frequency": 1/30,
-            "sleep_stage_label": random_sleep_stage_labels
+            "target_classes": random_sleep_stage_labels
         }
         random_datapoint_without_mad = {
             "ID": str(index),
@@ -2338,7 +2355,7 @@ if __name__ == "__main__":
             "RRI_frequency": 4,
             "SLP": np.random.randint(5, size=1200), # 10 hours with 1/30 Hz sampling rate
             "SLP_frequency": 1/30,
-            "sleep_stage_label": random_sleep_stage_labels
+            "target_classes": random_sleep_stage_labels
         }
         random_data_manager.save(random_datapoint, unique_id=True) # comment to test data without MAD signal
         #random_data_manager.save(random_datapoint_without_mad) # uncomment to test data without MAD signal
@@ -2544,7 +2561,6 @@ if __name__ == "__main__":
     # Create example data
     rri_example = torch.rand((1, seconds * 4), device=device)
     mad_example = torch.rand((1, seconds), device=device)
-    residual_features = torch.rand((fully_connected_features), device=device)
     # mad_example = None # uncomment to test data without MAD signal
 
     # Send data to device
@@ -2553,7 +2569,7 @@ if __name__ == "__main__":
         mad_example = mad_example.to(device)
 
     # Pass data through the model
-    output = DCNN(residual_features, 1, rri_example, mad_example)
+    output = DCNN(rri_example, mad_example)
     print("-"*80)
     print(output.shape)
 

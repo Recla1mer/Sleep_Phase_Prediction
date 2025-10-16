@@ -265,7 +265,7 @@ def main_pipeline_SAE(
             neural_network_hyperparameters = neural_network_hyperparameters_gif,
             path_to_training_data_directory = path_to_gif_database,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
-            path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
             paths_to_validation_data_directories = [path_to_gif_database],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
@@ -656,9 +656,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1/30,
-        "train_size": 0.8,
-        "validation_size": 0.2,
-        "test_size": None,
+        "train_size": 0.05,
+        "validation_size": 0.05,
+        "test_size": 0.9,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -671,17 +671,17 @@ def build_default_datasets_for_training_and_testing():
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
 
-    Reduced_Process_SHHS_SSG_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = default_complete_shhs_SSG_path,
-        path_to_project_configuration = limited_project_configuration_file,
-        )
+    # Reduced_Process_SHHS_SSG_Dataset(
+    #     path_to_shhs_dataset = original_shhs_data_path,
+    #     path_to_save_processed_data = default_complete_shhs_SSG_path,
+    #     path_to_project_configuration = limited_project_configuration_file,
+    #     )
     
-    Reduced_Process_GIF_SSG_Dataset(
-        path_to_gif_dataset = original_gif_ssg_data_path,
-        path_to_save_processed_data = default_complete_gif_SSG_path,
-        path_to_project_configuration = limited_project_configuration_file
-        )
+    # Reduced_Process_GIF_SSG_Dataset(
+    #     path_to_gif_dataset = original_gif_ssg_data_path,
+    #     path_to_save_processed_data = default_complete_gif_SSG_path,
+    #     path_to_project_configuration = limited_project_configuration_file
+    #     )
     
     os.remove(limited_project_configuration_file)
 
@@ -690,9 +690,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1/30,
-        "train_size": 0.8,
-        "validation_size": 0.2,
-        "test_size": None,
+        "train_size": 0.05,
+        "validation_size": 0.05,
+        "test_size": 0.9,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -705,17 +705,17 @@ def build_default_datasets_for_training_and_testing():
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
 
-    Reduced_Process_SHHS_SSG_Dataset(
-        path_to_shhs_dataset = original_shhs_data_path,
-        path_to_save_processed_data = default_reduced_shhs_SSG_path,
-        path_to_project_configuration = limited_project_configuration_file,
-        )
+    # Reduced_Process_SHHS_SSG_Dataset(
+    #     path_to_shhs_dataset = original_shhs_data_path,
+    #     path_to_save_processed_data = default_reduced_shhs_SSG_path,
+    #     path_to_project_configuration = limited_project_configuration_file,
+    #     )
     
-    Reduced_Process_GIF_SSG_Dataset(
-        path_to_gif_dataset = original_gif_ssg_data_path,
-        path_to_save_processed_data = default_reduced_gif_SSG_path,
-        path_to_project_configuration = limited_project_configuration_file
-        )
+    # Reduced_Process_GIF_SSG_Dataset(
+    #     path_to_gif_dataset = original_gif_ssg_data_path,
+    #     path_to_save_processed_data = default_reduced_gif_SSG_path,
+    #     path_to_project_configuration = limited_project_configuration_file
+    #     )
     
     os.remove(limited_project_configuration_file)
 
@@ -724,9 +724,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1,
-        "train_size": 0.8,
-        "validation_size": 0.2,
-        "test_size": None,
+        "train_size": 0.05,
+        "validation_size": 0.05,
+        "test_size": 0.9,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -752,9 +752,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1,
-        "train_size": 0.8,
-        "validation_size": 0.2,
-        "test_size": None,
+        "train_size": 0.05,
+        "validation_size": 0.05,
+        "test_size": 0.9,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -851,7 +851,7 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
 
     neural_network_hyperparameters_shhs = {
         "batch_size": 8, # 80h for 10h data | 7K (6712) / 8 => 839 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -862,7 +862,7 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
 
     neural_network_hyperparameters_gif = {
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1135,7 +1135,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     thirty_second_hyperparameters_shhs = {
         "batch_size": 128, # 64m for 30s data | 6M (5931923) / 128 => 46344 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1146,7 +1146,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     thirty_second_hyperparameters_gif = {
         "batch_size": 8, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1164,7 +1164,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     sixty_second_hyperparameters_shhs = {
         "batch_size": 128, # 2.1h for 60s data | 3M (2966296) / 128 => 23175 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1175,7 +1175,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     sixty_second_hyperparameters_gif = {
         "batch_size": 8, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1193,7 +1193,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hundred_twenty_second_hyperparameters_shhs = {
         "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1204,7 +1204,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hundred_twenty_second_hyperparameters_gif = {
         "batch_size": 8, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1337,7 +1337,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
     neural_network_hyperparameters_gif = {
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1429,7 +1429,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
     if not os.path.exists(gif_directory_path):
         copy_and_split_default_database_SAE(
-            path_to_default_gif_database = default_complete_gif_SAE_path,
+            path_to_default_gif_database = default_reduced_gif_SAE_path,
             path_to_save_gif_database = gif_directory_path,
             project_configuration = default_project_configuration
         )
@@ -1574,7 +1574,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     one_second_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1592,7 +1592,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     ten_second_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1610,7 +1610,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     sixteen_second_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 40,
+        "number_epochs": 2,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1657,10 +1657,11 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
 
 if __name__ == "__main__":
+
     build_default_datasets_for_training_and_testing()
 
-    train_and_test_long_sequence_model_on_sleep_staging_data()
-    train_and_test_short_sequence_model_on_sleep_staging_data()
+    # train_and_test_long_sequence_model_on_sleep_staging_data()
+    # train_and_test_short_sequence_model_on_sleep_staging_data()
 
     train_and_test_long_sequence_model_on_apnea_events()
     train_and_test_short_sequence_model_on_apnea_events()

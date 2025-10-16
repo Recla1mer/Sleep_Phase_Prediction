@@ -31,8 +31,6 @@ project_configuration_file = "Project_Configuration.pkl"
 
 model_state_after_shhs_file = "Model_State_SHHS.pth"
 model_state_after_shhs_gif_file = "Model_State.pth"
-best_model_state_after_shhs_file = "Best_Model_State_SHHS.pth"
-best_model_state_after_shhs_gif_file = "Best_Model_State.pth"
 
 loss_per_epoch_shhs_file = "Loss_per_Epoch_SHHS.pkl"
 loss_per_epoch_gif_file = "Loss_per_Epoch_GIF.pkl"
@@ -162,7 +160,7 @@ neural_network_hyperparameters_shhs = {
 # neural network hyperparameters for GIF dataset, see 'main_model_training' function in this file
 neural_network_hyperparameters_gif = {
     "batch_size": 8,
-    "number_epochs": 100,
+    "number_epochs": 40,
     "lr_scheduler_parameters": {
         "number_updates_to_max_lr": 4,
         "start_learning_rate": 1 * 1e-5,
@@ -885,7 +883,6 @@ def main_model_training(
         path_to_project_configuration: str,
         path_to_model_state,
         path_to_updated_model_state: str,
-        path_to_best_model_state: str,
         paths_to_validation_data_directories: list,
         path_to_loss_per_epoch: str,
     ):
@@ -1074,9 +1071,6 @@ def main_model_training(
     test_avg_loss = [[] for _ in range(len(paths_to_validation_data_directories))]
     test_confusion_matrices = [[] for _ in range(len(paths_to_validation_data_directories))]
 
-    best_f1 = 0
-    best_epoch = 0
-
     for t in range(1, number_epochs+1):
         # clearing previous epoch progress bars
         if t > 1:
@@ -1101,10 +1095,8 @@ def main_model_training(
         train_avg_loss.append(train_loss)
         train_confusion_matrices.append(train_confusion_matrix)
 
-        validation_f1_scores = []
-
         for i, validation_dataloader in enumerate(validation_dataloaders):
-            test_loss, test_confusion_matrix, test_target_true, test_target_pred = test_loop(
+            test_loss, test_confusion_matrix = test_loop(
                 dataloader = validation_dataloader,
                 model = neural_network_model,
                 device = device,
@@ -1113,16 +1105,8 @@ def main_model_training(
                 number_classes = number_classes
             )
 
-            validation_f1_scores.append(f1_score(test_target_true, test_target_pred, zero_division=np.nan, average='macro')) # type: ignore
-
             test_avg_loss[i].append(test_loss)
             test_confusion_matrices[i].append(test_confusion_matrix)
-        
-        # check current performance
-        if np.nanmean(validation_f1_scores) > best_f1:
-            best_f1 = np.nanmean(validation_f1_scores)
-            best_epoch = t+1
-            torch.save(neural_network_model.state_dict(), path_to_best_model_state)
 
     """
     ----------------------------------
@@ -1983,7 +1967,6 @@ def run_ssg_model_training(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_file,
-            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_file,
             paths_to_validation_data_directories = [path_to_shhs_directory, path_to_gif_directory],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
             )
@@ -2017,7 +2000,6 @@ def run_ssg_model_training(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
-            path_to_best_model_state = path_to_model_directory + best_model_state_after_shhs_gif_file,
             paths_to_validation_data_directories = [path_to_shhs_directory, path_to_gif_directory],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
             )
