@@ -78,7 +78,9 @@ pid_distribution_parameters = {
     "random_state": None,
     "shuffle": True,
     "join_splitted_parts": True,
-    "equally_distribute_signal_durations": True
+    "equally_distribute_signal_durations": True,
+    "stratify_by_target": False,
+    "consider_targets_for_stratification": [],
 }
 
 # transformations applied to the data, see 'CustomSleepDataset' class in neural_network_model.py
@@ -209,7 +211,7 @@ def check_project_configuration(parameters: dict):
         "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
         "rri_inlier_interval", "mad_inlier_interval", "target_classes",
-        "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
+        "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification",
         "feature_transform", "target_transform",
         "reshape_to_overlapping_windows", "windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order",
         "normalize_rri", "normalize_mad", "normalization_technique", "normalization_mode", "normalization_max", "normalization_min",
@@ -227,7 +229,7 @@ def check_project_configuration(parameters: dict):
         "rri_inlier_interval", "mad_inlier_interval", "target_classes",
         "signal_length_seconds", "shift_length_seconds_interval",
         "pad_feature_with", "pad_target_with",
-        "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations",
+        "train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification",
         "feature_transform", "target_transform",
         "reshape_to_overlapping_windows", 
         "normalize_rri", "normalize_mad"
@@ -394,7 +396,7 @@ def Process_SHHS_SSG_Dataset(
     shhs_data_manager.change_uniform_frequencies(freq_params)
 
     # access parameters used for distributing the data into train, validation, and test pids
-    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
@@ -500,7 +502,7 @@ def Process_GIF_Dataset_h5(
     gif_data_manager.change_uniform_frequencies(freq_params)
 
     # access parameters used for distributing the data into train, validation, and test pids
-    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
@@ -598,7 +600,7 @@ def Process_GIF_SSG_Dataset(
     gif_data_manager.change_uniform_frequencies(freq_params)
 
     # access parameters used for distributing the data into train, validation, and test pids
-    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
@@ -705,7 +707,7 @@ def Process_GIF_SAE_Dataset(
     gif_data_manager.change_uniform_frequencies(freq_params)
 
     # access parameters used for distributing the data into train, validation, and test pids
-    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations"]} # pid_distribution_parameters
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification"]} # pid_distribution_parameters
 
     # access parameters used for cropping the data
     signal_crop_params = {key: project_configuration[key] for key in ["signal_length_seconds", "shift_length_seconds_interval"]} # signal_cropping_parameters
@@ -2378,7 +2380,9 @@ if __name__ == "__main__":
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
-        "equally_distribute_signal_durations": True
+        "equally_distribute_signal_durations": True,
+        "stratify_by_target": False,
+        "consider_targets_for_stratification": [],
     }
 
     dataset_class_transform_parameters = {

@@ -19,6 +19,7 @@ import copy
 
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.cluster import KMeans
 
 
 # LOCAL IMPORTS:
@@ -920,6 +921,12 @@ def find_suitable_window_parameters(
     if not window_parameters_found:
         print("No suitable window parameters found. Expand search range.")
 
+find_suitable_window_parameters(
+        signal_length = 600,
+        number_windows_range = (6, 500),
+        window_size_range = (8, 12),
+        minimum_window_size_overlap_difference = 0
+    )
 
 def signal_to_windows(
         signal: list,   
@@ -2580,6 +2587,8 @@ class BigDataManager:
             shuffle = True,
             join_splitted_parts = True,
             equally_distribute_signal_durations = True,
+            stratify_by_target = False,
+            consider_targets_for_stratification: list = [],
         ):
         """
         Depending whether "test_size" = None/float: Separate the data in the file into training and validation 
@@ -2639,6 +2648,9 @@ class BigDataManager:
         # check arguments:
         if equally_distribute_signal_durations and not join_splitted_parts:
             raise ValueError("If 'equally_distribute_signal_durations' is True, 'join_splitted_parts' must also be True. It does not make sense to equally distribute signal durations if you do not intend to keep all splitted parts of a datapoint together in the same pid.")
+        
+        if stratify_by_target and not equally_distribute_signal_durations:
+            raise ValueError("'stratify_by_target' without 'equally_distribute_signal_durations' is not implemented yet.")
 
         if test_size == 0:
             test_size = None
@@ -2707,14 +2719,57 @@ class BigDataManager:
         id_with_rri_and_mad = list()
         id_with_rri = list()
 
+        rri_mad_distribution_gradient = list()
+        rri_distribution_gradient = list()
+
+        # transform targets to consider into numerical values if needed
+        if stratify_by_target:
+            if isinstance(consider_targets_for_stratification[0], int):
+                consider_targets_for_stratification_num = consider_targets_for_stratification
+            else:
+                consider_targets_for_stratification_num = []
+                for key in self.database_configuration["target_classes"]:
+                    if key in consider_targets_for_stratification:
+                        consider_targets_for_stratification_num.append(self.database_configuration["target_classes"][key])
+
         # iterate over entries and collect ids
         num_invalid_data_points = 0
         for data_point in file_generator:
             if "SLP" in data_point and "RRI" in data_point:
+
+                # collect distribution gradient if stratification by target is enabled
+                if stratify_by_target:
+
+                    corresponding_target_series = data_point["SLP"]
+                    if consider_targets_for_stratification:
+                        corresponding_target_series = [label for label in corresponding_target_series if label in consider_targets_for_stratification]
+
+                    this_distribution_gradient = list()
+                    unique_targets, target_counts = np.unique(corresponding_target_series, return_counts=True)
+                    for temp_target in consider_targets_for_stratification_num:
+                        if temp_target in unique_targets:
+                            this_distribution_gradient.append(target_counts[unique_targets.tolist().index(temp_target)])
+                        else:
+                            this_distribution_gradient.append(0)
+
                 if "MAD" in data_point:
                     id_with_rri_and_mad.append(data_point["ID"])
+                    
+                    if stratify_by_target:
+                        if len(corresponding_target_series) == 0:
+                            rri_mad_distribution_gradient.append(this_distribution_gradient)
+                        else:
+                            rri_mad_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
+                        
                 else:
                     id_with_rri.append(data_point["ID"])
+
+                    if stratify_by_target:
+                        if len(corresponding_target_series) == 0:
+                            rri_distribution_gradient.append(this_distribution_gradient)
+                        else:
+                            rri_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
+
             else:
                 num_invalid_data_points += 1
         
@@ -2727,10 +2782,12 @@ class BigDataManager:
         # check which id's are more numerous
         if len(id_with_rri_and_mad) > len(id_with_rri):
             consider_identifications = id_with_rri_and_mad
+            consider_distribution_gradients = rri_mad_distribution_gradient
             if len(id_with_rri) != 0:
                 print(f"Attention: {len(id_with_rri)} datapoints without MAD signal will be left in the main file.")
         else:
             consider_identifications = id_with_rri
+            consider_distribution_gradients = rri_distribution_gradient
             if len(id_with_rri_and_mad) != 0:
                 print(f"Attention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
         
@@ -2767,8 +2824,13 @@ class BigDataManager:
             # ensure at least two instances of each artificial class (sklearn demands this), we make it ten to avoid further problems
             while True:
                 class_label, label_occurance = np.unique(signal_durations, return_counts = True)
-                if np.min(label_occurance) >= 10:
-                    break
+
+                if stratify_by_target:
+                    if np.min(label_occurance) >= 50:
+                        break
+                else:
+                    if np.min(label_occurance) >= 10:
+                        break
 
                 # find the class label with the least occurances
                 min_class_label_index = np.argmin(label_occurance)
@@ -2783,6 +2845,38 @@ class BigDataManager:
                 signal_durations[signal_durations == min_class_label] = closest_class_label
             
                 del class_label, label_occurance, min_class_label_index, min_class_label, difference_to_label, closest_class_label
+        
+        if stratify_by_target:
+            if equally_distribute_signal_durations:
+                length_labels = []
+                length_grouped_identifications = []
+                length_grouped_distribution_gradients = []
+
+                for id_index in range(len(consider_identifications)):
+                    if signal_durations[id_index] in length_labels:
+                        length_label_index = length_labels.index(signal_durations[id_index])
+                        length_grouped_identifications[length_label_index].append(consider_identifications[id_index])
+                        length_grouped_distribution_gradients[length_label_index].append(consider_distribution_gradients[id_index])
+                    else:
+                        length_labels.append(signal_durations[id_index])
+                        length_grouped_identifications.append([consider_identifications[id_index]])
+                        length_grouped_distribution_gradients.append([consider_distribution_gradients[id_index]])
+                
+                length_grouped_kmeans_labels = []
+                cluster_into = 10
+                for length_label_index in range(len(length_grouped_identifications)):
+                    while True:
+                        this_kmeans = KMeans(n_clusters=cluster_into, random_state=0, n_init="auto").fit(np.array(length_grouped_distribution_gradients[length_label_index]))
+                        kmeans_labels, kmeans_label_counts = np.unique(this_kmeans.labels_, return_counts=True)
+
+                        if np.min(kmeans_label_counts) >= 10:
+                            break
+
+                        cluster_into -= 1
+                    
+                    length_grouped_kmeans_labels.append(this_kmeans.labels_)
+            else:
+                raise NotImplementedError("Stratification by target without equally distributing signal durations is not implemented yet.")
 
         # Create temporary file to save data in progress
         working_file_path = self.directory_path + "save_in_progress"
@@ -2800,23 +2894,39 @@ class BigDataManager:
             """
             split into training and validation data based on the chosen distribution method
             """
+            if stratify_by_target:
+                if equally_distribute_signal_durations:
+                    train_data_ids, validation_data_ids = list(), list()
 
-            if equally_distribute_signal_durations:
-                train_data_ids, validation_data_ids = train_test_split(
-                    copy.deepcopy(consider_identifications),
-                    train_size = train_size,
-                    random_state = random_state,
-                    shuffle = shuffle,
-                    stratify = signal_durations
-                )
-            
-            else:                
-                train_data_ids, validation_data_ids = train_test_split(
-                    copy.deepcopy(consider_identifications),
-                    train_size = train_size,
-                    random_state = random_state,
-                    shuffle = shuffle,
-                )
+                    for length_label_index in range(len(length_grouped_identifications)):
+                        this_train_ids, this_validation_ids = train_test_split(
+                            copy.deepcopy(length_grouped_identifications[length_label_index]),
+                            train_size = train_size,
+                            random_state = random_state,
+                            shuffle = shuffle,
+                            stratify = length_grouped_kmeans_labels[length_label_index]
+                        )
+
+                        train_data_ids.extend(list(this_train_ids))
+                        validation_data_ids.extend(list(this_validation_ids))
+
+            else:
+                if equally_distribute_signal_durations:
+                    train_data_ids, validation_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = signal_durations
+                    )
+                
+                else:                
+                    train_data_ids, validation_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                    )
 
             # ensure files are empty before writing
             for file_path in [train_file_path, validation_file_path]:
@@ -2876,47 +2986,79 @@ class BigDataManager:
             split into training validation and test data
             """
 
-            if equally_distribute_signal_durations:
-                train_data_ids, rest_data_ids = train_test_split(
-                    copy.deepcopy(consider_identifications),
-                    train_size = train_size,
-                    random_state = random_state,
-                    shuffle = shuffle,
-                    stratify = signal_durations
-                )
+            if stratify_by_target:
+                if equally_distribute_signal_durations:
+                    train_data_ids, validation_data_ids, test_data_ids = list(), list(), list()
 
-                # ensure rest_data_ids contains enough data points for validation and test
-                if len(rest_data_ids) < 2:
-                    rest_data_ids.append(train_data_ids[-1]) # type: ignore
-                    train_data_ids = train_data_ids[:-1]
+                    for length_label_index in range(len(length_grouped_identifications)):
+                        this_train_ids, this_rest_data_ids = train_test_split(
+                            copy.deepcopy(length_grouped_identifications[length_label_index]),
+                            train_size = train_size,
+                            random_state = random_state,
+                            shuffle = shuffle,
+                            stratify = length_grouped_kmeans_labels[length_label_index]
+                        )
+                    
+                        # ensure rest_data_ids contains enough data points for validation and test
+                        if len(this_rest_data_ids) < 2:
+                            this_rest_data_ids.append(this_train_ids[-1]) # type: ignore
+                            this_train_ids = this_train_ids[:-1]
 
-                validation_data_ids, test_data_ids = train_test_split(
-                    rest_data_ids,
-                    train_size = validation_size / (1 - train_size), # type: ignore
-                    random_state = random_state,
-                    shuffle = shuffle,
-                    stratify = [signal_durations[consider_identifications.index(id)] for id in rest_data_ids]
-                )
+                        this_validation_ids, this_test_ids = train_test_split(
+                            this_rest_data_ids,
+                            train_size = validation_size / (1 - train_size), # type: ignore
+                            random_state = random_state,
+                            shuffle = shuffle,
+                            stratify = [length_grouped_kmeans_labels[length_label_index][length_grouped_identifications[length_label_index].index(id)] for id in this_rest_data_ids]
+                        )
 
-            else:                
-                train_data_ids, rest_data_ids = train_test_split(
-                    copy.deepcopy(consider_identifications),
-                    train_size = train_size,
-                    random_state = random_state,
-                    shuffle = shuffle,
-                )
+                        train_data_ids.extend(list(this_train_ids))
+                        validation_data_ids.extend(list(this_validation_ids))
+                        test_data_ids.extend(list(this_test_ids))
 
-                # ensure rest_data_ids contains enough data points for validation and test
-                if len(rest_data_ids) < 2:
-                    rest_data_ids.append(train_data_ids[-1]) # type: ignore
-                    train_data_ids = train_data_ids[:-1]
+            else:
 
-                validation_data_ids, test_data_ids = train_test_split(
-                    rest_data_ids,
-                    train_size = validation_size / (1 - train_size), # type: ignore
-                    random_state = random_state,
-                    shuffle = shuffle,
-                )
+                if equally_distribute_signal_durations:
+                    train_data_ids, rest_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = signal_durations
+                    )
+
+                    # ensure rest_data_ids contains enough data points for validation and test
+                    if len(rest_data_ids) < 2:
+                        rest_data_ids.append(train_data_ids[-1]) # type: ignore
+                        train_data_ids = train_data_ids[:-1]
+
+                    validation_data_ids, test_data_ids = train_test_split(
+                        rest_data_ids,
+                        train_size = validation_size / (1 - train_size), # type: ignore
+                        random_state = random_state,
+                        shuffle = shuffle,
+                        stratify = [signal_durations[consider_identifications.index(id)] for id in rest_data_ids]
+                    )
+
+                else:                
+                    train_data_ids, rest_data_ids = train_test_split(
+                        copy.deepcopy(consider_identifications),
+                        train_size = train_size,
+                        random_state = random_state,
+                        shuffle = shuffle,
+                    )
+
+                    # ensure rest_data_ids contains enough data points for validation and test
+                    if len(rest_data_ids) < 2:
+                        rest_data_ids.append(train_data_ids[-1]) # type: ignore
+                        train_data_ids = train_data_ids[:-1]
+
+                    validation_data_ids, test_data_ids = train_test_split(
+                        rest_data_ids,
+                        train_size = validation_size / (1 - train_size), # type: ignore
+                        random_state = random_state,
+                        shuffle = shuffle,
+                    )
             
             # ensure files are empty before writing
             for file_path in [train_file_path, validation_file_path, test_file_path]:
