@@ -258,7 +258,7 @@ def scale_classification_signal(
 
     # Assign values to target signal (use nearest value in original signal)
     for time_point in target_signal_time:
-        nearest_index = np.argmin(np.abs(np.array(original_signal_time) - time_point))
+        nearest_index = np.argmin(np.abs(np.array(original_signal_time) - time_point)) # type: ignore
         target_signal = np.append(target_signal, signal[nearest_index])
     
     return target_signal
@@ -921,12 +921,6 @@ def find_suitable_window_parameters(
     if not window_parameters_found:
         print("No suitable window parameters found. Expand search range.")
 
-find_suitable_window_parameters(
-        signal_length = 600,
-        number_windows_range = (6, 500),
-        window_size_range = (8, 12),
-        minimum_window_size_overlap_difference = 0
-    )
 
 def signal_to_windows(
         signal: list,   

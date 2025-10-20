@@ -10,6 +10,8 @@ from plot_helper import *
 import shutil
 
 import os
+import io
+import sys
 
 default_complete_shhs_SSG_path = "Default_SHHS_SSG_Data_All/"
 default_complete_gif_SSG_path = "Default_GIF_SSG_Data_All/"
@@ -966,12 +968,15 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
     }
 
     window_and_class_adjustments = [overlap_artifact_as_wake, no_overlap_artifact_as_wake, overlap_full_class]
+    window_and_class_adjustments = [overlap_artifact_as_wake]
     window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
 
     cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
+    cleaning_adjustments = [raw]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
 
     network_models = [LongSequenceModel, LongSequenceResidualModel]
+    network_models = [LongSequenceModel]
     network_model_names = ["LSM", "LSM_Residual"]
 
     # all share same signal cropping parameters, so we need to create only one database to draw data from
@@ -1343,10 +1348,6 @@ def train_and_test_long_sequence_model_on_apnea_events():
         "max_pooling_layers": 5,
         "fully_connected_features": 128,
         "convolution_dilations": [2, 4, 8, 16, 32],
-        #
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-        "windows_per_signal": window_reshape_parameters["windows_per_signal"],
     }
 
     neural_network_hyperparameters_gif = {
@@ -1377,8 +1378,6 @@ def train_and_test_long_sequence_model_on_apnea_events():
     default_project_configuration.update(neural_network_model_parameters)
     default_project_configuration.update(filter_gif_data_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_gif_data_parameters
-
     apnea_hypopnea_type = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
         "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
@@ -1401,19 +1400,27 @@ def train_and_test_long_sequence_model_on_apnea_events():
         "window_duration_seconds": 16,
         "windows_per_signal": 4499,
         "overlap_seconds": 8,
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 16),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 16),
     }
 
     no_overlap_10 = {
         "window_duration_seconds": 10,
         "windows_per_signal": 3600,
         "overlap_seconds": 0,
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 10),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
     no_overlap_16 = {
         "window_duration_seconds": 16,
         "windows_per_signal": 2250,
         "overlap_seconds": 0,
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 16),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 16),
     }
+
+    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_gif_data_parameters
 
     window_adjustments = [overlap, no_overlap_10, no_overlap_16]
     window_names = ["Overlap_16", "No_Overlap_10", "No_Overlap_16"]
@@ -1854,24 +1861,6 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "normalization_mode": "local", # "local" or "global" makes no difference for 1D data
     }
 
-    one_second_network = {
-        "signal_length_seconds": 1,
-        "shift_length_seconds_interval": (1, 1),
-        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 1),
-        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 1),
-    }
-
-    one_second_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 1,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
-    }
-
     ten_second_network = {
         "signal_length_seconds": 10,
         "shift_length_seconds_interval": (10, 10),
@@ -1908,15 +1897,69 @@ def train_and_test_short_sequence_model_on_apnea_events():
         }
     }
 
+    thirty_second_network = {
+        "signal_length_seconds": 30,
+        "shift_length_seconds_interval": (30, 30),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
+    }
+
+    thirty_second_hyperparameters_gif = {
+        "batch_size": 8,
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
+        }
+    }
+
+    sixty_second_network = {
+        "signal_length_seconds": 60,
+        "shift_length_seconds_interval": (60, 60),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
+    }
+
+    sixty_second_hyperparameters_gif = {
+        "batch_size": 8,
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
+        }
+    }
+
+    hundred_twenty_second_network = {
+        "signal_length_seconds": 120,
+        "shift_length_seconds_interval": (120, 120),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
+    }
+
+    hundred_twenty_second_hyperparameters_gif = {
+        "batch_size": 8,
+        "number_epochs": 40,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 4,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
+        }
+    }
+
     cleaning_adjustments = [raw, cleaned, norm]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
 
-    network_adjustments = [one_second_network, ten_second_network, sixteen_second_network]
-    gif_hyperparameter_adjustments = [one_second_hyperparameters_gif, ten_second_hyperparameters_gif, sixteen_second_hyperparameters_gif]
-    network_names = ["Local_1s", "Local_10s", "Local_16s"]
+    network_adjustments = [ten_second_network, sixteen_second_network, thirty_second_network, sixty_second_network, hundred_twenty_second_network]
+    gif_hyperparameter_adjustments = [ten_second_hyperparameters_gif, sixteen_second_hyperparameters_gif, thirty_second_hyperparameters_gif, sixty_second_hyperparameters_gif, hundred_twenty_second_hyperparameters_gif]
+    network_names = ["Local_10s", "Local_16s", "Local_30s", "Local_60s", "Local_120s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
-    gif_directory_paths = ["1s_GIF_SAE_Data/", "10s_GIF_SAE_Data/", "16s_GIF_SAE_Data/"]
+    gif_directory_paths = ["10s_GIF_SAE_Data/", "16s_GIF_SAE_Data/", "30s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "120s_GIF_SAE_Data/"]
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
@@ -1947,14 +1990,108 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
 
 if __name__ == "__main__":
+    # build_default_datasets_for_training_and_testing()
+
+    # train_and_test_long_sequence_model_on_sleep_staging_data()
+    # train_and_test_short_sequence_model_on_sleep_staging_data()
+
+    # train_and_test_long_sequence_model_on_apnea_events()
+    # train_and_test_long_sequence_model_varying_duration_on_apnea_events()
+    # train_and_test_short_sequence_model_on_apnea_events()
+
     build_default_datasets_for_training_and_testing()
 
-    train_and_test_long_sequence_model_on_sleep_staging_data()
-    train_and_test_short_sequence_model_on_sleep_staging_data()
+    buffer = io.StringIO()
+    sys.stdout = buffer
 
-    train_and_test_long_sequence_model_on_apnea_events()
-    train_and_test_long_sequence_model_varying_duration_on_apnea_events()
-    train_and_test_short_sequence_model_on_apnea_events()
+    # sys.stdout = sys.__stdout__
+
+    success = 0
+
+    try:
+        train_and_test_long_sequence_model_on_sleep_staging_data()
+
+        print(buffer.getvalue())
+
+        send_email_notification(
+            email_subject="LSM on Sleep Staging - Completed",
+            email_body=buffer.getvalue()
+        )
+
+        success += 1
+
+    finally:
+        buffer.truncate(0)
+        buffer.seek(0)
+
+    try:
+        train_and_test_short_sequence_model_on_sleep_staging_data()
+
+        print(buffer.getvalue())
+
+        send_email_notification(
+            email_subject="SSM on Sleep Staging - Completed",
+            email_body=buffer.getvalue()
+        )
+
+        success += 1
+
+    finally:
+        buffer.truncate(0)
+        buffer.seek(0)
+
+    try:
+        train_and_test_long_sequence_model_on_apnea_events()
+
+        print(buffer.getvalue())
+
+        send_email_notification(
+            email_subject="LSM on Apnea Events - Completed",
+            email_body=buffer.getvalue()
+        )
+
+        success += 1
+
+    finally:
+        buffer.truncate(0)
+        buffer.seek(0)
+
+    try:
+        train_and_test_long_sequence_model_varying_duration_on_apnea_events()
+
+        print(buffer.getvalue())
+
+        send_email_notification(
+            email_subject="Varying LSM on Apnea Events - Completed",
+            email_body=buffer.getvalue()
+        )
+
+        success += 1
+
+    finally:
+        buffer.truncate(0)
+        buffer.seek(0)
+
+    try:
+        train_and_test_short_sequence_model_on_apnea_events()
+
+        print(buffer.getvalue())
+
+        send_email_notification(
+            email_subject="SSM on Apnea Events - Completed",
+            email_body=buffer.getvalue()
+        )
+
+        success += 1
+
+    finally:
+        buffer.truncate(0)
+        buffer.seek(0)
+    
+    send_email_notification(
+        email_subject="All Training and Testing Completed",
+        email_body=f"All training and testing pipelines have been completed successfully. ({success}/5)"
+    )
 
 if False:
     # fix_project_configuration_3()

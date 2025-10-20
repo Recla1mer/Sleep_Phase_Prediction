@@ -8,6 +8,7 @@ In this file we provide functions that are used to keep the code a little bit cl
 import time
 import numpy as np
 import os
+import smtplib
 import shutil
 import sys
 import tty
@@ -551,7 +552,33 @@ def delete_directory_files(directory_path: str, keep_files: list):
             os.remove(file_path)
 
 
-if __name__ == "__main__":
+def send_email_notification(email_subject: str, email_body: str):
+    """
+    Sends an email notification.
+
+    ARGUMENTS:
+    ------------------------------
+    subject: str
+        email subject
+    body: str
+        email body
+
+    RETURNS:
+    ------------------------------
+    None
+    """
+
+    # Set up email parameters
+    sender_email = ""
+    recipient_email = ""
+
+    # Send email
+    with smtplib.SMTP_SSL("smtpauth.", 465) as server:
+        server.login("", "")
+        server.sendmail(sender_email, recipient_email, f"Subject: {email_subject}\n\n{email_body}")
+
+
+if False:
     # total = 100
     # bar = DynamicProgressBar(total=total, batch_size=1, seconds_between_updates=0)
 
