@@ -573,7 +573,7 @@ def send_email_notification(email_subject: str, email_body: str):
     recipient_email = ""
 
     # Send email
-    with smtplib.SMTP_SSL("smtpauth.", 465) as server:
+    with smtplib.SMTP_SSL("smtpauth.uni-halle.de", 465) as server:
         server.login("", "")
         server.sendmail(sender_email, recipient_email, f"Subject: {email_subject}\n\n{email_body}")
 

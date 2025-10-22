@@ -2005,6 +2005,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2021,6 +2024,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2037,6 +2043,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2053,6 +2062,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2069,6 +2081,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)

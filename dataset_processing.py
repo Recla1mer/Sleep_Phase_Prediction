@@ -2724,7 +2724,8 @@ class BigDataManager:
                 consider_targets_for_stratification_num = []
                 for key in self.database_configuration["target_classes"]:
                     if key in consider_targets_for_stratification:
-                        consider_targets_for_stratification_num.append(self.database_configuration["target_classes"][key])
+                        for target_class_num in self.database_configuration["target_classes"][key]:
+                            consider_targets_for_stratification_num.append(target_class_num)
 
         # iterate over entries and collect ids
         num_invalid_data_points = 0
@@ -2735,11 +2736,12 @@ class BigDataManager:
                 if stratify_by_target:
 
                     corresponding_target_series = data_point["SLP"]
-                    if consider_targets_for_stratification:
-                        corresponding_target_series = [label for label in corresponding_target_series if label in consider_targets_for_stratification]
 
                     this_distribution_gradient = list()
                     unique_targets, target_counts = np.unique(corresponding_target_series, return_counts=True)
+
+                    # print(consider_targets_for_stratification_num)
+                    # print(unique_targets)
                     for temp_target in consider_targets_for_stratification_num:
                         if temp_target in unique_targets:
                             this_distribution_gradient.append(target_counts[unique_targets.tolist().index(temp_target)])
@@ -2750,19 +2752,13 @@ class BigDataManager:
                     id_with_rri_and_mad.append(data_point["ID"])
                     
                     if stratify_by_target:
-                        if len(corresponding_target_series) == 0:
-                            rri_mad_distribution_gradient.append(this_distribution_gradient)
-                        else:
-                            rri_mad_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
+                        rri_mad_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
                         
                 else:
                     id_with_rri.append(data_point["ID"])
 
                     if stratify_by_target:
-                        if len(corresponding_target_series) == 0:
-                            rri_distribution_gradient.append(this_distribution_gradient)
-                        else:
-                            rri_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
+                        rri_distribution_gradient.append([count / len(corresponding_target_series) for count in this_distribution_gradient])
 
             else:
                 num_invalid_data_points += 1
@@ -2786,13 +2782,56 @@ class BigDataManager:
                 print(f"Attention: {len(id_with_rri_and_mad)} datapoints with MAD signal will be left in the main file.")
         
         del id_with_rri_and_mad, id_with_rri
-
+                
         # check if there are enough data points available
         if test_size is None and len(consider_identifications) < 2:
             raise ValueError("Not enough data available. Please save some more data first.")
 
         if test_size is not None and len(consider_identifications) < 3:
             raise ValueError("Not enough data available. Please save some more data first.")
+
+        if stratify_by_target:
+            max_distribution_gradients = np.mean(np.array(consider_distribution_gradients), axis=0)
+            max_gradient = np.max(max_distribution_gradients)
+            scale_gradients = np.array([max_gradient / gradient for gradient in max_distribution_gradients])
+
+            zero_positions = [i for i, x in enumerate(consider_distribution_gradients) if all(v == 0 for v in x)]
+            zero_removed_gradients = [x for i, x in enumerate(consider_distribution_gradients) if i not in zero_positions]
+            zero_removed_gradients = zero_removed_gradients * scale_gradients
+            
+            this_scaled_gradients = []
+            for gradient in zero_removed_gradients:
+                new_gradient = []
+                for value in gradient:
+                    if value <= 0:
+                        new_gradient.append(0)
+                    elif value > 0 and value <= 0.3:
+                        new_gradient.append(0.3)
+                    elif value > 0.3 and value <= 0.6:
+                        new_gradient.append(0.6)
+                    else:
+                        new_gradient.append(1)
+                this_scaled_gradients.append(new_gradient)
+            
+            cluster_into = 10
+            while True:
+
+                kmeans = KMeans(n_clusters=cluster_into, random_state=0, n_init="auto").fit(this_scaled_gradients)
+                _, kmeans_label_counts = np.unique(kmeans.labels_, return_counts=True)
+
+                if np.min(kmeans_label_counts) >= 12:
+                    break
+
+                cluster_into -= 1
+            
+            consider_kmeans = []
+            count_non_zero = 0
+            for i in range(len(consider_identifications)):
+                if i in zero_positions:
+                    consider_kmeans.append(0)
+                else:
+                    consider_kmeans.append(kmeans.labels_[count_non_zero]+1)
+                    count_non_zero += 1
 
         """
         To enable that the duration of the signals is equally distributed across the pids, we will assign
@@ -2820,14 +2859,35 @@ class BigDataManager:
                 class_label, label_occurance = np.unique(signal_durations, return_counts = True)
 
                 if stratify_by_target:
-                    if np.min(label_occurance) >= 50:
+                    length_labels = class_label.tolist()
+                    length_grouped_identifications = [[] for _ in range(len(length_labels))]
+                    length_grouped_kmeans = [[] for _ in range(len(length_labels))]
+
+                    for id_index in range(len(consider_identifications)):
+                        length_label_index = length_labels.index(signal_durations[id_index])
+                        length_grouped_identifications[length_label_index].append(consider_identifications[id_index])
+                        length_grouped_kmeans[length_label_index].append(consider_kmeans[id_index]) # type: ignore
+                    
+                    # check if each combination of signal duration and kmeans label has at least 10 instances
+                    sufficient_instances = True
+                    prior_minimum = len(consider_identifications) # arbitrary high number
+                    for length_label_index in range(len(length_labels)):
+                        _, this_unique_kmeans_counts = np.unique(length_grouped_kmeans[length_label_index], return_counts=True) # type: ignore
+                        if np.min(this_unique_kmeans_counts) < 2:
+                            sufficient_instances = False
+                        if np.min(this_unique_kmeans_counts) < prior_minimum:
+                            min_class_label_index = length_label_index
+                    
+                    if sufficient_instances:
                         break
+
                 else:
                     if np.min(label_occurance) >= 10:
                         break
 
+                    min_class_label_index = np.argmin(label_occurance)
+
                 # find the class label with the least occurances
-                min_class_label_index = np.argmin(label_occurance)
                 min_class_label = class_label[min_class_label_index]
 
                 # find second closest class label
@@ -2839,38 +2899,6 @@ class BigDataManager:
                 signal_durations[signal_durations == min_class_label] = closest_class_label
             
                 del class_label, label_occurance, min_class_label_index, min_class_label, difference_to_label, closest_class_label
-        
-        if stratify_by_target:
-            if equally_distribute_signal_durations:
-                length_labels = []
-                length_grouped_identifications = []
-                length_grouped_distribution_gradients = []
-
-                for id_index in range(len(consider_identifications)):
-                    if signal_durations[id_index] in length_labels:
-                        length_label_index = length_labels.index(signal_durations[id_index])
-                        length_grouped_identifications[length_label_index].append(consider_identifications[id_index])
-                        length_grouped_distribution_gradients[length_label_index].append(consider_distribution_gradients[id_index])
-                    else:
-                        length_labels.append(signal_durations[id_index])
-                        length_grouped_identifications.append([consider_identifications[id_index]])
-                        length_grouped_distribution_gradients.append([consider_distribution_gradients[id_index]])
-                
-                length_grouped_kmeans_labels = []
-                cluster_into = 10
-                for length_label_index in range(len(length_grouped_identifications)):
-                    while True:
-                        this_kmeans = KMeans(n_clusters=cluster_into, random_state=0, n_init="auto").fit(np.array(length_grouped_distribution_gradients[length_label_index]))
-                        kmeans_labels, kmeans_label_counts = np.unique(this_kmeans.labels_, return_counts=True)
-
-                        if np.min(kmeans_label_counts) >= 10:
-                            break
-
-                        cluster_into -= 1
-                    
-                    length_grouped_kmeans_labels.append(this_kmeans.labels_)
-            else:
-                raise NotImplementedError("Stratification by target without equally distributing signal durations is not implemented yet.")
 
         # Create temporary file to save data in progress
         working_file_path = self.directory_path + "save_in_progress"
@@ -2898,7 +2926,7 @@ class BigDataManager:
                             train_size = train_size,
                             random_state = random_state,
                             shuffle = shuffle,
-                            stratify = length_grouped_kmeans_labels[length_label_index]
+                            stratify = length_grouped_kmeans[length_label_index]
                         )
 
                         train_data_ids.extend(list(this_train_ids))
@@ -2990,7 +3018,7 @@ class BigDataManager:
                             train_size = train_size,
                             random_state = random_state,
                             shuffle = shuffle,
-                            stratify = length_grouped_kmeans_labels[length_label_index]
+                            stratify = length_grouped_kmeans[length_label_index]
                         )
                     
                         # ensure rest_data_ids contains enough data points for validation and test
@@ -3003,7 +3031,7 @@ class BigDataManager:
                             train_size = validation_size / (1 - train_size), # type: ignore
                             random_state = random_state,
                             shuffle = shuffle,
-                            stratify = [length_grouped_kmeans_labels[length_label_index][length_grouped_identifications[length_label_index].index(id)] for id in this_rest_data_ids]
+                            stratify = [length_grouped_kmeans[length_label_index][length_grouped_identifications[length_label_index].index(id)] for id in this_rest_data_ids]
                         )
 
                         train_data_ids.extend(list(this_train_ids))

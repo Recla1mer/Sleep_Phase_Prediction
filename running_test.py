@@ -267,7 +267,7 @@ def main_pipeline_SAE(
             neural_network_hyperparameters = neural_network_hyperparameters_gif,
             path_to_training_data_directory = path_to_gif_database,
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
-            path_to_model_state = path_to_model_directory + model_state_after_shhs_file,
+            path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
             paths_to_validation_data_directories = [path_to_gif_database],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
@@ -658,9 +658,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1/30,
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -694,9 +694,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1/30,
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -730,9 +730,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1,
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -760,9 +760,9 @@ def build_default_datasets_for_training_and_testing():
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1,
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -817,9 +817,9 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
     }
 
     pid_distribution_parameters = {
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -863,7 +863,7 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
 
     neural_network_hyperparameters_shhs = {
         "batch_size": 8, # 80h for 10h data | 7K (6712) / 8 => 839 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -874,7 +874,7 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
 
     neural_network_hyperparameters_gif = {
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -968,15 +968,12 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
     }
 
     window_and_class_adjustments = [overlap_artifact_as_wake, no_overlap_artifact_as_wake, overlap_full_class]
-    window_and_class_adjustments = [overlap_artifact_as_wake]
     window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
 
     cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
-    cleaning_adjustments = [raw]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
 
     network_models = [LongSequenceModel, LongSequenceResidualModel]
-    network_models = [LongSequenceModel]
     network_model_names = ["LSM", "LSM_Residual"]
 
     # all share same signal cropping parameters, so we need to create only one database to draw data from
@@ -1049,9 +1046,9 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
     }
 
     pid_distribution_parameters = {
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -1152,7 +1149,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     thirty_second_hyperparameters_shhs = {
         "batch_size": 128, # 64m for 30s data | 6M (5931923) / 128 => 46344 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1163,7 +1160,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     thirty_second_hyperparameters_gif = {
         "batch_size": 8, # 16m for 30s data | 350K (348524) / 32 => 10892 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1181,7 +1178,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     sixty_second_hyperparameters_shhs = {
         "batch_size": 128, # 2.1h for 60s data | 3M (2966296) / 128 => 23175 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1192,7 +1189,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     sixty_second_hyperparameters_gif = {
         "batch_size": 8, # 32m for 60s data | 175K (174374) / 32 => 5450 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1210,7 +1207,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hundred_twenty_second_hyperparameters_shhs = {
         "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1221,7 +1218,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hundred_twenty_second_hyperparameters_gif = {
         "batch_size": 8, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1306,13 +1303,13 @@ def train_and_test_long_sequence_model_on_apnea_events():
     value_mapping_parameters = {
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     pid_distribution_parameters = {
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -1352,7 +1349,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
     neural_network_hyperparameters_gif = {
         "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1380,7 +1377,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
     apnea_hypopnea_type = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     apnea_hypopnea = {
@@ -1419,7 +1416,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
         "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 16),
         "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 16),
     }
-
+    
     del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_gif_data_parameters
 
     window_adjustments = [overlap, no_overlap_10, no_overlap_16]
@@ -1468,7 +1465,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
     if not os.path.exists(gif_directory_path):
         copy_and_split_default_database_SAE(
-            path_to_default_gif_database = default_complete_gif_SAE_path,
+            path_to_default_gif_database = default_reduced_gif_SAE_path,
             path_to_save_gif_database = gif_directory_path,
             project_configuration = default_project_configuration
         )
@@ -1521,13 +1518,13 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
     value_mapping_parameters = {
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     pid_distribution_parameters = {
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -1578,7 +1575,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
 
     apnea_hypopnea_type = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     apnea_hypopnea = {
@@ -1601,13 +1598,13 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "window_duration_seconds": 10,
         "overlap_seconds": 5,
         "priority_order": [3, 2, 4, 1, 0],
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 120),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 120),
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 10),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
     two_minute_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1623,13 +1620,13 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "window_duration_seconds": 10,
         "overlap_seconds": 5,
         "priority_order": [3, 2, 4, 1, 0],
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 300),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 300),
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 10),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
     five_minute_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1645,13 +1642,13 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "window_duration_seconds": 10,
         "overlap_seconds": 5,
         "priority_order": [3, 2, 4, 1, 0],
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 600),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 600),
+        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 10),
+        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
     ten_minute_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1709,7 +1706,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
-            path_to_default_gif_database = default_complete_gif_SSG_path,
+            path_to_default_gif_database = default_complete_gif_SAE_path,
             path_to_save_gif_database = gif_directory_paths[net_adjust_index],
             project_configuration = network_adjustments[net_adjust_index]
         )
@@ -1762,13 +1759,13 @@ def train_and_test_short_sequence_model_on_apnea_events():
     value_mapping_parameters = {
         "rri_inlier_interval": (None, None),
         "mad_inlier_interval": (None, None),
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     pid_distribution_parameters = {
-        "train_size": 0.05,
-        "validation_size": 0.05,
-        "test_size": 0.9,
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
         "random_state": None,
         "shuffle": True,
         "join_splitted_parts": True,
@@ -1798,8 +1795,6 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "mad_convolutional_channels": [1, 8, 16, 32, 64],
         "max_pooling_layers": 5,
         "fully_connected_features": 128,
-        "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
-        "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
     }
 
     filter_gif_data_parameters = {
@@ -1822,7 +1817,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     apnea_hypopnea_type = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
-        "target_classes": {"Normal": 0, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Mixed Apnea": 3, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
     }
 
     apnea_hypopnea = {
@@ -1870,7 +1865,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     ten_second_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1888,7 +1883,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     sixteen_second_hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 1,
+        "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1963,7 +1958,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
-            path_to_default_gif_database = default_complete_gif_SSG_path,
+            path_to_default_gif_database = default_complete_gif_SAE_path,
             path_to_save_gif_database = gif_directory_paths[net_adjust_index],
             project_configuration = network_adjustments[net_adjust_index]
         )
@@ -1990,15 +1985,6 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
 
 if __name__ == "__main__":
-    # build_default_datasets_for_training_and_testing()
-
-    # train_and_test_long_sequence_model_on_sleep_staging_data()
-    # train_and_test_short_sequence_model_on_sleep_staging_data()
-
-    # train_and_test_long_sequence_model_on_apnea_events()
-    # train_and_test_long_sequence_model_varying_duration_on_apnea_events()
-    # train_and_test_short_sequence_model_on_apnea_events()
-
     build_default_datasets_for_training_and_testing()
 
     buffer = io.StringIO()
@@ -2019,6 +2005,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2035,6 +2024,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2051,6 +2043,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2067,6 +2062,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2083,6 +2081,9 @@ if __name__ == "__main__":
         )
 
         success += 1
+    
+    except:
+        pass
 
     finally:
         buffer.truncate(0)
@@ -2092,6 +2093,7 @@ if __name__ == "__main__":
         email_subject="All Training and Testing Completed",
         email_body=f"All training and testing pipelines have been completed successfully. ({success}/5)"
     )
+
 
 if False:
     # fix_project_configuration_3()
