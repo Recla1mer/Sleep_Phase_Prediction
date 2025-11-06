@@ -481,6 +481,97 @@ def Reduced_Process_GIF_SSG_Dataset(
     gif_data_manager.separate_train_test_validation(**distribution_params)
 
 
+def Reduced_Process_GIF_SSG_Dataset_h5(
+        path_to_gif_dataset: str,
+        path_to_save_processed_data: str,
+        path_to_project_configuration: str
+    ):
+    """
+    This function processes our GIF dataset. It is designed to be a more specific. So, if you are not using
+    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
+    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
+    to process a dataset.
+
+    The datapoints from the GIF dataset are resaved to a pickle file using the SleepDataManager class.
+    The class is designed to save the data in a uniform way. How exactly can be altered using the
+    parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
+    class to split the data into training, validation, and test pids (individual files).
+
+    RETURNS:
+    ------------------------------
+    None
+
+    ARGUMENTS:
+    ------------------------------
+    path_to_gif_dataset: str
+        the path to the GIF dataset
+
+    Others: See 'Process_SHHS_Sleep_Dataset' function
+    """
+
+    # abort if destination path exists to avoid accidental overwriting
+    if os.path.exists(path_to_save_processed_data):
+        return
+
+    # initializing the database
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    # access sampling frequency parameters
+    freq_params = {key: project_configuration[key] for key in ["RRI_frequency", "MAD_frequency", "SLP_frequency"]} # sampling_frequency_parameters
+    gif_data_manager.change_uniform_frequencies(freq_params)
+
+    # access parameters used for distributing the data into train, validation, and test pids
+    distribution_params = {key: project_configuration[key] for key in ["train_size", "validation_size", "test_size", "random_state", "shuffle", "join_splitted_parts", "equally_distribute_signal_durations", "stratify_by_target", "consider_targets_for_stratification"]} # pid_distribution_parameters
+
+    # access parameters used for filtering the data
+    minimum_length_seconds = project_configuration["gif_min_duration_hours"] * 3600
+    filter_ids = project_configuration["gif_filter_ids"]
+
+    # define the sleep stage labels (attention: a different dataset will most likely have different labels)
+    gif_target_classes = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
+
+    # access the GIF dataset
+    gif_dataset = h5py.File(path_to_gif_dataset, 'r')
+
+    # accessing patient ids:
+    patients = list(gif_dataset['stage'].keys()) # type: ignore
+
+    # check if patient ids are unique:
+    gif_data_manager.check_if_ids_are_unique(patients)
+
+    # showing progress bar
+    print("\nEnsuring sampling frequency uniformity in the datapoints from the GIF dataset:")
+    progress_bar = DynamicProgressBar(total = len(patients))
+
+    # saving all data from GIF dataset to the pickle file
+    for patient_id in patients:
+        if patient_id[:5] in filter_ids:
+            continue
+        if len(gif_dataset["rri"][patient_id][:]) / gif_dataset["rri"].attrs["freq"] < minimum_length_seconds: # type: ignore
+            continue
+
+        new_datapoint = {
+            "ID": patient_id,
+            "RRI": gif_dataset["rri"][patient_id][:], # type: ignore
+            "MAD": gif_dataset["mad"][patient_id][:], # type: ignore
+            "SLP": np.array(gif_dataset["stage"][patient_id][:]).astype(int), # type: ignore
+            "RRI_frequency": gif_dataset["rri"].attrs["freq"], # type: ignore
+            "MAD_frequency": gif_dataset["mad"].attrs["freq"], # type: ignore
+            "SLP_frequency": 1/30, # type: ignore
+            "target_classes": copy.deepcopy(gif_target_classes)
+        }
+
+        gif_data_manager.save(new_datapoint, unique_id=True)
+        progress_bar.update()
+
+    # Train-, Validation- and Test-Pid Distribution
+    gif_data_manager.separate_train_test_validation(**distribution_params)
+
+
 def Reduced_Process_GIF_SAE_Dataset(
         path_to_gif_dataset: str,
         path_to_save_processed_data: str,
@@ -558,11 +649,28 @@ def Reduced_Process_GIF_SAE_Dataset(
         if len(generator_entry["RRI"]) / generator_entry["RRI_frequency"] < minimum_length_seconds: # type: ignore
             continue
 
+        sae_signal = np.array(generator_entry["SAE"]).astype(int)
+        end_length = int(generator_entry["SAE_frequency"] * 30)
+        i = 0
+        while i < len(sae_signal):
+            if sae_signal[i] != 0 and sae_signal[i+1] == 0:
+                current_event = sae_signal[i]
+
+                lower_border = max(0, i-end_length)
+                upper_border = min(len(sae_signal), i+end_length)
+                
+                for j in range(lower_border, upper_border):
+                    sae_signal[j] = current_event
+                i += end_length
+            else:
+                sae_signal[i] = 0
+                i += 1
+
         new_datapoint = {
             "ID": generator_entry["ID"],
             "RRI": generator_entry["RRI"],
             "MAD": generator_entry["MAD"],
-            "SLP": np.array(generator_entry["SAE"]).astype(int),
+            "SLP": sae_signal,
             "RRI_frequency": generator_entry["RRI_frequency"],
             "MAD_frequency": generator_entry["MAD_frequency"],
             "SLP_frequency": generator_entry["SAE_frequency"],
@@ -1741,7 +1849,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         with open(configuration_path, "rb") as f:
             database_configuration = pickle.load(f)
         
-        database_configuration["number_data_points"][1] = len(collect_some_data)
+        database_configuration["number_datapoints"][1] = len(collect_some_data)
 
         with open(configuration_path, "wb") as f:
             pickle.dump(database_configuration, f)
