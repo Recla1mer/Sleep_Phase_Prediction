@@ -1983,8 +1983,35 @@ def train_and_test_short_sequence_model_on_apnea_events():
                     path_to_gif_database = gif_directory_paths[network_index],
                 )
 
-
 if __name__ == "__main__":
+    build_default_datasets_for_training_and_testing()
+
+    try:
+        train_and_test_long_sequence_model_on_sleep_staging_data()
+    except:
+        pass
+
+    try:
+        train_and_test_short_sequence_model_on_sleep_staging_data()
+    except:
+        pass
+
+    try:
+        train_and_test_long_sequence_model_on_apnea_events()
+    except:
+        pass
+
+    try:
+        train_and_test_long_sequence_model_varying_duration_on_apnea_events()
+    except:
+        pass
+
+    try:
+        train_and_test_short_sequence_model_on_apnea_events()
+    except:
+        pass
+
+if False:
     build_default_datasets_for_training_and_testing()
 
     buffer = io.StringIO()
