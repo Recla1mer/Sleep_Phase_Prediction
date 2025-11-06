@@ -1710,6 +1710,41 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
             path_to_save_gif_database = gif_directory_paths[net_adjust_index],
             project_configuration = network_adjustments[net_adjust_index]
         )
+    
+    for path_index in range(len(gif_directory_paths)):
+        train_file_path = gif_directory_paths[path_index] + "training_pid.pkl"
+        train_data_offset_path = gif_directory_paths[path_index] + ".training_pid_offset.pkl"
+        configuration_path = gif_directory_paths[path_index] + "configuration.pkl"
+        
+        train_file_generator = load_from_pickle(train_file_path)
+        collect_some_data = list()
+
+        for data_point in train_file_generator:
+            sae_signal = np.array(data_point["SLP"])
+            proportion_normal_breathing = (sae_signal == 0).sum() / len(sae_signal)
+            if proportion_normal_breathing > 0.8 and random.random() < 0.8:
+                continue
+            collect_some_data.append(data_point)
+        
+        os.remove(train_file_path)
+        os.remove(train_data_offset_path)
+        new_file = open(train_file_path, "ab")
+
+        train_byte_offsets = []
+        for data_point in collect_some_data:
+            train_byte_offsets.append(new_file.tell())
+            pickle.dump(data_point, new_file)
+        
+        with open(train_data_offset_path, "wb") as f:
+            pickle.dump(train_byte_offsets, f)
+        
+        with open(configuration_path, "rb") as f:
+            database_configuration = pickle.load(f)
+        
+        database_configuration["number_data_points"][1] = len(collect_some_data)
+
+        with open(configuration_path, "wb") as f:
+            pickle.dump(database_configuration, f)
 
     for clean_index in range(len(cleaning_adjustments)):
         for class_index in range(len(class_adjustments)):
