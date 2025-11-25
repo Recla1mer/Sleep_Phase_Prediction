@@ -36,6 +36,7 @@ def final_data_preprocessing(
         signal_length_seconds: int,
         pad_with,
         reshape_to_overlapping_windows: bool,
+        disregard_classes_when_possible: list,
         normalize: bool,
         datatype_mappings: list,
         transform,
@@ -105,8 +106,34 @@ def final_data_preprocessing(
 
         # ensure only one label per signal (automatically done by reshape_signal_to_overlapping_windows):
         if signal_type == "target":
+            found_apnea = False
+            signal_length = len(signal)
+            for signal_index in range(signal_length):
+                if signal[signal_index] != 0 and signal_index+1 <= signal_length * 0.8 and signal_index+1 >= signal_length * 0.2:
+                    found_apnea = True
+                    signal = np.array([signal[signal_index]])
+                    break
+            
+            if not found_apnea:
+                signal = np.array([0])
+
+        if signal_type == "bubable":
             # collect unique labels and their counts
             different_labels, label_counts = np.unique(copy.deepcopy(signal), return_counts=True)
+
+            # remove disregarded classes from consideration
+            remove_disregarded_classes = False
+            for label in different_labels:
+                if label not in disregard_classes_when_possible:
+                    remove_disregarded_classes = True
+                    break
+            
+            if remove_disregarded_classes:
+                for disregard_class in disregard_classes_when_possible:
+                    for label_index in range(len(different_labels)):
+                        if different_labels[label_index] == disregard_class:
+                            label_counts[label_index] = -1  # set count to -1 so that it is never chosen as max
+
             # take label with highest count
             signal = np.array([different_labels[np.argmax(label_counts)]])
         
@@ -145,6 +172,7 @@ class AccessTransformDataset(Dataset):
             slp_label_mapping: dict,
             rri_inlier_interval: tuple,
             mad_inlier_interval: tuple,
+            disregard_classes_when_possible: list,
             signal_length_seconds: int,
             pad_feature_with,
             pad_target_with,
@@ -228,6 +256,7 @@ class AccessTransformDataset(Dataset):
         self.slp_label_mapping = slp_label_mapping
         self.rri_inlier_interval = rri_inlier_interval
         self.mad_inlier_interval = mad_inlier_interval
+        self.disregard_classes_when_possible = disregard_classes_when_possible
         
         # parameters needed for ensuring uniform signal shape
         self.signal_length_seconds = signal_length_seconds
@@ -271,6 +300,7 @@ class AccessTransformDataset(Dataset):
             signal_length_seconds = self.signal_length_seconds,
             pad_with = self.pad_feature_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
+            disregard_classes_when_possible = [],
             **self.common_window_reshape_parameters,
             normalize = self.normalize_rri,
             **self.common_signal_normalization_parameters,
@@ -288,6 +318,7 @@ class AccessTransformDataset(Dataset):
                 signal_length_seconds = self.signal_length_seconds,
                 pad_with = self.pad_feature_with,
                 reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
+                disregard_classes_when_possible = [],
                 **self.common_window_reshape_parameters,
                 normalize = self.normalize_mad,
                 **self.common_signal_normalization_parameters,
@@ -307,6 +338,7 @@ class AccessTransformDataset(Dataset):
             signal_length_seconds = self.signal_length_seconds,
             pad_with = self.pad_target_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
+            disregard_classes_when_possible = self.disregard_classes_when_possible,
             **self.common_window_reshape_parameters,
             normalize = False,  # SLP labels should not be normalized
             datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
@@ -1374,6 +1406,20 @@ class DemoShortSequenceModel(nn.Module):
         ========================
         """
 
+        # Create layer structure for dilated convolution
+        dilated_convolution_learning_layers = []
+        for dilation in [2, 4, 8, 16, 32]:
+            # Residual block:
+            dilated_convolution_learning_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[-1],
+                out_channels = rri_convolutional_channels[-1],
+                kernel_size = 7,
+                dilation = dilation,
+                padding ='same'
+                ))
+            dilated_convolution_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            dilated_convolution_learning_layers.append(nn.Dropout(0.2))
+
         """
         -----------------
         RRI Branch
@@ -1398,7 +1444,7 @@ class DemoShortSequenceModel(nn.Module):
             if num_channel_pos >= rri_start_pooling:  # Last two layers have pooling
                 rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
-        self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+        self.rri_signal_learning = nn.Sequential(*rri_branch_layers, *dilated_convolution_learning_layers)
 
         """
         -----------------
@@ -1424,7 +1470,7 @@ class DemoShortSequenceModel(nn.Module):
             if num_channel_pos >= mad_start_pooling:
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
-        self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+        self.mad_signal_learning = nn.Sequential(*mad_branch_layers, *dilated_convolution_learning_layers)
 
         """
         =================================================
@@ -1610,6 +1656,20 @@ class ShortSequenceModel(nn.Module):
         ========================
         """
 
+        # Create layer structure for dilated convolution
+        dilated_convolution_learning_layers = []
+        for dilation in [2, 4, 8, 16, 32]:
+            # Residual block:
+            dilated_convolution_learning_layers.append(nn.Conv1d(
+                in_channels = rri_convolutional_channels[-1],
+                out_channels = rri_convolutional_channels[-1],
+                kernel_size = 7,
+                dilation = dilation,
+                padding ='same'
+                ))
+            dilated_convolution_learning_layers.append(nn.LeakyReLU(negative_slope_leaky_relu))
+            dilated_convolution_learning_layers.append(nn.Dropout(0.2))
+
         """
         -----------------
         RRI Branch
@@ -1635,6 +1695,7 @@ class ShortSequenceModel(nn.Module):
                 rri_branch_layers.append(nn.MaxPool1d(kernel_size=rri_branch_max_pooling_kernel_size))
 
         self.rri_signal_learning = nn.Sequential(*rri_branch_layers)
+        # self.rri_signal_learning = nn.Sequential(*rri_branch_layers, *dilated_convolution_learning_layers)
 
         """
         -----------------
@@ -1661,6 +1722,7 @@ class ShortSequenceModel(nn.Module):
                 mad_branch_layers.append(nn.MaxPool1d(kernel_size=mad_branch_max_pooling_kernel_size))
         
         self.mad_signal_learning = nn.Sequential(*mad_branch_layers)
+        # self.mad_signal_learning = nn.Sequential(*mad_branch_layers, *dilated_convolution_learning_layers)
 
         """
         =================================================
@@ -2400,6 +2462,7 @@ if __name__ == "__main__":
         rri_inlier_interval = (None, None), # no inlier interval for RRI
         mad_inlier_interval = (None, None), # no inlier interval for MAD
         reshape_to_overlapping_windows = True,
+        disregard_classes_when_possible = [],
         normalize_rri = True,
         normalize_mad = True,
         # kwargs for CustomSleepDataset:

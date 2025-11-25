@@ -228,6 +228,7 @@ def main_pipeline_SAE(
         path_to_model_directory: str,
         neural_network_hyperparameters_gif: dict,
         path_to_gif_database: str,
+        path_to_gif_database_test: str,
         ):
     """
     Main function to run the entire pipeline
@@ -269,7 +270,7 @@ def main_pipeline_SAE(
             path_to_project_configuration = path_to_model_directory + project_configuration_file,
             path_to_model_state = None,
             path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
-            paths_to_validation_data_directories = [path_to_gif_database],
+            paths_to_validation_data_directories = [path_to_gif_database_test],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
         )
         newly_trained_model = True
@@ -283,7 +284,7 @@ def main_pipeline_SAE(
     if newly_trained_model:
         run_model_performance_evaluation_SAE(
             path_to_model_directory = path_to_model_directory,
-            path_to_gif_directory = path_to_gif_database,
+            path_to_gif_directory = path_to_gif_database_test,
         )
 
 
@@ -650,18 +651,19 @@ def Reduced_Process_GIF_SAE_Dataset(
             continue
 
         sae_signal = np.array(generator_entry["SAE"]).astype(int)
-        end_length = int(generator_entry["SAE_frequency"] * 30)
+        lower_length = int(generator_entry["SAE_frequency"] * 0) #2
+        upper_length = int(generator_entry["SAE_frequency"] * 2) #10
         i = 0
-        while i < len(sae_signal):
+        while i < len(sae_signal)-1:
             if sae_signal[i] != 0 and sae_signal[i+1] == 0:
                 current_event = sae_signal[i]
 
-                lower_border = max(0, i-end_length)
-                upper_border = min(len(sae_signal), i+end_length)
+                lower_border = max(0, i-lower_length)
+                upper_border = min(len(sae_signal), i+upper_length)
                 
                 for j in range(lower_border, upper_border):
                     sae_signal[j] = current_event
-                i += end_length
+                i += upper_length
             else:
                 sae_signal[i] = 0
                 i += 1
@@ -754,7 +756,7 @@ def copy_and_split_default_database_SAE(
     del signal_crop_params
 
 
-def build_default_datasets_for_training_and_testing():
+def build_default_datasets_for_training_and_testing_SSG():
     """
     =======================
     Build Default Database
@@ -833,6 +835,14 @@ def build_default_datasets_for_training_and_testing():
     
     os.remove(limited_project_configuration_file)
 
+
+def build_default_datasets_for_training_and_testing_SAE():
+    """
+    =======================
+    Build Default Database
+    =======================
+    """
+
     limited_project_configuration_file = "default_project_configuration.pkl"
     project_configuration = {
         "RRI_frequency": 4,
@@ -885,11 +895,11 @@ def build_default_datasets_for_training_and_testing():
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
     
-    Reduced_Process_GIF_SAE_Dataset(
-        path_to_gif_dataset = original_gif_sae_data_path,
-        path_to_save_processed_data = default_reduced_gif_SAE_path,
-        path_to_project_configuration = limited_project_configuration_file
-        )
+    # Reduced_Process_GIF_SAE_Dataset(
+    #     path_to_gif_dataset = original_gif_sae_data_path,
+    #     path_to_save_processed_data = default_reduced_gif_SAE_path,
+    #     path_to_project_configuration = limited_project_configuration_file
+    #     )
     
     os.remove(limited_project_configuration_file)
 
@@ -922,6 +932,7 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
         "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
+        "disregard_classes_when_possible": [],
     }
 
     pid_distribution_parameters = {
@@ -1151,6 +1162,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         "rri_inlier_interval": (None, None),
         "mad_inlier_interval": (None, None),
         "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
+        "disregard_classes_when_possible": [],
     }
 
     pid_distribution_parameters = {
@@ -1412,6 +1424,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
         "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "disregard_classes_when_possible": [0],
     }
 
     pid_distribution_parameters = {
@@ -1599,6 +1612,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
                         path_to_model_directory = identifier,
                         neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
                         path_to_gif_database = gif_directory_path,
+                        path_to_gif_database_test = gif_directory_path,
                     )
     
     del project_configuration, default_project_configuration
@@ -1627,6 +1641,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "rri_inlier_interval": (None, None), # (0.3, 2)
         "mad_inlier_interval": (None, None),
         "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "disregard_classes_when_possible": [0],
     }
 
     pid_distribution_parameters = {
@@ -1696,12 +1711,14 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 1, "Obstructive Hypopnea": 1, "Central Hypopnea": 1},
     }
 
-    class_adjustments = [apnea_hypopnea_type, apnea_hypopnea, apnea_event]
-    class_names = ["AHT", "AH", "AE"]
+    # class_adjustments = [apnea_hypopnea_type, apnea_hypopnea, apnea_event]
+    # class_names = ["AHT", "AH", "AE"]
+    class_adjustments = [apnea_event, apnea_hypopnea]
+    class_names = ["A", "AH"]
 
     two_minute_network = {
         "signal_length_seconds": 120,
-        "shift_length_seconds_interval": (120, 120),
+        "shift_length_seconds_interval": (30, 30),
         "windows_per_signal": 23,
         "window_duration_seconds": 10,
         "overlap_seconds": 5,
@@ -1710,37 +1727,15 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
-    two_minute_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
-    }
-
     five_minute_network = {
         "signal_length_seconds": 300,
-        "shift_length_seconds_interval": (300, 300),
+        "shift_length_seconds_interval": (75, 75),
         "windows_per_signal": 59,
         "window_duration_seconds": 10,
         "overlap_seconds": 5,
         "priority_order": [3, 2, 4, 1, 0],
         "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 10),
         "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
-    }
-
-    five_minute_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
     }
 
     ten_minute_network = {
@@ -1754,7 +1749,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 10),
     }
 
-    ten_minute_hyperparameters_gif = {
+    hyperparameters_gif = {
         "batch_size": 8,
         "number_epochs": 40,
         "lr_scheduler_parameters": {
@@ -1799,19 +1794,22 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         "normalization_mode": "local",
     }
 
-    network_adjustments = [two_minute_network, five_minute_network, ten_minute_network]
-    gif_hyperparameter_adjustments = [two_minute_hyperparameters_gif, five_minute_hyperparameters_gif, ten_minute_hyperparameters_gif]
-    network_names = ["Multiple_2min", "Multiple_5min", "Multiple_10min"]
-
     cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
 
     network_models = [LongSequenceModel, LongSequenceResidualModel]
     network_model_names = ["LSM", "LSM_Residual"]
 
-    # different networks have different signal cropping parameters, so we need to create a database for each network
-    gif_directory_paths = ["2min_GIF_SAE_Data/", "5min_GIF_SAE_Data/", "10min_GIF_SAE_Data/"]
+    # network_adjustments = [two_minute_network, five_minute_network, ten_minute_network]
+    # gif_hyperparameter_adjustments = [hyperparameters_gif, hyperparameters_gif, hyperparameters_gif]
+    # network_names = ["Multiple_2min", "Multiple_5min", "Multiple_10min"]
+    network_adjustments = [two_minute_network, five_minute_network]
+    gif_hyperparameter_adjustments = [hyperparameters_gif, hyperparameters_gif]
+    network_names = ["Multiple_2min", "Multiple_5min"]
 
+    # different networks have different signal cropping parameters, so we need to create a database for each network
+    # gif_directory_paths = ["2min_GIF_SAE_Data/", "5min_GIF_SAE_Data/", "10min_GIF_SAE_Data/"]
+    gif_directory_paths = ["2min_GIF_SAE_Data/", "5min_GIF_SAE_Data/"]
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
             path_to_default_gif_database = default_complete_gif_SAE_path,
@@ -1827,11 +1825,18 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
         train_file_generator = load_from_pickle(train_file_path)
         collect_some_data = list()
 
+        count_high_proportion = 0
         for data_point in train_file_generator:
+            if count_high_proportion == 10:
+                count_high_proportion = 0
+
             sae_signal = np.array(data_point["SLP"])
             proportion_normal_breathing = (sae_signal == 0).sum() / len(sae_signal)
-            if proportion_normal_breathing > 0.8 and random.random() < 0.8:
-                continue
+            if sae_signal.sum() == 0:# and random.random() < 0.8:
+                count_high_proportion += 1
+                if count_high_proportion > 3:
+                    continue
+
             collect_some_data.append(data_point)
         
         os.remove(train_file_path)
@@ -1875,9 +1880,10 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
                         path_to_model_directory = identifier,
                         neural_network_hyperparameters_gif = gif_hyperparameter_adjustments[network_index],
                         path_to_gif_database = gif_directory_paths[network_index],
+                        path_to_gif_database_test = gif_directory_paths[network_index],
                     )
     
-    del project_configuration, default_project_configuration
+    del project_configuration, default_project_configuration # type: ignore
 
 
 def train_and_test_short_sequence_model_on_apnea_events():
@@ -1902,7 +1908,8 @@ def train_and_test_short_sequence_model_on_apnea_events():
     value_mapping_parameters = {
         "rri_inlier_interval": (None, None),
         "mad_inlier_interval": (None, None),
-        "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        "target_classes": {"Normal": 0, "Mixed Apnea": 1, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Hypopnea": 2, "Obstructive Hypopnea": 2, "Central Hypopnea": 2},
+        "disregard_classes_when_possible": [0],
     }
 
     pid_distribution_parameters = {
@@ -1914,7 +1921,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "join_splitted_parts": True,
         "equally_distribute_signal_durations": True,
         "stratify_by_target": True,
-        "consider_targets_for_stratification": ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+        "consider_targets_for_stratification": ["Mixed Apnea", "Hypopnea"],
     }
 
     dataset_class_transform_parameters = {
@@ -1973,8 +1980,8 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 1, "Obstructive Hypopnea": 1, "Central Hypopnea": 1},
     }
 
-    class_adjustments = [apnea_hypopnea_type, apnea_hypopnea, apnea_event]
-    class_names = ["AHT", "AH", "AE"]
+    class_adjustments = [apnea_event, apnea_hypopnea]
+    class_names = ["A", "AH"]
 
     raw = {
         "rri_inlier_interval": (None, None),
@@ -2006,17 +2013,6 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 10),
     }
 
-    ten_second_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
-    }
-
     sixteen_second_network = {
         "signal_length_seconds": 16,
         "shift_length_seconds_interval": (16, 16),
@@ -2024,61 +2020,49 @@ def train_and_test_short_sequence_model_on_apnea_events():
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 16),
     }
 
-    sixteen_second_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
-    }
-
     thirty_second_network = {
         "signal_length_seconds": 30,
-        "shift_length_seconds_interval": (30, 30),
+        "shift_length_seconds_interval": (15, 15),
         "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
     }
 
-    thirty_second_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
+    thirty_second_network_test = {
+        "signal_length_seconds": 30,
+        "shift_length_seconds_interval": (15, 15),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
     }
 
     sixty_second_network = {
         "signal_length_seconds": 60,
-        "shift_length_seconds_interval": (60, 60),
+        "shift_length_seconds_interval": (15, 15),
         "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
     }
 
-    sixty_second_hyperparameters_gif = {
-        "batch_size": 8,
-        "number_epochs": 40,
-        "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
-            "start_learning_rate": 1 * 1e-5,
-            "max_learning_rate": 1 * 1e-3,
-            "end_learning_rate": 1 * 1e-6
-        }
+    sixty_second_network_test = {
+        "signal_length_seconds": 60,
+        "shift_length_seconds_interval": (15, 15),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
     }
 
     hundred_twenty_second_network = {
         "signal_length_seconds": 120,
-        "shift_length_seconds_interval": (120, 120),
+        "shift_length_seconds_interval": (30, 30),
         "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
     }
 
-    hundred_twenty_second_hyperparameters_gif = {
+    hundred_twenty_second_network_test = {
+        "signal_length_seconds": 120,
+        "shift_length_seconds_interval": (30, 30),
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
+    }
+
+    hyperparameters_gif = {
         "batch_size": 8,
         "number_epochs": 40,
         "lr_scheduler_parameters": {
@@ -2092,12 +2076,21 @@ def train_and_test_short_sequence_model_on_apnea_events():
     cleaning_adjustments = [raw, cleaned, norm]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
 
-    network_adjustments = [ten_second_network, sixteen_second_network, thirty_second_network, sixty_second_network, hundred_twenty_second_network]
-    gif_hyperparameter_adjustments = [ten_second_hyperparameters_gif, sixteen_second_hyperparameters_gif, thirty_second_hyperparameters_gif, sixty_second_hyperparameters_gif, hundred_twenty_second_hyperparameters_gif]
-    network_names = ["Local_10s", "Local_16s", "Local_30s", "Local_60s", "Local_120s"]
+    # network_adjustments = [ten_second_network, sixteen_second_network, thirty_second_network, sixty_second_network, hundred_twenty_second_network]
+    # gif_hyperparameter_adjustments = [hyperparameters_gif, hyperparameters_gif, hyperparameters_gif, hyperparameters_gif, hyperparameters_gif]
+    # network_names = ["Local_10s", "Local_16s", "Local_30s", "Local_60s", "Local_120s"]
+    network_adjustments = [hundred_twenty_second_network, sixty_second_network, thirty_second_network]
+    network_adjustments_test = [hundred_twenty_second_network_test, sixty_second_network_test, thirty_second_network_test]
+    gif_hyperparameter_adjustments = [hyperparameters_gif, hyperparameters_gif, hyperparameters_gif]
+    network_names = ["Local_120s", "Local_60s", "Local_30s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
-    gif_directory_paths = ["10s_GIF_SAE_Data/", "16s_GIF_SAE_Data/", "30s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "120s_GIF_SAE_Data/"]
+    gif_directory_paths = ["120s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "30s_GIF_SAE_Data/"]
+    gif_directory_paths_test = ["120s_GIF_SAE_Data_Test/", "60s_GIF_SAE_Data_Test/", "30s_GIF_SAE_Data_Test/"]
+    remove_training_data_from_paths = []
+    for path in gif_directory_paths:
+        if not os.path.exists(path):
+            remove_training_data_from_paths.append(path)
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
@@ -2105,6 +2098,54 @@ def train_and_test_short_sequence_model_on_apnea_events():
             path_to_save_gif_database = gif_directory_paths[net_adjust_index],
             project_configuration = network_adjustments[net_adjust_index]
         )
+
+        # copy_and_split_default_database_SAE(
+        #     path_to_default_gif_database = default_complete_gif_SAE_path,
+        #     path_to_save_gif_database = gif_directory_paths_test[net_adjust_index],
+        #     project_configuration = network_adjustments_test[net_adjust_index]
+        # )
+    
+    for path_index in range(len(remove_training_data_from_paths)):
+        train_file_path = remove_training_data_from_paths[path_index] + "training_pid.pkl"
+        train_data_offset_path = remove_training_data_from_paths[path_index] + ".training_pid_offset.pkl"
+        configuration_path = remove_training_data_from_paths[path_index] + "configuration.pkl"
+        
+        train_file_generator = load_from_pickle(train_file_path)
+        collect_some_data = list()
+
+        count_high_proportion = 0
+        for data_point in train_file_generator:
+            if count_high_proportion == 10:
+                count_high_proportion = 0
+
+            sae_signal = np.array(data_point["SLP"])
+            proportion_normal_breathing = (sae_signal == 0).sum() / len(sae_signal)
+            if sae_signal.sum() == 0:# and random.random() < 0.8:
+                count_high_proportion += 1
+                if count_high_proportion > 3:
+                    continue
+
+            collect_some_data.append(data_point)
+        
+        os.remove(train_file_path)
+        os.remove(train_data_offset_path)
+        new_file = open(train_file_path, "ab")
+
+        train_byte_offsets = []
+        for data_point in collect_some_data:
+            train_byte_offsets.append(new_file.tell())
+            pickle.dump(data_point, new_file)
+        
+        with open(train_data_offset_path, "wb") as f:
+            pickle.dump(train_byte_offsets, f)
+        
+        with open(configuration_path, "rb") as f:
+            database_configuration = pickle.load(f)
+        
+        database_configuration["number_datapoints"][1] = len(collect_some_data)
+
+        with open(configuration_path, "wb") as f:
+            pickle.dump(database_configuration, f)
 
     for clean_index in range(len(cleaning_adjustments)):
         for class_index in range(len(class_adjustments)):
@@ -2124,33 +2165,62 @@ def train_and_test_short_sequence_model_on_apnea_events():
                     path_to_model_directory = identifier,
                     neural_network_hyperparameters_gif = gif_hyperparameter_adjustments[network_index],
                     path_to_gif_database = gif_directory_paths[network_index],
+                    # path_to_gif_database_test = gif_directory_paths_test[network_index],
+                    path_to_gif_database_test = gif_directory_paths[network_index],
                 )
 
+
 if __name__ == "__main__":
-    build_default_datasets_for_training_and_testing()
+    # hundred_twenty_second_network_test = {
+    #     "signal_length_seconds": 120,
+    #     "shift_length_seconds_interval": (120, 120),
+    #     "rri_datapoints": int(480),
+    #     "mad_datapoints": int(120),
+    # }
+
+    # # copy_and_split_default_database_SAE(
+    # #     path_to_default_gif_database = "Default_GIF_SAE_Data_All/",
+    # #     path_to_save_gif_database = "120_bla/",
+    # #     project_configuration = hundred_twenty_second_network_test
+    # # )
+    
+    # run_model_performance_evaluation_SAE(
+    #     path_to_model_directory = "SAE_Local_120s_AE_RAW/",
+    #     path_to_gif_directory = "120s_GIF_SAE_Data_Test/",
+    # )
+
+    # raise SystemExit
+
+    # build_default_datasets_for_training_and_testing_SSG()
+    build_default_datasets_for_training_and_testing_SAE()
 
     try:
-        train_and_test_long_sequence_model_on_sleep_staging_data()
+        # train_and_test_long_sequence_model_on_sleep_staging_data()
+        pass
     except:
         pass
 
     try:
-        train_and_test_short_sequence_model_on_sleep_staging_data()
+        # train_and_test_short_sequence_model_on_sleep_staging_data()
+        pass
     except:
         pass
 
     try:
-        train_and_test_long_sequence_model_on_apnea_events()
+        # train_and_test_long_sequence_model_on_apnea_events()
+        pass
     except:
         pass
 
     try:
-        train_and_test_long_sequence_model_varying_duration_on_apnea_events()
+        # train_and_test_long_sequence_model_varying_duration_on_apnea_events()
+        pass
     except:
         pass
 
     try:
         train_and_test_short_sequence_model_on_apnea_events()
+        pass
     except:
         pass
 

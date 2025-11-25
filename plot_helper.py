@@ -500,8 +500,8 @@ def plot_distribution_of_score(
 
 
 def plot_confusion_matrix(
-        path_to_pkl_file: str,
-        path_to_project_configuration: str,
+        path_to_model_directory: str,
+        dataset: str, # "SHHS" or "GIF"
         prediction_result_key: str,
         actual_result_key: str,
         **kwargs
@@ -547,8 +547,8 @@ def plot_confusion_matrix(
     # Default values
     kwargs.setdefault("figsize", [3.4, 2.7])
     kwargs.setdefault("title", "")
-    kwargs.setdefault("xlabel", "predicted stage")
-    kwargs.setdefault("ylabel", "real stage")
+    kwargs.setdefault("xlabel", "Predicted Class")
+    kwargs.setdefault("ylabel", "Real Class")
 
     kwargs.setdefault("cmap", "Blues")
     kwargs.setdefault("values_format", ".1%") # or None, 'd', '.2g'
@@ -556,11 +556,12 @@ def plot_confusion_matrix(
     kwargs.setdefault("normalize", "true") # or "pred", "all", None
 
     # load signal processing parameters
+    path_to_project_configuration = path_to_model_directory + project_configuration_file
     with open(path_to_project_configuration, "rb") as f:
         project_configuration = pickle.load(f)
     
     # access dictionary that maps sleep stages (display labels) to integers
-    sleep_stage_to_label = project_configuration["sleep_stage_label"]
+    sleep_stage_to_label = project_configuration["target_classes"]
 
     # Create a list of the integer labels, sorted
     integer_labels = np.array([value for value in sleep_stage_to_label.values()])
@@ -575,24 +576,33 @@ def plot_confusion_matrix(
                 display_labels.append(key)
                 break
 
+    # variables to store results
+    all_predicted_results = np.empty(0)
+    all_actual_results = np.empty(0)
+
     # Load the data
-    data_generator = load_from_pickle(path_to_pkl_file)
-    data = next(data_generator)
+    data_generator = load_from_pickle(path_to_model_directory + model_performance_file[:-4] + "_" + dataset + "_Validation_Pid.pkl")
 
-    # Get the predicted and actual results
-    predicted_results = data[prediction_result_key]
-    actual_results = data[actual_result_key]
+    for data in data_generator:
+        
+        # Get the predicted and actual results
+        predicted_results = data[prediction_result_key]
+        actual_results = data[actual_result_key]
 
-    # Flatten the arrays
-    predicted_results = predicted_results.flatten()
-    actual_results = actual_results.flatten()
+        # Flatten the arrays
+        predicted_results = predicted_results.flatten()
+        actual_results = actual_results.flatten()
+
+        # Add the results to the arrays
+        all_predicted_results = np.append(all_predicted_results, predicted_results)
+        all_actual_results = np.append(all_actual_results, actual_results)
 
     # Plot the confusion matrix
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
 
     metrics.ConfusionMatrixDisplay.from_predictions(
-        y_true = actual_results,
-        y_pred = predicted_results,
+        y_true = all_actual_results,
+        y_pred = all_predicted_results,
         ax = ax,
         display_labels = display_labels,
         labels = integer_labels,
@@ -764,6 +774,20 @@ def plot_actual_predicted(
 
 
 if __name__ == "__main__":
+
+    model_directory_path = "SAE_Multiple_2min_AE_LSM_RAW/"
+    model_directory_path = "SAE_Local_120s_AE_RAW/"
+
+    plot_confusion_matrix(
+        path_to_model_directory = model_directory_path,
+        dataset = "GIF", # "SHHS" or "GIF"
+        # normalize = None,
+        # values_format = None,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+    )
+
+    raise SystemExit
 
     model_directory_path = "Neural_Network/"
     # model_directory_path = "Yao_no_overlap/"

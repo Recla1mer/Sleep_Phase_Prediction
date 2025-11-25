@@ -855,6 +855,362 @@ def nako_info():
     print(np.mean(age), np.std(age), np.min(age), np.max(age))
 
 
+def apnea_info(
+    data_path: str = "RAW_Data/gif_sleep_apnea_events.pkl",
+    results_file_path: str = "gif_apnea_info.pkl",
+):
+    """
+    """
+    gif_generator = load_from_pickle(data_path)
+
+    apnea_classes = [i for i in range(0, 8)]
+    apnea_classes_count = [1 for _ in apnea_classes]
+
+    for data_dict in gif_generator:
+        apnea_events = data_dict["SAE"]
+        for i in range(len(apnea_events)):
+            index = apnea_classes.index(apnea_events[i])
+            apnea_classes_count[index] += 1
+
+    with open(results_file_path, "rb") as f:
+        current_dict = pickle.load(f)
+    
+    current_dict["apnea_classes_for_count"] = apnea_classes
+    current_dict["apnea_classes_count"] = apnea_classes_count
+
+    with open(results_file_path, "wb") as f:
+        pickle.dump(current_dict, f)
+
+
+def apnea_info_2(
+    data_path: str = "RAW_Data/gif_sleep_apnea_events.pkl",
+    results_file_path: str = "gif_apnea_info.pkl",
+):
+    """
+    """
+    gif_generator = load_from_pickle(data_path)
+
+    apnea_classes = [i for i in range(1, 8)]
+    all_count = [[] for _ in range(len(apnea_classes))]
+
+
+    for data_dict in gif_generator:
+        event_count = 0
+        apnea_events = data_dict["SAE"]
+        apnea_classes_count = [0 for _ in apnea_classes]
+        for i in range(len(apnea_events)-1):
+            if apnea_events[i] != 0 and apnea_events[i+1] == 0:
+                index = apnea_classes.index(apnea_events[i])
+                apnea_classes_count[index] += 1
+                event_count += 1
+        
+        if apnea_events[-1] != 0:
+            index = apnea_classes.index(apnea_events[-1])
+            apnea_classes_count[index] += 1
+            event_count += 1
+        
+        for i in range(len(apnea_classes)):
+            all_count[i].append(apnea_classes_count[i])
+        
+        if event_count > 50:
+            print(f"High apnea event count: {event_count} in file {data_dict['ID']}")
+
+    # with open(results_file_path, "rb") as f:
+    #     current_dict = pickle.load(f)
+    
+    # current_dict["apnea_classes_for_occurance"] = apnea_classes
+    # current_dict["apnea_classes_occurance"] = all_count
+
+    # with open(results_file_path, "wb") as f:
+    #     pickle.dump(current_dict, f)
+
+
+def apnea_info_3(
+    data_path: str = "RAW_Data/gif_sleep_apnea_events.pkl",
+    results_file_path: str = "gif_apnea_info.pkl",
+):
+    """
+    """
+    gif_generator = load_from_pickle(data_path)
+
+    apnea_classes = [i for i in range(1, 8)]
+    all_count = [[] for _ in range(len(apnea_classes))]
+
+    ids = []
+    ids_apnea_classes_count = []
+    ids_lengths = []
+
+
+    for data_dict in gif_generator:
+        
+        id = data_dict["ID"][:5]
+        apnea_events = data_dict["SAE"]
+
+        if id in ids:
+            id_index = ids.index(id)
+            apnea_classes_count = ids_apnea_classes_count[id_index]
+            for i in range(len(apnea_events)-1):
+                if apnea_events[i] != 0:
+                    index = apnea_classes.index(apnea_events[i])
+                    apnea_classes_count[index] += 1
+            ids_apnea_classes_count[id_index] = apnea_classes_count
+            ids_lengths[id_index] += len(apnea_events)
+            
+        else:
+            apnea_classes_count = [0 for _ in apnea_classes]
+            for i in range(len(apnea_events)-1):
+                if apnea_events[i] != 0:
+                    index = apnea_classes.index(apnea_events[i])
+                    apnea_classes_count[index] += 1
+            ids.append(id)
+            ids_lengths.append(len(apnea_events))
+            ids_apnea_classes_count.append(apnea_classes_count)
+
+    for id_index in range(len(ids_apnea_classes_count)):
+        apnea_classes_count = ids_apnea_classes_count[id_index]
+        apnea_events_length = ids_lengths[id_index]
+        for i in range(len(apnea_classes)):
+            all_count[i].append(int((apnea_classes_count[i] / apnea_events_length) * 100))
+
+    with open(results_file_path, "rb") as f:
+        current_dict = pickle.load(f)
+    
+    # current_dict["apnea_classes_for_occurance"] = apnea_classes
+    current_dict["apnea_classes_relative_time"] = all_count
+
+    with open(results_file_path, "wb") as f:
+        pickle.dump(current_dict, f)
+
+
+def slp_info_2(
+    data_path_gif: str = "RAW_Data/gif_sleep_stages.pkl",
+    data_path_shhs: str = "RAW_Data/SHHS_dataset.h5",
+    results_file_path: str = "slp_stage_info.pkl",
+):
+    """
+    """
+    gif_generator = load_from_pickle(data_path_gif)
+    apnea_classes = [0, 1, 2, 3]
+    gif_count = [[] for _ in range(len(apnea_classes))]
+    all_count = [[] for _ in range(len(apnea_classes))]
+
+    ids = []
+    ids_apnea_classes_count = []
+
+    for data_dict in gif_generator:
+        id = data_dict["ID"][:5]
+        apnea_events = data_dict["SLP"]
+
+        if id in ids:
+            id_index = ids.index(id)
+            apnea_classes_count = ids_apnea_classes_count[id_index]
+            for i in range(len(apnea_events)):
+                current_event = apnea_events[i]
+                if current_event == 2:
+                    current_event = 1
+                elif current_event == 3:
+                    current_event = 2
+                elif current_event == 5:
+                    current_event = 3
+                elif current_event == 4 or current_event > 5:
+                    continue
+                index = apnea_classes.index(current_event)
+                apnea_classes_count[index] += 1
+            ids_apnea_classes_count[id_index] = apnea_classes_count
+        else:
+            apnea_classes_count = [0 for _ in apnea_classes]
+            start_counting = False
+            for i in range(len(apnea_events)):
+                current_event = apnea_events[i]
+                if current_event != 0:
+                    start_counting = True
+                if not start_counting:
+                    continue
+                if current_event == 2:
+                    current_event = 1
+                elif current_event == 3:
+                    current_event = 2
+                elif current_event == 5:
+                    current_event = 3
+                elif current_event == 4 or current_event > 5:
+                    continue
+                index = apnea_classes.index(current_event)
+                apnea_classes_count[index] += 1
+            
+            if sum(apnea_classes_count) != 0:
+                ids.append(id)
+                ids_apnea_classes_count.append(apnea_classes_count)
+    
+    for apnea_classes_count in ids_apnea_classes_count:
+        for i in range(len(apnea_classes)):
+            gif_count[i].append(apnea_classes_count[i])
+            all_count[i].append(apnea_classes_count[i])
+    
+    # access the SHHS dataset
+    shhs_dataset = h5py.File(data_path_shhs, 'r')
+    shhs_count = [[] for _ in range(len(apnea_classes))]
+
+    # accessing patient ids:
+    patients = list(shhs_dataset['slp'].keys()) # type: ignore
+
+    for patient_id in patients:
+        apnea_events = shhs_dataset["slp"][patient_id][:] # type: ignore
+        time = len(apnea_events) * 30 # type: ignore
+        apnea_classes_count = [0 for _ in apnea_classes]
+        for i in range(len(apnea_events)): # type: ignore
+            current_event = apnea_events[i] # type: ignore
+            if current_event == 2:
+                current_event = 1
+            elif current_event == 3:
+                current_event = 2
+            elif current_event == 5:
+                current_event = 3
+            elif current_event == 4 or current_event > 5: # type: ignore
+                continue
+            index = apnea_classes.index(current_event) # type: ignore
+            apnea_classes_count[index] += 1
+        
+        for i in range(len(apnea_classes)):
+            shhs_count[i].append(apnea_classes_count[i])
+            all_count[i].append(apnea_classes_count[i])
+        
+    current_dict = dict()
+    current_dict["slp_classes"] = apnea_classes
+    current_dict["shhs_occurance"] = shhs_count
+    current_dict["gif_occurance"] = gif_count
+    current_dict["all_occurance"] = all_count
+
+    with open(results_file_path, "wb") as f:
+        pickle.dump(current_dict, f)
+
+
+def plot_slp_occurance_distribution(
+    pickle_name = "slp_stage_info.pkl",
+    dataset_name = "all", # "shhs", "gif", or "all"
+    sleep_labels = ["Wake", "LS", "DS", "REM"],
+    sleep_mapping = [[0,0], [1,1], [2,2], [3,3]],
+    **kwargs
+    ):
+    
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", r"Relative Class Time (\%)")
+    kwargs.setdefault("ylabel", "Count")
+    kwargs.setdefault("edgecolor", "black")
+    kwargs.setdefault("kde", True)
+    kwargs.setdefault("bins", 'auto')
+    kwargs.setdefault("binwidth", None)
+    kwargs.setdefault("common_bins", True)
+    kwargs.setdefault("multiple", "layer") # “layer”, “dodge”, “stack”, “fill”
+    kwargs.setdefault("linewidth", 1)
+    kwargs.setdefault("alpha", 0.5)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("yscale", "linear")
+    kwargs.setdefault("grid", True)
+    kwargs.setdefault("legend", True)
+
+    sns_args = dict(
+        kde=kwargs["kde"],
+        bins=kwargs["bins"],
+        binwidth=kwargs["binwidth"],
+        edgecolor=kwargs["edgecolor"],
+        common_bins=kwargs["common_bins"],
+        multiple=kwargs["multiple"],
+        alpha=kwargs["alpha"],
+        legend=kwargs["legend"],
+        # linewidth=kwargs["linewidth"]
+    )
+
+    with open(pickle_name, "rb") as f:
+        pickle_data_loaded = pickle.load(f)
+    
+    original_classes = pickle_data_loaded["slp_classes"]
+    original_occurance = pickle_data_loaded[f"{dataset_name}_occurance"]
+
+    remove_rows = []
+
+    for i in range(len(original_occurance[0])):
+        total = np.sum([original_occurance[j][i] for j in range(len(original_occurance))])
+        
+        time = total * 30 / 3600  # in hours
+        # if time > 6.75 or time > 7.25:
+        #     remove_rows.append(i)
+
+        for j in range(len(original_occurance)):
+            original_occurance[j][i] = int(original_occurance[j][i] / total * 100)
+    
+    original_occurance = np.array(original_occurance)
+    # original_occurance = np.delete(original_occurance, remove_rows, axis=1)
+
+    considered_stages = []
+    considered_occurances = []
+
+    for i in range(len(original_classes)):
+        current_class = original_classes[i]
+        class_found = False
+        for j in range(len(sleep_mapping)):
+            source_class = sleep_mapping[j][0]
+            target_class = sleep_mapping[j][1]
+            if source_class == current_class:
+                class_found = True
+                break
+        
+        if not class_found:
+            continue
+        
+        if target_class not in considered_stages:
+            considered_stages.append(target_class)
+            considered_occurances.append(np.array(original_occurance[i]))
+        else:
+            index = considered_stages.index(target_class)
+            considered_occurances[index] = considered_occurances[index] + np.array(original_occurance[i])
+    
+    if len(considered_stages) != len(sleep_labels):
+        raise ValueError(f"Inconsistent sleep stage mapping and labels: {len(considered_stages)} vs {len(sleep_labels)}")
+    else:
+        print("Current Mapping:")
+        print(considered_stages)
+        print([sleep_labels[i] for i in considered_stages])
+        where_zero = [len([considered_occurances[stage][i] for i in range(len(considered_occurances[stage])) if considered_occurances[stage][i] == 0]) for stage in considered_stages]
+        ratio_where_zero = [where_zero[i] / len(considered_occurances[i]) * 100 for i in range(len(considered_stages))]
+        print("Zero occurrences:", where_zero)
+        print("Ratio of zero occurrences (%):", ratio_where_zero)
+        print(np.mean(considered_occurances, axis=1))
+        print(np.std(considered_occurances, axis=1))
+    
+    collected_stages = []
+    collected_occurances = []
+
+    for i in range(len(considered_stages)):
+        stage = considered_stages[i]
+        occurances = considered_occurances[i]
+        label = sleep_labels[considered_stages.index(stage)]
+        for j in range(len(occurances)):
+            if occurances[j] > -1:
+                collected_stages.append(label)
+                collected_occurances.append(occurances[j])
+
+    pd_dataframe = pd.DataFrame({
+        "durations": collected_occurances,
+        "Class": collected_stages
+    })
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax = sns.histplot(data=pd_dataframe, x="durations", hue="Class", **sns_args)
+    ax.set(xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
+    ax.grid(kwargs["grid"])
+    ax.set_axisbelow(True)
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+    
+    ax.set_title(kwargs["title"])
+    plt.show()
+
+
 def plot_apnea_duration_distribution(
     pickle_name = "gif_apnea_info.pkl",
     transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
@@ -946,6 +1302,202 @@ def plot_apnea_duration_distribution(
     ax.set_title(kwargs["title"])
     plt.show()
 
+# {"Normal": [0], "Apnea": [1], "Obstructive Apnea": [2], "Central Apnea": [3], "Mixed Apnea": [4], "Hypopnea": [5], "Obstructive Hypopnea": [6], "Central Hypopnea": [7]}
+def plot_apnea_frequency(
+    results_file_path: str = "gif_apnea_info.pkl",
+    sleep_labels = ["Normal", "Apnea", "Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea", "Obstructive Hypopnea", "Central Hypopnea"],
+    sleep_mapping = [[0,0], [1,1], [2,2], [3,3], [4,4], [5,5], [6,6], [7,7]],
+    stat = "percentage", # "count" or "percentage"
+    **kwargs
+    ):
+
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "Classes")
+    kwargs.setdefault("ylabel", "Count" if stat == "count" else "Relative Recording Time (\%)") # type: ignore
+    kwargs.setdefault("edgecolor", "black")
+    kwargs.setdefault("alpha", 0.5)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("yscale", "linear")
+    kwargs.setdefault("grid", True)
+
+    matplotlib.rcParams["axes.prop_cycle"] = matplotlib.rcParams["axes.prop_cycle"][1:]
+
+    sns_args = dict(
+        edgecolor=kwargs["edgecolor"],
+        alpha=kwargs["alpha"]
+    )
+
+    considered_stages = []
+    for i in range(len(sleep_mapping)):
+        considered_stages.append(sleep_mapping[i][1])
+    considered_stages.sort()
+    considered_stages = np.unique(considered_stages)
+
+    if len(considered_stages) != len(sleep_labels):
+        raise ValueError(f"Inconsistent sleep stage mapping and labels: {len(considered_stages)} vs {len(sleep_labels)}")
+    else:
+        print("Current Mapping:")
+        print(considered_stages)
+        print(sleep_labels)
+
+    with open(results_file_path, "rb") as f:
+        pickle_data_loaded = pickle.load(f)
+
+    original_stages = pickle_data_loaded["apnea_classes_for_count"]
+    original_num_stages = pickle_data_loaded["apnea_classes_count"]
+    print(original_stages, original_num_stages)
+    num_stages = remap_stag_count(considered_stages, original_stages, original_num_stages, sleep_mapping)
+
+    print(f"Apnea stages: {considered_stages}, counts: {num_stages}, relative: {[count/sum(num_stages) * 100 for count in num_stages]}")
+
+    if stat == "count":
+        lengths = num_stages
+    elif stat == "percentage":
+        total = sum(num_stages)
+        lengths = np.array(num_stages) / total * 100
+
+    stages = sleep_labels
+    
+    label = ["CHB" for _ in range(len(num_stages))]
+
+    pd_dataframe = pd.DataFrame({
+        "lengths": lengths,
+        "slp_stage": stages,
+        "Dataset": label
+    })
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax = sns.barplot(data=pd_dataframe, x="slp_stage", y="lengths", hue="Dataset", **sns_args)
+    ax.set(xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
+    ax.grid(kwargs["grid"])
+    ax.set_axisbelow(True)
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    print(f"Y-limits: {kwargs['ylim']}, X-limits: {kwargs['xlim']}")
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+    
+    ax.set_title(kwargs["title"])
+    plt.show()
+
+    matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler( # type: ignore
+            "color", bnb.plt.get_default_colors()
+        )
+
+
+def plot_apnea_occurance_distribution(
+    pickle_name = "gif_apnea_info.pkl",
+    sleep_labels = ["Normal", "Apnea", "Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea", "Obstructive Hypopnea", "Central Hypopnea"],
+    sleep_mapping = [[0,0], [1,1], [2,2], [3,3], [4,4], [5,5], [6,6], [7,7]],
+    **kwargs
+    ):
+    
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", r"Total Apnea Event Duration (\%)")
+    kwargs.setdefault("ylabel", "Count")
+    kwargs.setdefault("edgecolor", "black")
+    kwargs.setdefault("kde", True)
+    kwargs.setdefault("bins", 'auto')
+    kwargs.setdefault("binwidth", None)
+    kwargs.setdefault("common_bins", True)
+    kwargs.setdefault("multiple", "layer") # “layer”, “dodge”, “stack”, “fill”
+    kwargs.setdefault("linewidth", 1)
+    kwargs.setdefault("alpha", 0.5)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("yscale", "linear")
+    kwargs.setdefault("grid", True)
+    kwargs.setdefault("legend", True)
+
+    sns_args = dict(
+        kde=kwargs["kde"],
+        bins=kwargs["bins"],
+        binwidth=kwargs["binwidth"],
+        edgecolor=kwargs["edgecolor"],
+        common_bins=kwargs["common_bins"],
+        multiple=kwargs["multiple"],
+        alpha=kwargs["alpha"],
+        legend=kwargs["legend"],
+        # linewidth=kwargs["linewidth"]
+    )
+
+    with open(pickle_name, "rb") as f:
+        pickle_data_loaded = pickle.load(f)
+    
+    original_classes = pickle_data_loaded["apnea_classes_for_occurance"]
+    # original_occurance = pickle_data_loaded["apnea_classes_occurance"]
+    original_occurance = pickle_data_loaded["apnea_classes_relative_time"]
+
+    considered_stages = []
+    considered_occurances = []
+
+    for i in range(len(original_classes)):
+        current_class = original_classes[i]
+        class_found = False
+        for j in range(len(sleep_mapping)):
+            source_class = sleep_mapping[j][0]
+            target_class = sleep_mapping[j][1]
+            if source_class == current_class:
+                class_found = True
+                break
+        
+        if not class_found:
+            continue
+        
+        if target_class not in considered_stages:
+            considered_stages.append(target_class)
+            considered_occurances.append(np.array(original_occurance[i]))
+        else:
+            index = considered_stages.index(target_class)
+            considered_occurances[index] = considered_occurances[index] + np.array(original_occurance[i])
+    
+    considered_occurances = np.array(considered_occurances)
+    considered_stages = [int(stage)-1 for stage in considered_stages]
+    
+    if len(considered_stages) != len(sleep_labels):
+        raise ValueError(f"Inconsistent sleep stage mapping and labels: {len(considered_stages)} vs {len(sleep_labels)}")
+    else:
+        print("Current Mapping:")
+        print(considered_stages)
+        print([sleep_labels[i] for i in considered_stages])
+        print(np.mean(considered_occurances, axis=1))
+        print(np.std(considered_occurances, axis=1))
+    
+    collected_stages = []
+    collected_occurances = []
+
+    for i in range(len(considered_stages)):
+        stage = considered_stages[i]
+        occurances = considered_occurances[i]
+        label = sleep_labels[considered_stages.index(stage)]
+        for j in range(len(occurances)):
+            if occurances[j] > -1:
+                collected_stages.append(label)
+                collected_occurances.append(occurances[j])
+
+    pd_dataframe = pd.DataFrame({
+        "durations": collected_occurances,
+        "Apnea Event": collected_stages
+    })
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax = sns.histplot(data=pd_dataframe, x="durations", hue="Apnea Event", **sns_args)
+    ax.set(xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
+    ax.grid(kwargs["grid"])
+    ax.set_axisbelow(True)
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+    
+    ax.set_title(kwargs["title"])
+    plt.show()
+
 
 tex_correction = 0.5
 tex_look = {
@@ -996,22 +1548,94 @@ if __name__ == "__main__":
     matplotlib.rcParams.update(tex_look)
     
     # multi-plots
-    # fig_ratio = 4 / 3
-    # linewidth *= 0.48 # 0.48, 0.5, 0.3
+    fig_ratio = 4 / 3
+    linewidth *= 0.322 # 0.48, 0.5, 0.3
 
     # standalone plots
-    fig_ratio = 3 / 2
-    fig_ratio = 2 / 1
-    linewidth *= 0.8
+    # fig_ratio = 3 / 2
+    # fig_ratio = 2 / 1
+    # linewidth *= 0.8
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
     # MA Plots
     if True:
+        # slp_info_2()
+        # apnea_info_3()
+
+        # plot_slp_occurance_distribution(
+        #     dataset_name="gif",
+        #     bins = np.arange(0, 100, 2),
+        # )
+        # plot_slp_occurance_distribution(
+        #     dataset_name="shhs",
+        #     bins = np.arange(0, 100, 2),
+        # )
+
+        plot_apnea_occurance_distribution(
+            pickle_name = "gif_apnea_info.pkl",
+            # xlabel = "",
+            # ylabel = "",
+            # sleep_labels = ["Apnea", "Hypopnea"],
+            # sleep_mapping = [[1,2], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
+            sleep_labels = ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+            sleep_mapping = [[1,1], [2,1], [3,2], [4,3], [5,4], [6,4], [7,4]],
+            # ylim = [0, 20],
+            # xlim = [0, 100],
+            binwidth = 1,
+            # legend = False
+        )
+
+        plot_apnea_occurance_distribution(
+            pickle_name = "gif_apnea_info.pkl",
+            xlabel = "",
+            ylabel = "",
+            # sleep_labels = ["Apnea", "Hypopnea"],
+            # sleep_mapping = [[1,2], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
+            sleep_labels = ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+            sleep_mapping = [[1,1], [2,1], [3,2], [4,3], [5,4], [6,4], [7,4]],
+            ylim = [0, 20],
+            # xlim = [0, 100],
+            binwidth = 1,
+            legend = False
+        )
+
+    if False:
+
+        plot_apnea_occurance_distribution(
+            pickle_name = "gif_apnea_info.pkl",
+            # sleep_labels = ["Apnea", "Hypopnea"],
+            # sleep_mapping = [[1,2], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
+            sleep_labels = ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+            sleep_mapping = [[1,1], [2,1], [3,2], [4,3], [5,4], [6,4], [7,4]],
+            # ylim = [0, 100],
+            # xlim = [0, 100],
+            binwidth = 5,
+        )
+        
+        # plot_apnea_frequency(
+        #     sleep_labels = ["Normal Breathing", "Apnea", "Hypopnea"],
+        #     sleep_mapping = [[0,0], [1,1], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
+        # )
+
+        # plot_apnea_frequency(
+        #     sleep_labels = ["A", "OA", "CA", "MA", "H", "OH", "CH"],
+        #     sleep_mapping = [[1,1], [2,2], [3,3], [4,4], [5,5], [6,6], [7,7]],
+        # )
+        
+        # plot_apnea_duration_distribution(
+        #     pickle_name = "gif_apnea_info.pkl",
+        #     transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
+        #     # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+        #     include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+        #     xlim = [0, 100],
+        #     bins = np.arange(0, 301, 2),
+        # )
+
         plot_apnea_duration_distribution(
             pickle_name = "gif_apnea_info.pkl",
-            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
+            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
             # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
-            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
             xlim = [0, 100],
             bins = np.arange(0, 301, 2),
         )
