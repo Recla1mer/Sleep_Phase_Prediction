@@ -153,6 +153,7 @@ def main_pipeline_SSG(
         path_to_default_shhs_database: str,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
+        email = False
         ):
     """
     Main function to run the entire pipeline
@@ -214,13 +215,50 @@ def main_pipeline_SSG(
     ===========================
     """
 
-    run_model_performance_evaluation_SSG(
-        path_to_model_directory = path_to_model_directory,
-        path_to_splitted_shhs_directory = path_to_shhs_database,
-        path_to_complete_shhs_directory = path_to_default_shhs_database,
-        path_to_splitted_gif_directory = path_to_gif_database,
-        path_to_complete_gif_directory = path_to_default_gif_database,
-    )
+    if email:
+        run_model_performance_evaluation_SSG(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_shhs_directory = path_to_shhs_database,
+            path_to_complete_shhs_directory = path_to_default_shhs_database,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
+
+        buffer = io.StringIO()
+        sys.stdout = buffer
+
+        run_model_performance_evaluation_SSG(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_shhs_directory = path_to_shhs_database,
+            path_to_complete_shhs_directory = path_to_default_shhs_database,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
+
+        try:
+            send_email_notification(
+                email_subject="SSG Results",
+                email_body=buffer.getvalue()
+            )
+        
+        except:
+            pass
+
+        buffer.truncate(0)
+        buffer.seek(0)
+
+        sys.stdout = sys.__stdout__
+        del buffer
+    
+    else:
+
+        run_model_performance_evaluation_SSG(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_shhs_directory = path_to_shhs_database,
+            path_to_complete_shhs_directory = path_to_default_shhs_database,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
 
 
 def main_pipeline_SAE(
@@ -229,6 +267,7 @@ def main_pipeline_SAE(
         neural_network_hyperparameters_gif: dict,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
+        email = False
         ):
     """
     Main function to run the entire pipeline
@@ -279,11 +318,44 @@ def main_pipeline_SAE(
     ===========================
     """
 
-    run_model_performance_evaluation_SAE(
-        path_to_model_directory = path_to_model_directory,
-        path_to_splitted_gif_directory = path_to_gif_database,
-        path_to_complete_gif_directory = path_to_default_gif_database,
-    )
+    if email:
+        run_model_performance_evaluation_SAE(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
+
+        buffer = io.StringIO()
+        sys.stdout = buffer
+
+        run_model_performance_evaluation_SAE(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
+
+        try:
+            send_email_notification(
+                email_subject="SSG Results",
+                email_body=buffer.getvalue()
+            )
+        
+        except:
+            pass
+
+        buffer.truncate(0)
+        buffer.seek(0)
+
+        sys.stdout = sys.__stdout__
+        del buffer
+    
+    else:
+
+        run_model_performance_evaluation_SAE(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_gif_directory = path_to_gif_database,
+            path_to_complete_gif_directory = path_to_default_gif_database,
+        )
 
 
 def Reduced_Process_SHHS_SSG_Dataset(
@@ -1294,9 +1366,9 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hyperparameters_shhs = {
         "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 20,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
+            "number_updates_to_max_lr": 2,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -1305,9 +1377,9 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     hyperparameters_gif = {
         "batch_size": 8, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
-        "number_epochs": 40,
+        "number_epochs": 20,
         "lr_scheduler_parameters": {
-            "number_updates_to_max_lr": 4,
+            "number_updates_to_max_lr": 2,
             "start_learning_rate": 1 * 1e-5,
             "max_learning_rate": 1 * 1e-3,
             "end_learning_rate": 1 * 1e-6
@@ -1322,14 +1394,14 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     # network_adjustments = [thirty_second_network, sixty_second_network, hundred_twenty_second_network, hundred_eighty_second_network]
     # network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
-    network_adjustments = [hundred_eighty_second_network]
-    network_names = ["Local_180s"]
+    network_adjustments = [hundred_eighty_second_network, thirty_second_network]
+    network_names = ["Local_180s", "Local_30s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
     # shhs_directory_paths = ["30s_SHHS_SSG_Data/", "60s_SHHS_SSG_Data/", "120s_SHHS_SSG_Data/", "180s_SHHS_SSG_Data/"]
     # gif_directory_paths = ["30s_GIF_SSG_Data/", "60s_GIF_SSG_Data/", "120s_GIF_SSG_Data/", "180s_GIF_SSG_Data/"]
-    shhs_directory_paths = ["180s_SHHS_SSG_Data/"]
-    gif_directory_paths = ["180s_GIF_SSG_Data/"]
+    shhs_directory_paths = ["180s_SHHS_SSG_Data/", "30s_SHHS_SSG_Data/"]
+    gif_directory_paths = ["180s_GIF_SSG_Data/", "30s_GIF_SSG_Data/"]
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SSG(
             path_to_default_shhs_database = default_complete_shhs_SSG_path,
@@ -1812,12 +1884,12 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     # network_adjustments = [hundred_eighty_second_network, hundred_twenty_second_network, sixty_second_network, thirty_second_network]
     # network_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
-    network_adjustments = [hundred_twenty_second_network]
-    network_names = ["Local_120s"]
+    network_adjustments = [hundred_eighty_second_network]
+    network_names = ["Local_180s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
     # gif_directory_paths = ["180s_GIF_SAE_Data/", "120s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "30s_GIF_SAE_Data/"]
-    gif_directory_paths = ["120s_GIF_SAE_Data/"]
+    gif_directory_paths = ["180s_GIF_SAE_Data/"]
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
@@ -1931,7 +2003,7 @@ if __name__ == "__main__":
         pass
 
     try:
-        # train_and_test_short_sequence_model_on_apnea_events()
+        train_and_test_short_sequence_model_on_apnea_events()
         pass
     except:
         pass

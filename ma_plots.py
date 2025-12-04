@@ -990,6 +990,35 @@ def apnea_info_3(
         pickle.dump(current_dict, f)
 
 
+def apnea_info_4(
+    data_path: str = "RAW_Data/gif_sleep_apnea_events.pkl",
+    results_file_path: str = "gif_apnea_info.pkl",
+):
+    """
+    """
+    gif_generator = load_from_pickle(data_path)
+
+    all_count = []
+
+    for data_dict in gif_generator:
+        event_count = 0
+        apnea_events = data_dict["SAE"]
+        last_apnea = -1
+        for i in range(len(apnea_events)-1):
+            if apnea_events[i] == 0 and apnea_events[i+1] != 0 and last_apnea > -1:
+                all_count.append(i+1-last_apnea)
+            if apnea_events[i] != 0 and apnea_events[i+1] == 0:
+                last_apnea = i+1
+        
+    with open(results_file_path, "rb") as f:
+        current_dict = pickle.load(f)
+    
+    current_dict["distance_apnea_events"] = all_count
+
+    with open(results_file_path, "wb") as f:
+        pickle.dump(current_dict, f)
+
+
 def slp_info_2(
     data_path_gif: str = "RAW_Data/gif_sleep_stages.pkl",
     data_path_shhs: str = "RAW_Data/SHHS_dataset.h5",
@@ -1309,6 +1338,74 @@ def plot_apnea_duration_distribution(
     
     ax.set_title(kwargs["title"])
     plt.show()
+
+
+def plot_apnea_distance_distribution(
+    pickle_name = "gif_apnea_info.pkl",
+    check_times = [5, 10, 15, 16, 17, 20, 25, 30, 60, 120, 180, 200],
+    **kwargs
+    ):
+    
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "Apnea Event Distance (s)")
+    kwargs.setdefault("ylabel", "Count")
+    kwargs.setdefault("edgecolor", "black")
+    kwargs.setdefault("kde", True)
+    kwargs.setdefault("bins", 'auto')
+    kwargs.setdefault("binwidth", None)
+    kwargs.setdefault("common_bins", True)
+    kwargs.setdefault("multiple", "layer") # “layer”, “dodge”, “stack”, “fill”
+    kwargs.setdefault("linewidth", 1)
+    kwargs.setdefault("alpha", 0.5)
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("yscale", "linear")
+    kwargs.setdefault("grid", True)
+    kwargs.setdefault("legend", True)
+
+    sns_args = dict(
+        kde=kwargs["kde"],
+        bins=kwargs["bins"],
+        binwidth=kwargs["binwidth"],
+        edgecolor=kwargs["edgecolor"],
+        common_bins=kwargs["common_bins"],
+        multiple=kwargs["multiple"],
+        alpha=kwargs["alpha"],
+        legend=kwargs["legend"],
+        # linewidth=kwargs["linewidth"]
+    )
+
+    with open(pickle_name, "rb") as f:
+        pickle_data_loaded = pickle.load(f)
+    
+    distances = pickle_data_loaded["distance_apnea_events"]
+    
+    for time in check_times:
+        count = 0
+        for distance in distances:
+            if distance >= time:
+                count += 1
+        print(f"Apnea events with distance to last >= {time} seconds: {count} / {len(distances)} ({count / len(distances) * 100:.2f}%)")
+
+    pd_dataframe = pd.DataFrame({
+        "distance": distances,
+    })
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax = sns.histplot(data=pd_dataframe, x="distance", **sns_args)
+    ax.set(xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.set_yscale(kwargs["yscale"])
+    ax.grid(kwargs["grid"])
+    ax.set_axisbelow(True)
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+    
+    ax.set_title(kwargs["title"])
+    plt.show()
+
 
 # {"Normal": [0], "Apnea": [1], "Obstructive Apnea": [2], "Central Apnea": [3], "Mixed Apnea": [4], "Hypopnea": [5], "Obstructive Hypopnea": [6], "Central Hypopnea": [7]}
 def plot_apnea_frequency(
@@ -1639,21 +1736,26 @@ if __name__ == "__main__":
         #     bins = np.arange(0, 301, 2),
         # )
 
-        plot_apnea_duration_distribution(
-            pickle_name = "gif_apnea_info.pkl",
-            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
-            # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
-            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
-            binwidth = 5
-        )
+        # plot_apnea_duration_distribution(
+        #     pickle_name = "gif_apnea_info.pkl",
+        #     transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
+        #     # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+        #     include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
+        #     binwidth = 5
+        # )
 
-        plot_apnea_duration_distribution(
-            pickle_name = "gif_apnea_info.pkl",
-            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
-            # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
-            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
-            xlim = [0, 100],
-            bins = np.arange(0, 301, 2),
+        # plot_apnea_duration_distribution(
+        #     pickle_name = "gif_apnea_info.pkl",
+        #     transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
+        #     # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+        #     include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
+        #     xlim = [0, 100],
+        #     bins = np.arange(0, 301, 2),
+        # )
+
+        plot_apnea_distance_distribution(
+            xlim = [0, 200],
+            binwidth = 10
         )
 
     if False:
