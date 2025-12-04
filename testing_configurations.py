@@ -13,6 +13,8 @@ import os
 import io
 import sys
 
+global_send_email = False
+
 default_complete_shhs_SSG_path = "Default_SHHS_SSG_Data_All/"
 default_complete_gif_SSG_path = "Default_GIF_SSG_Data_All/"
 
@@ -153,8 +155,8 @@ def main_pipeline_SSG(
         path_to_default_shhs_database: str,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
-        send_email = False,
-        email_subject = ""
+        send_email: bool = False,
+        email_subject: str = ""
         ):
     """
     Main function to run the entire pipeline
@@ -352,8 +354,8 @@ def main_pipeline_SAE(
         neural_network_hyperparameters_gif: dict,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
-        send_email = False,
-        email_subject = ""
+        send_email: bool = False,
+        email_subject: str = ""
         ):
     """
     Main function to run the entire pipeline
@@ -1323,6 +1325,8 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
                     path_to_default_shhs_database = default_reduced_shhs_SSG_path,
                     path_to_gif_database = gif_directory_path,
                     path_to_default_gif_database = default_reduced_gif_SSG_path,
+                    send_email = global_send_email,
+                    email_subject = identifier
                 )
     
     del project_configuration, default_project_configuration
@@ -1548,6 +1552,8 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
                     path_to_default_shhs_database = default_complete_shhs_SSG_path,
                     path_to_gif_database = gif_directory_paths[network_index],
                     path_to_default_gif_database = default_complete_gif_SSG_path,
+                    send_email = global_send_email,
+                    email_subject = identifier
                 )
 
 
@@ -1815,6 +1821,8 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
                         neural_network_hyperparameters_gif = hyperparameters_gif,
                         path_to_gif_database = gif_directory_paths[network_index],
                         path_to_default_gif_database = default_complete_gif_SAE_path,
+                        send_email = global_send_email,
+                        email_subject = identifier
                     )
     
     del project_configuration, default_project_configuration # type: ignore
@@ -2081,6 +2089,8 @@ def train_and_test_short_sequence_model_on_apnea_events():
                     neural_network_hyperparameters_gif = hyperparameters_gif,
                     path_to_gif_database = gif_directory_paths[network_index],
                     path_to_default_gif_database = default_complete_gif_SAE_path,
+                    send_email = global_send_email,
+                    email_subject = identifier
                 )
 
 
