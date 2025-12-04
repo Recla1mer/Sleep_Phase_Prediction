@@ -215,24 +215,118 @@ def main_pipeline_SSG(
     ===========================
     """
 
+    run_model_performance_evaluation_SSG(
+        path_to_model_directory = path_to_model_directory,
+        path_to_splitted_shhs_directory = path_to_shhs_database,
+        path_to_complete_shhs_directory = path_to_default_shhs_database,
+        path_to_splitted_gif_directory = path_to_gif_database,
+        path_to_complete_gif_directory = path_to_default_gif_database,
+    )
+
     if email:
-        run_model_performance_evaluation_SSG(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_shhs_directory = path_to_shhs_database,
-            path_to_complete_shhs_directory = path_to_default_shhs_database,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
-        )
 
         buffer = io.StringIO()
         sys.stdout = buffer
 
-        run_model_performance_evaluation_SSG(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_shhs_directory = path_to_shhs_database,
-            path_to_complete_shhs_directory = path_to_default_shhs_database,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
+        """
+        -------------------------------
+        Print Performance on SHHS Data
+        -------------------------------
+        """
+
+        # path to save the predictions
+        shhs_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_SHHS_Splitted_Validation_Pid.pkl"
+        shhs_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_SHHS_Complete_Validation_Pid.pkl"
+
+        # calculate and print performance results for splitted data
+        print_headline("Performance on Splitted SHHS Data:", symbol_sequence="=")
+        print("   - Reflecting performance on single data segments of required signal length")
+
+        print_model_performance(
+            paths_to_pkl_files = [shhs_splitted_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        # calculate and print performance results for complete data
+        print_headline("Performance on Complete SHHS Data:", symbol_sequence="=")
+        print("   - Reflecting performance on data segments of variable lengths, as they occur in practice")
+        print("   - Predictions were made using inference, combining results from overlapping data segments")
+        
+        print_headline("Performance calculated from combined Probability:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [shhs_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        print_headline("Performance calculated from majority vote:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [shhs_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted_2",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+
+        """
+        ------------------------------
+        Print Performance on GIF Data
+        ------------------------------
+        """
+        
+        # path to save the predictions
+        gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
+        gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
+
+        # calculate and print performance results for splitted data
+        print_headline("Performance on Splitted GIF Data:", symbol_sequence="=")
+        print("   - Reflecting performance on single data segments of required signal length")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        # calculate and print performance results for complete data
+        print_headline("Performance on Complete GIF Data:", symbol_sequence="=")
+        print("   - Reflecting performance on data segments of variable lengths, as they occur in practice")
+        print("   - Predictions were made using inference, combining results from overlapping data segments")
+        
+        print_headline("Performance calculated from combined Probability:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        print_headline("Performance calculated from majority vote:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted_2",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
         )
 
         try:
@@ -249,16 +343,6 @@ def main_pipeline_SSG(
 
         sys.stdout = sys.__stdout__
         del buffer
-    
-    else:
-
-        run_model_performance_evaluation_SSG(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_shhs_directory = path_to_shhs_database,
-            path_to_complete_shhs_directory = path_to_default_shhs_database,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
-        )
 
 
 def main_pipeline_SAE(
@@ -318,25 +402,70 @@ def main_pipeline_SAE(
     ===========================
     """
 
+    run_model_performance_evaluation_SAE(
+        path_to_model_directory = path_to_model_directory,
+        path_to_splitted_gif_directory = path_to_gif_database,
+        path_to_complete_gif_directory = path_to_default_gif_database,
+    )
+
     if email:
-        run_model_performance_evaluation_SAE(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
-        )
 
         buffer = io.StringIO()
         sys.stdout = buffer
 
-        run_model_performance_evaluation_SAE(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
+        """
+        ------------------------------
+        Print Performance on GIF Data
+        ------------------------------
+        """
+        
+        # path to save the predictions
+        gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
+        gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
+
+        # calculate and print performance results for splitted data
+        print_headline("Performance on Splitted GIF Data:", symbol_sequence="=")
+        print("   - Reflecting performance on single data segments of required signal length")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        # calculate and print performance results for complete data
+        print_headline("Performance on Complete GIF Data:", symbol_sequence="=")
+        print("   - Reflecting performance on data segments of variable lengths, as they occur in practice")
+        print("   - Predictions were made using inference, combining results from overlapping data segments")
+        
+        print_headline("Performance calculated from combined Probability:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
+        )
+
+        print_headline("Performance calculated from majority vote:", symbol_sequence="-")
+
+        print_model_performance(
+            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            prediction_result_key = "Predicted_2",
+            actual_result_key = "Actual",
+            additional_score_function_args = {"zero_division": np.nan},
+            number_of_decimals = 3
         )
 
         try:
             send_email_notification(
-                email_subject="SSG Results",
+                email_subject="SAE Results",
                 email_body=buffer.getvalue()
             )
         
@@ -348,14 +477,6 @@ def main_pipeline_SAE(
 
         sys.stdout = sys.__stdout__
         del buffer
-    
-    else:
-
-        run_model_performance_evaluation_SAE(
-            path_to_model_directory = path_to_model_directory,
-            path_to_splitted_gif_directory = path_to_gif_database,
-            path_to_complete_gif_directory = path_to_default_gif_database,
-        )
 
 
 def Reduced_Process_SHHS_SSG_Dataset(
@@ -1155,20 +1276,14 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "normalization_mode": "local",
     }
 
-    # window_and_class_adjustments = [overlap_artifact_as_wake, no_overlap_artifact_as_wake, overlap_full_class]
-    # window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
-    window_and_class_adjustments = [overlap_artifact_as_wake, overlap_full_class]
-    window_and_class_names = ["Overlap_ArtifactAsWake", "Overlap_FullClass"]
+    window_and_class_adjustments = [overlap_artifact_as_wake, no_overlap_artifact_as_wake, overlap_full_class]
+    window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
 
-    # cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
-    # cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
-    cleaning_adjustments = [local_norm]
-    cleaning_names = ["LocalNorm"]
+    cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
 
-    # network_models = [LongSequenceModel, LongSequenceResidualModel]
-    # network_model_names = ["LSM", "LSM_Residual"]
-    network_models = [LongSequenceResidualModel]
-    network_model_names = ["LSM_Residual"]
+    network_models = [LongSequenceModel, LongSequenceResidualModel]
+    network_model_names = ["LSM", "LSM_Residual"]
 
     # all share same signal cropping parameters, so we need to create only one database to draw data from
     shhs_directory_path = "10h_SHHS_SSG_Data/"
@@ -1392,16 +1507,12 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
     cleaning_adjustments = [raw, cleaned, norm]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
 
-    # network_adjustments = [thirty_second_network, sixty_second_network, hundred_twenty_second_network, hundred_eighty_second_network]
-    # network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
-    network_adjustments = [hundred_eighty_second_network, thirty_second_network]
-    network_names = ["Local_180s", "Local_30s"]
+    network_adjustments = [hundred_eighty_second_network, hundred_twenty_second_network, sixty_second_network, thirty_second_network]
+    network_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
-    # shhs_directory_paths = ["30s_SHHS_SSG_Data/", "60s_SHHS_SSG_Data/", "120s_SHHS_SSG_Data/", "180s_SHHS_SSG_Data/"]
-    # gif_directory_paths = ["30s_GIF_SSG_Data/", "60s_GIF_SSG_Data/", "120s_GIF_SSG_Data/", "180s_GIF_SSG_Data/"]
-    shhs_directory_paths = ["180s_SHHS_SSG_Data/", "30s_SHHS_SSG_Data/"]
-    gif_directory_paths = ["180s_GIF_SSG_Data/", "30s_GIF_SSG_Data/"]
+    shhs_directory_paths = ["180s_SHHS_SSG_Data/", "120s_SHHS_SSG_Data/", "60s_SHHS_SSG_Data/", "30s_SHHS_SSG_Data/"]
+    gif_directory_paths = ["180s_GIF_SSG_Data/", "120s_GIF_SSG_Data/", "60s_GIF_SSG_Data/", "30s_GIF_SSG_Data/"]
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SSG(
             path_to_default_shhs_database = default_complete_shhs_SSG_path,
@@ -1882,14 +1993,14 @@ def train_and_test_short_sequence_model_on_apnea_events():
     cleaning_adjustments = [raw, cleaned, norm]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
 
-    # network_adjustments = [hundred_eighty_second_network, hundred_twenty_second_network, sixty_second_network, thirty_second_network]
-    # network_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
-    network_adjustments = [hundred_eighty_second_network]
-    network_names = ["Local_180s"]
+    network_adjustments = [hundred_eighty_second_network, hundred_twenty_second_network, sixty_second_network, thirty_second_network]
+    network_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
+    # network_adjustments = [hundred_eighty_second_network]
+    # network_names = ["Local_180s"]
 
     # different networks have different signal cropping parameters, so we need to create a database for each network
-    # gif_directory_paths = ["180s_GIF_SAE_Data/", "120s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "30s_GIF_SAE_Data/"]
-    gif_directory_paths = ["180s_GIF_SAE_Data/"]
+    gif_directory_paths = ["180s_GIF_SAE_Data/", "120s_GIF_SAE_Data/", "60s_GIF_SAE_Data/", "30s_GIF_SAE_Data/"]
+    # gif_directory_paths = ["180s_GIF_SAE_Data/"]
 
     for net_adjust_index in range(len(network_adjustments)):
         copy_and_split_default_database_SAE(
@@ -1969,8 +2080,6 @@ def train_and_test_short_sequence_model_on_apnea_events():
                     path_to_gif_database = gif_directory_paths[network_index],
                     path_to_default_gif_database = default_complete_gif_SAE_path,
                 )
-
-                raise SystemExit("Finished one pipeline.")
 
 
 if __name__ == "__main__":

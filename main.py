@@ -960,7 +960,7 @@ def main_model_training_stage(
         current_labels = current_target_classes,
         desired_labels = project_configuration["target_classes"],
     )
-    print(slp_label_mapping)
+
     CustomDatasetKeywords["slp_label_mapping"] = slp_label_mapping
     del data_manager
 
@@ -1077,8 +1077,8 @@ def main_model_training_stage(
 
     for t in range(1, number_epochs+1):
         # clearing previous epoch progress bars
-        # if t > 1:
-        #     print(clearing_sequence, end='')
+        if t > 1:
+            print(clearing_sequence, end='')
 
         print("")
         print("-"*10)
@@ -1233,7 +1233,7 @@ def main_model_training_apnea(
         current_labels = current_target_classes,
         desired_labels = project_configuration["target_classes"],
     )
-    print(slp_label_mapping)
+
     CustomDatasetKeywords["slp_label_mapping"] = slp_label_mapping
     del data_manager
 
@@ -1350,8 +1350,8 @@ def main_model_training_apnea(
 
     for t in range(1, number_epochs+1):
         # clearing previous epoch progress bars
-        # if t > 1:
-        #     print(clearing_sequence, end='')
+        if t > 1:
+            print(clearing_sequence, end='')
 
         print("")
         print("-"*10)
