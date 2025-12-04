@@ -36,7 +36,6 @@ def final_data_preprocessing(
         signal_length_seconds: int,
         pad_with,
         reshape_to_overlapping_windows: bool,
-        disregard_classes_when_possible: list,
         normalize: bool,
         datatype_mappings: list,
         transform,
@@ -50,14 +49,14 @@ def final_data_preprocessing(
                 required if the corresponding preprocessing transformation should be applied in the first place.
     """
 
-    if signal_id == "SLP":
+    if signal_id[:3] == "SLP":
         signal_type = "target"
     elif signal_id in ["RRI", "MAD"]:
         signal_type = "feature"
     else:
         raise ValueError(f"Unknown signal_id '{signal_id}'. Expected 'SLP', 'RRI' or 'MAD'.")
 
-    if signal_id == "SLP":
+    if signal_type == "target":
         # transform sleep stage labels to uniform labels:
         signal = map_slp_labels(
             slp_labels = signal, # type: ignore
@@ -105,11 +104,11 @@ def final_data_preprocessing(
             signal = np.append(signal, np.full_like(np.empty(int(signal_length_seconds * target_frequency) - signal.shape[0]), pad_with, dtype=signal.dtype), axis=0)
 
         # ensure only one label per signal (automatically done by reshape_signal_to_overlapping_windows):
-        if signal_type == "target":
+        if signal_id == "SLP_apnea_predict":
             found_apnea = False
             signal_length = len(signal)
             for signal_index in range(signal_length):
-                if signal[signal_index] != 0 and signal_index+1 <= signal_length * 0.8 and signal_index+1 >= signal_length * 0.2:
+                if signal[signal_index] != 0 and signal_index+1:
                     found_apnea = True
                     signal = np.array([signal[signal_index]])
                     break
@@ -117,22 +116,21 @@ def final_data_preprocessing(
             if not found_apnea:
                 signal = np.array([0])
 
-        if signal_type == "bubable":
-            # collect unique labels and their counts
-            different_labels, label_counts = np.unique(copy.deepcopy(signal), return_counts=True)
-
-            # remove disregarded classes from consideration
-            remove_disregarded_classes = False
-            for label in different_labels:
-                if label not in disregard_classes_when_possible:
-                    remove_disregarded_classes = True
+        if signal_id == "SLP_apnea_train":
+            found_apnea = False
+            signal_length = len(signal)
+            for signal_index in range(signal_length):
+                if signal[signal_index] != 0 and signal_index+1 <= signal_length * 0.8 and signal_index+1 >= signal_length * 0.1:
+                    found_apnea = True
+                    signal = np.array([signal[signal_index]])
                     break
             
-            if remove_disregarded_classes:
-                for disregard_class in disregard_classes_when_possible:
-                    for label_index in range(len(different_labels)):
-                        if different_labels[label_index] == disregard_class:
-                            label_counts[label_index] = -1  # set count to -1 so that it is never chosen as max
+            if not found_apnea:
+                signal = np.array([0])
+
+        if signal_id == "SLP_stage_train" or signal_id == "SLP_stage_predict":
+            # collect unique labels and their counts
+            different_labels, label_counts = np.unique(copy.deepcopy(signal), return_counts=True)
 
             # take label with highest count
             signal = np.array([different_labels[np.argmax(label_counts)]])
@@ -172,7 +170,6 @@ class AccessTransformDataset(Dataset):
             slp_label_mapping: dict,
             rri_inlier_interval: tuple,
             mad_inlier_interval: tuple,
-            disregard_classes_when_possible: list,
             signal_length_seconds: int,
             pad_feature_with,
             pad_target_with,
@@ -181,6 +178,7 @@ class AccessTransformDataset(Dataset):
             normalize_mad: bool = False,
             feature_transform = None,
             target_transform = None,
+            modeling_task: str = "sleep_staging", # "apnea_detection"
             **kwargs
         ):
         """
@@ -256,7 +254,6 @@ class AccessTransformDataset(Dataset):
         self.slp_label_mapping = slp_label_mapping
         self.rri_inlier_interval = rri_inlier_interval
         self.mad_inlier_interval = mad_inlier_interval
-        self.disregard_classes_when_possible = disregard_classes_when_possible
         
         # parameters needed for ensuring uniform signal shape
         self.signal_length_seconds = signal_length_seconds
@@ -283,6 +280,8 @@ class AccessTransformDataset(Dataset):
         self.feature_transform = feature_transform
         self.target_transform = target_transform
 
+        self.modeling_task = modeling_task
+
     def __len__(self):
         return len(self.data_manager)
 
@@ -300,7 +299,6 @@ class AccessTransformDataset(Dataset):
             signal_length_seconds = self.signal_length_seconds,
             pad_with = self.pad_feature_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
-            disregard_classes_when_possible = [],
             **self.common_window_reshape_parameters,
             normalize = self.normalize_rri,
             **self.common_signal_normalization_parameters,
@@ -318,7 +316,6 @@ class AccessTransformDataset(Dataset):
                 signal_length_seconds = self.signal_length_seconds,
                 pad_with = self.pad_feature_with,
                 reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
-                disregard_classes_when_possible = [],
                 **self.common_window_reshape_parameters,
                 normalize = self.normalize_mad,
                 **self.common_signal_normalization_parameters,
@@ -330,15 +327,21 @@ class AccessTransformDataset(Dataset):
             mad_sample = "None"
 
         # extract labels (Sleep Phase) from dictionary and perform final preprocessing:
+        if self.modeling_task == "apnea_detection":
+            slp_signal_id = "SLP_apnea_train"
+        elif self.modeling_task == "sleep_staging":
+            slp_signal_id = "SLP_stage_train"
+        else:
+            raise ValueError(f"Unknown modeling_task '{self.modeling_task}'. Expected 'sleep_staging' or 'apnea_detection'.")
+
         slp_labels = final_data_preprocessing(
             signal = data_sample["SLP"], # type: ignore
-            signal_id = "SLP",
+            signal_id = slp_signal_id,
             slp_label_mapping = self.slp_label_mapping,
             target_frequency = self.slp_frequency,
             signal_length_seconds = self.signal_length_seconds,
             pad_with = self.pad_target_with,
             reshape_to_overlapping_windows = self.reshape_to_overlapping_windows,
-            disregard_classes_when_possible = self.disregard_classes_when_possible,
             **self.common_window_reshape_parameters,
             normalize = False,  # SLP labels should not be normalized
             datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
@@ -2462,7 +2465,6 @@ if __name__ == "__main__":
         rri_inlier_interval = (None, None), # no inlier interval for RRI
         mad_inlier_interval = (None, None), # no inlier interval for MAD
         reshape_to_overlapping_windows = True,
-        disregard_classes_when_possible = [],
         normalize_rri = True,
         normalize_mad = True,
         # kwargs for CustomSleepDataset:

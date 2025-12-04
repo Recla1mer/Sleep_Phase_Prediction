@@ -940,10 +940,16 @@ def apnea_info_3(
     ids_apnea_classes_count = []
     ids_lengths = []
 
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+    skip_ids = gif_error_code_4 + gif_error_code_5 + ["SL067"]
 
     for data_dict in gif_generator:
         
         id = data_dict["ID"][:5]
+        if id in skip_ids:
+            continue
+        
         apnea_events = data_dict["SAE"]
 
         if id in ids:
@@ -977,6 +983,8 @@ def apnea_info_3(
     
     # current_dict["apnea_classes_for_occurance"] = apnea_classes
     current_dict["apnea_classes_relative_time"] = all_count
+
+    print(len(ids))
 
     with open(results_file_path, "wb") as f:
         pickle.dump(current_dict, f)
@@ -1093,7 +1101,7 @@ def plot_slp_occurance_distribution(
     ):
     
     kwargs.setdefault("title", "")
-    kwargs.setdefault("xlabel", r"Relative Class Time (\%)")
+    kwargs.setdefault("xlabel", r"Total SLP Class Duration (\%)")
     kwargs.setdefault("ylabel", "Count")
     kwargs.setdefault("edgecolor", "black")
     kwargs.setdefault("kde", True)
@@ -1215,7 +1223,7 @@ def plot_apnea_duration_distribution(
     pickle_name = "gif_apnea_info.pkl",
     transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Central Hypopnea'], ['Obstructive Hypopnea', 'Obstructive Hypopnea'], ['Apnea', 'Apnea']],
     include_labels = ['Hypopnea', 'Obstructive Apnea', 'Mixed Apnea', 'Central Apnea', 'Central Hypopnea', 'Obstructive Hypopnea', 'Apnea'],
-    check_times = [5, 10, 15, 16, 17, 20, 25, 30, 60, 120, 200],
+    check_times = [5, 10, 15, 16, 17, 20, 25, 30, 60, 120, 180, 200],
     crop_outside = [0, 24*3600],
     **kwargs
     ):
@@ -1549,7 +1557,7 @@ if __name__ == "__main__":
     
     # multi-plots
     fig_ratio = 4 / 3
-    linewidth *= 0.322 # 0.48, 0.5, 0.3
+    linewidth *= 0.48 # 0.48, 0.5, 0.3, 0.322
 
     # standalone plots
     # fig_ratio = 3 / 2
@@ -1558,7 +1566,7 @@ if __name__ == "__main__":
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
     # MA Plots
-    if True:
+    if False:
         # slp_info_2()
         # apnea_info_3()
 
@@ -1599,18 +1607,18 @@ if __name__ == "__main__":
             legend = False
         )
 
-    if False:
+    if True:
 
-        plot_apnea_occurance_distribution(
-            pickle_name = "gif_apnea_info.pkl",
-            # sleep_labels = ["Apnea", "Hypopnea"],
-            # sleep_mapping = [[1,2], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
-            sleep_labels = ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
-            sleep_mapping = [[1,1], [2,1], [3,2], [4,3], [5,4], [6,4], [7,4]],
-            # ylim = [0, 100],
-            # xlim = [0, 100],
-            binwidth = 5,
-        )
+        # plot_apnea_occurance_distribution(
+        #     pickle_name = "gif_apnea_info.pkl",
+        #     # sleep_labels = ["Apnea", "Hypopnea"],
+        #     # sleep_mapping = [[1,2], [2,1], [3,1], [4,1], [5,2], [6,2], [7,2]],
+        #     sleep_labels = ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+        #     sleep_mapping = [[1,1], [2,1], [3,2], [4,3], [5,4], [6,4], [7,4]],
+        #     # ylim = [0, 100],
+        #     # xlim = [0, 100],
+        #     binwidth = 5,
+        # )
         
         # plot_apnea_frequency(
         #     sleep_labels = ["Normal Breathing", "Apnea", "Hypopnea"],
@@ -1630,6 +1638,14 @@ if __name__ == "__main__":
         #     xlim = [0, 100],
         #     bins = np.arange(0, 301, 2),
         # )
+
+        plot_apnea_duration_distribution(
+            pickle_name = "gif_apnea_info.pkl",
+            transform = [['Hypopnea', 'Hypopnea'], ['Obstructive Apnea', 'Obstructive Apnea'], ['Mixed Apnea', 'Mixed Apnea'], ['Central Apnea', 'Central Apnea'], ['Central Hypopnea', 'Hypopnea'], ['Obstructive Hypopnea', 'Hypopnea'], ['Apnea', 'Apnea']],
+            # include_labels = ['Apnea', 'Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea', 'Obstructive Hypopnea', 'Central Hypopnea'],
+            include_labels = ['Obstructive Apnea', 'Central Apnea', 'Mixed Apnea', 'Hypopnea'],
+            binwidth = 5
+        )
 
         plot_apnea_duration_distribution(
             pickle_name = "gif_apnea_info.pkl",
