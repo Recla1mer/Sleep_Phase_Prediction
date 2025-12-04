@@ -153,7 +153,8 @@ def main_pipeline_SSG(
         path_to_default_shhs_database: str,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
-        email = False
+        send_email = False,
+        email_subject = ""
         ):
     """
     Main function to run the entire pipeline
@@ -223,7 +224,7 @@ def main_pipeline_SSG(
         path_to_complete_gif_directory = path_to_default_gif_database,
     )
 
-    if email:
+    if send_email:
 
         buffer = io.StringIO()
         sys.stdout = buffer
@@ -331,7 +332,7 @@ def main_pipeline_SSG(
 
         try:
             send_email_notification(
-                email_subject="SSG Results",
+                email_subject=email_subject,
                 email_body=buffer.getvalue()
             )
         
@@ -351,7 +352,8 @@ def main_pipeline_SAE(
         neural_network_hyperparameters_gif: dict,
         path_to_gif_database: str,
         path_to_default_gif_database: str,
-        email = False
+        send_email = False,
+        email_subject = ""
         ):
     """
     Main function to run the entire pipeline
@@ -408,7 +410,7 @@ def main_pipeline_SAE(
         path_to_complete_gif_directory = path_to_default_gif_database,
     )
 
-    if email:
+    if send_email:
 
         buffer = io.StringIO()
         sys.stdout = buffer
@@ -465,7 +467,7 @@ def main_pipeline_SAE(
 
         try:
             send_email_notification(
-                email_subject="SAE Results",
+                email_subject=email_subject,
                 email_body=buffer.getvalue()
             )
         
