@@ -355,7 +355,7 @@ def main_pipeline_SAE(
         path_to_gif_database: str,
         path_to_default_gif_database: str,
         send_email: bool = False,
-        email_subject: str = ""
+        email_subject: str = "",
         ):
     """
     Main function to run the entire pipeline
@@ -481,7 +481,7 @@ def main_pipeline_SAE(
 
         sys.stdout = sys.__stdout__
         del buffer
-
+    
 
 def Reduced_Process_SHHS_SSG_Dataset(
         path_to_shhs_dataset: str,
@@ -728,7 +728,7 @@ def Reduced_Process_GIF_SSG_Dataset_h5(
     filter_ids = project_configuration["gif_filter_ids"]
 
     # define the sleep stage labels (attention: a different dataset will most likely have different labels)
-    gif_target_classes = {"wake": [0], "LS": [1, 2], "DS": [3], "REM": [5], "artifact": ["other"]}
+    gif_target_classes = {"wake": [0, 1], "LS": [2], "DS": [3], "REM": [5], "artifact": ["other"]}
 
     # access the GIF dataset
     gif_dataset = h5py.File(path_to_gif_dataset, 'r')
@@ -1055,7 +1055,7 @@ def build_default_datasets_for_training_and_testing_SAE():
         "shhs_min_duration_hours": 0,
         "shhs_filter_ids": [],
         "gif_min_duration_hours": 0,
-        "gif_filter_ids": gif_error_code_4 + gif_error_code_5 + ["SL067"]
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5 + ["SL067"]# + ["SL432", "SL427", "SL422", "SL359", "SL165", "SL428", "SL007", "SL431"]
     }
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
@@ -1085,7 +1085,7 @@ def build_default_datasets_for_training_and_testing_SAE():
         "shhs_min_duration_hours": 7,
         "shhs_filter_ids": [],
         "gif_min_duration_hours": 7,
-        "gif_filter_ids": gif_error_code_4 + gif_error_code_5 + ["SL067"]
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5 + ["SL067"]# + ["SL432", "SL427", "SL422", "SL359", "SL165", "SL428", "SL007", "SL431"]
     }
     with open(limited_project_configuration_file, "wb") as file:
         pickle.dump(project_configuration, file)
@@ -1689,7 +1689,7 @@ def train_and_test_long_sequence_model_varying_duration_on_apnea_events():
 
     hyperparameters_gif = {
         "batch_size": 8,
-        "number_epochs": 40,
+        "number_epochs": 20,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
             "start_learning_rate": 1 * 1e-5,
@@ -1963,7 +1963,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
     thirty_second_network = {
         "signal_length_seconds": 30,
-        "shift_length_seconds_interval": (15, 15),
+        "shift_length_seconds_interval": (10, 10),
         "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
         "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
     }
@@ -2096,17 +2096,23 @@ def train_and_test_short_sequence_model_on_apnea_events():
 
 if __name__ == "__main__":
 
-    build_default_datasets_for_training_and_testing_SSG()
+    # run_model_performance_evaluation_SAE(
+    #     path_to_model_directory = "SAE_Local_120s_A_RAW/",
+    #     path_to_splitted_gif_directory = "120s_GIF_SAE_Data/",
+    #     path_to_complete_gif_directory = "Default_GIF_SAE_Data_All/",
+    # )
+
+    # build_default_datasets_for_training_and_testing_SSG()
     # build_default_datasets_for_training_and_testing_SAE()
 
     try:
-        train_and_test_long_sequence_model_on_sleep_staging_data()
+        # train_and_test_long_sequence_model_on_sleep_staging_data()
         pass
     except:
         pass
 
     try:
-        train_and_test_short_sequence_model_on_sleep_staging_data()
+        # train_and_test_short_sequence_model_on_sleep_staging_data()
         pass
     except:
         pass
@@ -2124,10 +2130,42 @@ if __name__ == "__main__":
         pass
 
     try:
-        train_and_test_short_sequence_model_on_apnea_events()
+        # train_and_test_short_sequence_model_on_apnea_events()
         pass
     except:
         pass
+
+    if True:
+        nako_directory = "Processed_NAKO/"
+        nako_paths = [nako_directory + "NAKO-994_Results.pkl", nako_directory + "NAKO-609_Results.pkl", nako_directory + "NAKO-419_Results.pkl", nako_directory + "NAKO-84_Results.pkl", nako_directory + "NAKO-33a_Results.pkl", nako_directory + "NAKO-33b_Results.pkl"]
+
+        stage_prediction_paths = []
+        apnea_prediction_paths = []
+
+        for path in nako_paths:
+
+            print_headline(f"Predicting Sleep Stages and Apnea Events within: {path}")
+
+            for stage_path in stage_prediction_paths:
+                main_model_predicting_stage_inference(
+                    path_to_model_state = stage_path + model_state_after_shhs_gif_file,
+                    path_to_data_directory = path,
+                    path_to_project_configuration = stage_path + project_configuration_file,
+                    path_to_save_results = path,
+                    inference = True,
+                    results_key = "SLP"
+                )
+
+            for apnea_path in apnea_prediction_paths:
+                main_model_predicting_apnea_inference(
+                    path_to_model_state = apnea_path + model_state_after_shhs_gif_file,
+                    path_to_data_directory = path,
+                    path_to_project_configuration = apnea_path + project_configuration_file,
+                    path_to_save_results = path,
+                    inference = True,
+                    results_key = "SAE"
+                )
+
 
 if False:
     build_default_datasets_for_training_and_testing()

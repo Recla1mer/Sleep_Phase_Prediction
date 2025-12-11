@@ -834,6 +834,10 @@ def Process_NAKO_Dataset(
     with open(path_to_project_configuration, "rb") as f:
         project_configuration = pickle.load(f)
 
+    # access sampling frequency parameters
+    freq_params = {key: project_configuration[key] for key in ["RRI_frequency", "MAD_frequency", "SLP_frequency"]} # sampling_frequency_parameters
+    nako_data_manager.change_uniform_frequencies(freq_params)
+
     ########################### REWORK THIS PART IF YOU WANT TO USE THE NAKO DATASET ###########################
 
     # access the NAKO dataset
@@ -2251,6 +2255,384 @@ def main_model_predicting_stage(
         print(unpredictable_signals)
 
 
+def main_model_predicting_stage_inference(
+        path_to_model_state: str,
+        path_to_data_directory: str,
+        path_to_project_configuration: str,
+        path_to_save_results: str,
+        inference = False,
+        results_key = "SLP"
+    ):
+    """
+    Applies the trained neural network model to the processed data. The processed data is accessed using the
+    SleepDataManager class from dataset_processing.py. The predictions are retransformed to the original
+    signal structure (they were reshaped to overlapping windows during training).
+    
+    If the database was previously split into training, validation, and test datasets, the algorithm assumes
+    that the data also contains the actual sleep stages and you want to do statistics using them and the 
+    predictions. Therefore, the results are saved to a pkl-file as individual dictionaries for every patient.
+    These dictionaries have the following format:
+    {
+        "Predicted_Probabilities": 
+            - shape: (number datapoints, number_target_classes) 
+            - probabilities for each target class,
+        "Predicted": 
+            - shape: (number datapoints) 
+            - predicted target class with highest probability,
+        "Actual": 
+            - shape: (number datapoints) 
+            - actual target class,
+        "Predicted_in_windows": 
+            - shape: (number datapoints, windows_per_signal) 
+            - predicted target classes with highest probability, signal still as overlapping windows (output of neural network), 
+        "Actual_in_windows":
+            - shape: (number datapoints, windows_per_signal) 
+            - actual target classes, signal still as overlapping windows (used by the neural network),
+    }
+
+    If the database was not split, the algorithm assumes you want to collect the predicted target classes and 
+    saves them directly to the database for easy access. Each appropriate datapoint is updated with the
+    predicted target classes:
+    {
+        "SLP_predicted_probability":
+            - shape: (windows_per_signal, number_target_classes) 
+            - probabilities for each target class,
+        "SLP_predicted":
+            - shape: (windows_per_signal) 
+            - predicted target class with highest probability,
+    }
+
+    Note:   The algorithm already crops the target classes to the correct length of the original signal. This is
+            important as the original signal might has been padded to fit the requirements of the neural network.
+
+
+    RETURNS:
+    ------------------------------
+    None
+
+    
+    ARGUMENTS:
+    ------------------------------
+    neural_network_model
+        the neural network model to use
+    path_to_model_state: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    path_to_processed_data: str
+        the path to the processed dataset 
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    path_to_project_configuration: str
+        the path to all signal processing parameters 
+        (not all are needed here)
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
+    """
+    
+    """
+    ------------------
+    Accessing Dataset
+    ------------------
+    """
+
+    data_generator = load_from_pickle(path_to_data_directory)
+    dataset_length = 0
+    for _ in data_generator:
+        dataset_length += 1
+    del data_generator
+
+    data_generator = load_from_pickle(path_to_data_directory)
+
+    """
+    --------------------------------
+    Accessing Project Configuration
+    --------------------------------
+    """
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    rri_frequency = project_configuration["RRI_frequency"]
+    mad_frequency = project_configuration["MAD_frequency"]
+
+    # access neural network initialization parameters
+    neural_network_model = project_configuration["neural_network_model"]
+
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+
+    # access target and feature value mapping parameters:
+    target_classes = project_configuration["target_classes"]
+    rri_inlier_interval = project_configuration["rri_inlier_interval"]
+    mad_inlier_interval = project_configuration["mad_inlier_interval"]
+
+    # parameters needed for ensuring uniform signal shape
+    signal_length_seconds = project_configuration["signal_length_seconds"]
+    pad_feature_with = project_configuration["pad_feature_with"]
+
+    # access common window_reshape_parameters
+    reshape_to_overlapping_windows = project_configuration["reshape_to_overlapping_windows"]
+    common_window_reshape_params = dict()
+
+    if reshape_to_overlapping_windows:
+        common_window_reshape_params = {key: project_configuration[key] for key in ["windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order"]} # window_reshape_parameters
+
+    # access common signal_normalization_parameters
+    normalize_rri = project_configuration["normalize_rri"]
+    normalize_mad = project_configuration["normalize_mad"]
+    common_signal_normalization_params = dict()
+
+    if normalize_mad or normalize_rri:
+        common_signal_normalization_params = {key: project_configuration[key] for key in project_configuration if key in ["normalization_technique", "normalization_mode", "normalization_max", "normalization_min"]} # signal_normalization_parameters
+
+    # access feature and target transformations
+    feature_transform = project_configuration["feature_transform"]
+
+    del project_configuration
+
+    """
+    ---------------
+    Setting Device
+    ---------------
+    """
+
+    # Neural network model is unable to function properly on mps device, option to use it is removed
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"\nUsing {device} device")
+
+    """
+    ----------------------------------
+    Initializing Neural Network Model
+    ----------------------------------
+    """
+
+    neural_network_model = neural_network_model(**nnm_params)
+   
+    neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
+    
+    neural_network_model.to(device)
+
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    neural_network_model.eval()
+
+    """
+    -----------------------------
+    Preparations for Saving Data
+    -----------------------------
+    """
+
+    working_file_path = "save_in_progress"
+    for char_pos in range(len(path_to_save_results)-1, -1, -1):
+        if path_to_save_results[char_pos] == "/":
+            working_file_path = path_to_save_results[:char_pos+1] + "save_in_progress"
+            break
+
+    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+    working_file = open(working_file_path, "ab")
+
+    """
+    ------------------------
+    Predicting Sleep Phases
+    ------------------------
+    """
+
+    if inference:
+        stride_seconds = int(signal_length_seconds / 4)
+    else:
+        stride_seconds = int(signal_length_seconds)
+    
+    if reshape_to_overlapping_windows:
+        window_duration_seconds = common_window_reshape_params["window_duration_seconds"]
+        overlap_seconds = common_window_reshape_params["overlap_seconds"]
+
+    # list to track unpredicatable signals
+    unpredictable_signals = []
+
+    # variables to track progress
+    print("\nPredicting Sleep Stages:")
+    progress_bar = DynamicProgressBar(total = dataset_length)
+
+    with torch.no_grad():
+        # Iterate over Database
+        for data_dict in data_generator:
+            
+            try:
+                total_duration = int(len(data_dict["RRI"])/rri_frequency)
+                
+                strided_prediction_probabilities = [[] for i in range(total_duration)]
+                strided_predicted_classes = [[] for _ in range(total_duration)]
+
+                start_time = -stride_seconds
+                upper_bound = 0
+                # for start_time in range(0, total_duration-signal_length_seconds+stride_seconds, stride_seconds):
+                while upper_bound < total_duration:
+                    start_time += stride_seconds
+                    upper_bound = start_time + signal_length_seconds
+                    if upper_bound > total_duration:
+                        upper_bound = total_duration
+                        start_time = upper_bound - signal_length_seconds
+                    if start_time < 0: # happens when signal length is longer than total duration
+                        start_time = 0
+                        upper_bound = signal_length_seconds
+
+                    """
+                    Data Processing (Analogue to CustomSleepDataset class in neural_network_model.py)
+                    """
+
+                    rri = final_data_preprocessing(
+                        signal = copy.deepcopy(data_dict["RRI"][int(start_time*rri_frequency):int(upper_bound*rri_frequency)]), # type: ignore
+                        signal_id = "RRI",
+                        inlier_interval = rri_inlier_interval,
+                        target_frequency = rri_frequency,
+                        signal_length_seconds = signal_length_seconds,
+                        pad_with = pad_feature_with,
+                        reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                        **common_window_reshape_params,
+                        normalize = normalize_rri,
+                        **common_signal_normalization_params,
+                        datatype_mappings = [(np.float64, np.float32)],
+                        transform = feature_transform
+                    )
+
+                    rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
+                    rri = rri.to(device) # type: ignore
+
+                    # Ensure RRI is of the correct data type
+                    if not isinstance(rri, torch.FloatTensor):
+                        rri = rri.float()
+
+                    # MAD preparation analogously to RRI
+                    if "MAD" in data_dict:
+                        mad = final_data_preprocessing(
+                            signal = copy.deepcopy(data_dict["MAD"][int(start_time*mad_frequency):int(upper_bound*mad_frequency)]), # type: ignore
+                            signal_id = "MAD",
+                            inlier_interval = mad_inlier_interval,
+                            target_frequency = mad_frequency,
+                            signal_length_seconds = signal_length_seconds,
+                            pad_with = pad_feature_with,
+                            reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                            **common_window_reshape_params,
+                            normalize = normalize_mad,
+                            **common_signal_normalization_params,
+                            datatype_mappings = [(np.float64, np.float32)],
+                            transform = feature_transform
+                        )
+
+                        mad = mad.unsqueeze(0) # type: ignore # add batch dimension (= 1)
+                        mad = mad.to(device) # type: ignore
+
+                        if not isinstance(mad, torch.FloatTensor):
+                            mad = mad.float()
+                    else:
+                        mad = None
+                
+                    """
+                    Applying Neural Network Model
+                    """
+
+                    # predictions in windows
+                    if reshape_to_overlapping_windows:
+                        predictions_probability_in_windows = neural_network_model(rri, mad)
+
+                        """
+                        Preparing Predicted Sleep Phases
+                        """
+
+                        predictions_probability_in_windows = predictions_probability_in_windows.cpu().numpy()
+                        predictions_in_windows = predictions_probability_in_windows.argmax(1)
+
+                        for i in range(len(predictions_in_windows)):
+                            for j in range(window_duration_seconds):
+                                this_index = start_time + int(i*(window_duration_seconds - overlap_seconds)) + j # type: ignore
+                                if this_index >= total_duration:
+                                    break
+                                strided_prediction_probabilities[this_index].append(predictions_probability_in_windows[i])
+                                strided_predicted_classes[this_index].append(predictions_in_windows[i])
+                    
+                    # predictions not in windows
+                    else:
+                        predictions_probability = neural_network_model(rri, mad)
+
+                        predictions_probability = predictions_probability.cpu().numpy()
+                        predicted = predictions_probability.argmax(1)
+
+                        for i in range(start_time, upper_bound):
+                            strided_prediction_probabilities[i].append(predictions_probability[0])
+                            strided_predicted_classes[i].append(predicted[0])
+                
+                # combine strided predictions
+                resolution_seconds = 30
+                combined_predicted_probabilities = []
+                combined_predicted_classes = []
+                for i in range(0, len(strided_prediction_probabilities), resolution_seconds):
+                    collected_probabilities = list()
+                    collected_classes = list()
+                    max_bound = min(i + resolution_seconds, len(strided_prediction_probabilities))
+
+                    for j in range(i, max_bound):
+                        collected_probabilities.extend(strided_prediction_probabilities[j])
+                        collected_classes.extend(strided_predicted_classes[j])
+                    
+                    combined_predicted_probabilities.append(collected_probabilities)
+                    combined_predicted_classes.append(collected_classes)
+
+                mean_combined_prediction_probabilities = []
+                for i in range(len(combined_predicted_probabilities)):
+                    mean_combined_prediction_probabilities.append(np.array(combined_predicted_probabilities[i]).mean(axis=0))
+                mean_combined_prediction_probabilities = np.array(mean_combined_prediction_probabilities)
+
+                predictions_from_combined_probabilities = np.array(mean_combined_prediction_probabilities).argmax(axis=1)
+                
+                predictions_from_combined_classes = list()
+                for row in combined_predicted_classes:
+                    values, counts = np.unique(row, return_counts=True)
+                    predictions_from_combined_classes.append(values[np.argmax(counts)])
+                predictions_from_combined_classes = np.array(predictions_from_combined_classes)
+
+                # save results to existing dictionary
+                results = copy.deepcopy(data_dict)
+                results[results_key + "_target_classes"] = target_classes
+                results[results_key + "_frequency"] = 1 / resolution_seconds
+                results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
+                results[results_key + "_from_probability"] = predictions_from_combined_probabilities
+                results[results_key + "_prediction_classes"] = combined_predicted_classes
+                results[results_key + "_from_majority"] = predictions_from_combined_classes
+                results[results_key] = predictions_from_combined_probabilities
+                
+                pickle.dump(results, working_file)
+            
+            except:
+                unpredictable_signals.append(data_dict["ID"]) # type: ignore
+                results = copy.deepcopy(data_dict)
+                pickle.dump(results, working_file)
+
+                continue
+
+            finally:        
+                # update progress
+                progress_bar.update()
+
+    working_file.close()
+
+    # rename working file
+    if os.path.exists(path_to_save_results):
+        os.remove(path_to_save_results)
+    create_directories_along_path(path_to_save_results)
+    os.rename(working_file_path, path_to_save_results)
+    
+    # Print unpredictable signals to console
+    number_unpredictable_signals = len(unpredictable_signals)
+    if number_unpredictable_signals > 0:
+        print(f"\nFor {number_unpredictable_signals} data points with the following IDs, the neural network model was unable to make predictions:")
+        print(unpredictable_signals)
+
+
 def main_model_predicting_apnea_validation_set(
         path_to_model_state: str,
         path_to_data_directory: str,
@@ -3009,14 +3391,31 @@ def main_model_predicting_apnea(
 
                 combined_predicted_probabilities = []
                 combined_predicted_classes = []
+
+                current_apnea_event_position = -1
+                start_appending_at = -1
                 for i in range(0, len(strided_prediction_probabilities), resolution_seconds):
                     collected_probabilities = list()
                     collected_classes = list()
                     max_bound = min(i + resolution_seconds, len(strided_prediction_probabilities))
+                    current_apnea_event = 0
 
                     for j in range(i, max_bound):
                         collected_probabilities.extend(strided_prediction_probabilities[j])
-                        collected_classes.extend(strided_predicted_classes[j])
+
+                        if j > start_appending_at: # prevent that apnea event is assigned to multiple time intervals (only let apneas pass that dont result from overlapping segments)
+                            collected_classes.extend(strided_predicted_classes[j])
+
+                            if current_apnea_event == 0:
+                                for k in range(len(strided_predicted_classes[j])):
+                                    if strided_predicted_classes[j][k] > 0:
+                                        current_apnea_event = strided_predicted_classes[j][k]
+                                        current_apnea_event_position = j + int(0.8*signal_length_seconds)
+                                        break
+                        else:
+                            collected_classes.append(0)
+                    
+                    start_appending_at = current_apnea_event_position
                     
                     combined_predicted_probabilities.append(collected_probabilities)
                     combined_predicted_classes.append(collected_classes)
@@ -3070,36 +3469,52 @@ def main_model_predicting_apnea(
 
                     for i in range(1, len(slp)-1):
                         if slp[i] != 0: 
-                            if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
-                                predictions_from_combined_probabilities[i-1] = 0
-                                if predictions_from_combined_probabilities[i] == 0:
-                                    predictions_from_combined_probabilities[i] = slp[i]
-                            if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
-                                predictions_from_combined_probabilities[i+1] = 0
-                                if predictions_from_combined_probabilities[i] == 0:
-                                    predictions_from_combined_probabilities[i] = slp[i]
+                            # if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
+                            #     predictions_from_combined_probabilities[i-1] = 0
+                            #     if predictions_from_combined_probabilities[i] == 0:
+                            #         predictions_from_combined_probabilities[i] = slp[i]
+                            # if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
+                            #     predictions_from_combined_probabilities[i+1] = 0
+                            #     if predictions_from_combined_probabilities[i] == 0:
+                            #         predictions_from_combined_probabilities[i] = slp[i]
                             
-                            if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
-                                predictions_from_combined_classes[i-1] = 0
-                                if predictions_from_combined_classes[i] == 0:
-                                    predictions_from_combined_classes[i] = slp[i]
-                            if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
-                                predictions_from_combined_classes[i+1] = 0
-                                if predictions_from_combined_classes[i] == 0:
-                                    predictions_from_combined_classes[i] = slp[i]
+                            # if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
+                            #     predictions_from_combined_classes[i-1] = 0
+                            #     if predictions_from_combined_classes[i] == 0:
+                            #         predictions_from_combined_classes[i] = slp[i]
+                            # if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
+                            #     predictions_from_combined_classes[i+1] = 0
+                            #     if predictions_from_combined_classes[i] == 0:
+                            #         predictions_from_combined_classes[i] = slp[i]
+
+                            if predictions_from_combined_probabilities[i] == 0:
+                                if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
+                                    predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i-1]
+                                    predictions_from_combined_probabilities[i-1] = 0
+                                if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
+                                    predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i+1]
+                                    predictions_from_combined_probabilities[i+1] = 0
+
+                            if predictions_from_combined_classes[i] == 0:
+                                if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
+                                    predictions_from_combined_classes[i] = predictions_from_combined_classes[i-1]
+                                    predictions_from_combined_classes[i-1] = 0
+                                if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
+                                    predictions_from_combined_classes[i] = predictions_from_combined_classes[i+1]
+                                    predictions_from_combined_classes[i+1] = 0
                     
-                    next_blocked = False
-                    for i in range(1, len(slp)):
-                        if next_blocked:
-                            next_blocked = False
-                            continue
-                        if slp[i-1] == 0 and slp[i] == 0:
-                            if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
-                                predictions_from_combined_probabilities[i] = 0
-                                next_blocked = True
-                            if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
-                                predictions_from_combined_classes[i] = 0
-                                next_blocked = True
+                    # next_blocked = False
+                    # for i in range(1, len(slp)):
+                    #     if next_blocked:
+                    #         next_blocked = False
+                    #         continue
+                    #     if slp[i-1] == 0 and slp[i] == 0:
+                    #         if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
+                    #             predictions_from_combined_probabilities[i] = 0
+                    #             next_blocked = True
+                    #         if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
+                    #             predictions_from_combined_classes[i] = 0
+                    #             next_blocked = True
 
                     # save results to new dictionary
                     results = {
@@ -3110,17 +3525,17 @@ def main_model_predicting_apnea(
                     }
 
                 else:
-                    next_blocked = False
-                    for i in range(1, len(predictions_from_combined_classes)):
-                        if next_blocked:
-                            next_blocked = False
-                            continue
-                        if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
-                            predictions_from_combined_probabilities[i] = 0
-                            next_blocked = True
-                        if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
-                            predictions_from_combined_classes[i] = 0
-                            next_blocked = True
+                    # next_blocked = False
+                    # for i in range(1, len(predictions_from_combined_classes)):
+                    #     if next_blocked:
+                    #         next_blocked = False
+                    #         continue
+                    #     if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
+                    #         predictions_from_combined_probabilities[i] = 0
+                    #         next_blocked = True
+                    #     if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
+                    #         predictions_from_combined_classes[i] = 0
+                    #         next_blocked = True
 
                     # save results to existing dictionary
                     results = copy.deepcopy(data_dict)
@@ -3147,6 +3562,429 @@ def main_model_predicting_apnea(
                 progress_bar.update()
 
     results_file.close()
+    
+    # Print unpredictable signals to console
+    number_unpredictable_signals = len(unpredictable_signals)
+    if number_unpredictable_signals > 0:
+        print(f"\nFor {number_unpredictable_signals} data points with the following IDs, the neural network model was unable to make predictions:")
+        print(unpredictable_signals)
+
+
+def main_model_predicting_apnea_inference(
+        path_to_model_state: str,
+        path_to_data_directory: str,
+        path_to_project_configuration: str,
+        path_to_save_results: str,
+        inference = False,
+        results_key = "SAE"
+    ):
+    """
+    Applies the trained neural network model to the processed data. The processed data is accessed using the
+    SleepDataManager class from dataset_processing.py. The predictions are retransformed to the original
+    signal structure (they were reshaped to overlapping windows during training).
+    
+    If the database was previously split into training, validation, and test datasets, the algorithm assumes
+    that the data also contains the actual sleep stages and you want to do statistics using them and the 
+    predictions. Therefore, the results are saved to a pkl-file as individual dictionaries for every patient.
+    These dictionaries have the following format:
+    {
+        "Predicted_Probabilities": 
+            - shape: (number datapoints, number_target_classes) 
+            - probabilities for each target class,
+        "Predicted": 
+            - shape: (number datapoints) 
+            - predicted target class with highest probability,
+        "Actual": 
+            - shape: (number datapoints) 
+            - actual target class,
+        "Predicted_in_windows": 
+            - shape: (number datapoints, windows_per_signal) 
+            - predicted target classes with highest probability, signal still as overlapping windows (output of neural network), 
+        "Actual_in_windows":
+            - shape: (number datapoints, windows_per_signal) 
+            - actual target classes, signal still as overlapping windows (used by the neural network),
+    }
+
+    If the database was not split, the algorithm assumes you want to collect the predicted target classes and 
+    saves them directly to the database for easy access. Each appropriate datapoint is updated with the
+    predicted target classes:
+    {
+        "SLP_predicted_probability":
+            - shape: (windows_per_signal, number_target_classes) 
+            - probabilities for each target class,
+        "SLP_predicted":
+            - shape: (windows_per_signal) 
+            - predicted target class with highest probability,
+    }
+
+    Note:   The algorithm already crops the target classes to the correct length of the original signal. This is
+            important as the original signal might has been padded to fit the requirements of the neural network.
+
+
+    RETURNS:
+    ------------------------------
+    None
+
+    
+    ARGUMENTS:
+    ------------------------------
+    neural_network_model
+        the neural network model to use
+    path_to_model_state: str
+        the path to load the model state dictionary
+        if None, the model will be trained from scratch
+    path_to_processed_data: str
+        the path to the processed dataset 
+        (must be designed so that adding: '_training_pid.pkl', '_validation_pid.pkl', '_test_pid.pkl' 
+        [after removing '.pkl'] accesses the training, validation, and test datasets)
+    path_to_project_configuration: str
+        the path to all signal processing parameters 
+        (not all are needed here)
+    path_to_save_results: str
+        If actual results exist, predicted and actual results will be saved to this path
+    """
+    
+    """
+    ------------------
+    Accessing Dataset
+    ------------------
+    """
+
+    data_generator = load_from_pickle(path_to_data_directory)
+    dataset_length = 0
+    for _ in data_generator:
+        dataset_length += 1
+    del data_generator
+
+    data_generator = load_from_pickle(path_to_data_directory)
+
+    """
+    --------------------------------
+    Accessing Project Configuration
+    --------------------------------
+    """
+
+    # load signal processing parameters
+    with open(path_to_project_configuration, "rb") as f:
+        project_configuration = pickle.load(f)
+    
+    rri_frequency = project_configuration["RRI_frequency"]
+    mad_frequency = project_configuration["MAD_frequency"]
+
+    # access neural network initialization parameters
+    neural_network_model = project_configuration["neural_network_model"]
+    number_target_classes = project_configuration["number_target_classes"]
+
+    nnm_params = {key: project_configuration[key] for key in project_configuration if key in ["number_target_classes", "rri_convolutional_channels", "mad_convolutional_channels", "max_pooling_layers", "fully_connected_features", "convolution_dilations", "datapoints_per_rri_window", "datapoints_per_mad_window", "windows_per_signal", "rri_datapoints", "mad_datapoints"]} # neural_network_model_parameters
+
+    # access target and feature value mapping parameters:
+    target_classes = project_configuration["target_classes"]
+    rri_inlier_interval = project_configuration["rri_inlier_interval"]
+    mad_inlier_interval = project_configuration["mad_inlier_interval"]
+
+    # parameters needed for ensuring uniform signal shape
+    signal_length_seconds = project_configuration["signal_length_seconds"]
+    pad_feature_with = project_configuration["pad_feature_with"]
+
+    # access common window_reshape_parameters
+    reshape_to_overlapping_windows = project_configuration["reshape_to_overlapping_windows"]
+    common_window_reshape_params = dict()
+
+    if reshape_to_overlapping_windows:
+        common_window_reshape_params = {key: project_configuration[key] for key in ["windows_per_signal", "window_duration_seconds", "overlap_seconds", "priority_order"]} # window_reshape_parameters
+
+    # access common signal_normalization_parameters
+    normalize_rri = project_configuration["normalize_rri"]
+    normalize_mad = project_configuration["normalize_mad"]
+    common_signal_normalization_params = dict()
+
+    if normalize_mad or normalize_rri:
+        common_signal_normalization_params = {key: project_configuration[key] for key in project_configuration if key in ["normalization_technique", "normalization_mode", "normalization_max", "normalization_min"]} # signal_normalization_parameters
+
+    # access feature and target transformations
+    feature_transform = project_configuration["feature_transform"]
+
+    del project_configuration
+
+    """
+    ---------------
+    Setting Device
+    ---------------
+    """
+
+    # Neural network model is unable to function properly on mps device, option to use it is removed
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"\nUsing {device} device")
+
+    """
+    ----------------------------------
+    Initializing Neural Network Model
+    ----------------------------------
+    """
+
+    neural_network_model = neural_network_model(**nnm_params)
+   
+    neural_network_model.load_state_dict(torch.load(path_to_model_state, map_location=device, weights_only=True))
+    
+    neural_network_model.to(device)
+
+    # Set the model to evaluation mode - important for batch normalization and dropout layers
+    neural_network_model.eval()
+
+    """
+    -----------------------------
+    Preparations for Saving Data
+    -----------------------------
+    """
+
+    working_file_path = "save_in_progress"
+    for char_pos in range(len(path_to_save_results)-1, -1, -1):
+        if path_to_save_results[char_pos] == "/":
+            working_file_path = path_to_save_results[:char_pos+1] + "save_in_progress"
+            break
+
+    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
+    working_file = open(working_file_path, "ab")
+
+    """
+    ------------------------
+    Predicting Sleep Phases
+    ------------------------
+    """
+
+    if inference:
+        stride_seconds = int(signal_length_seconds / 4)
+    else:
+        stride_seconds = int(signal_length_seconds)
+    
+    if reshape_to_overlapping_windows:
+        window_duration_seconds = common_window_reshape_params["window_duration_seconds"]
+        overlap_seconds = common_window_reshape_params["overlap_seconds"]
+
+    # list to track unpredicatable signals
+    unpredictable_signals = []
+
+    # variables to track progress
+    print("\nPredicting Sleep Stages:")
+    progress_bar = DynamicProgressBar(total = dataset_length)
+
+    with torch.no_grad():
+        # Iterate over Database
+        for data_dict in data_generator:
+            
+            try:
+                total_duration = int(len(data_dict["RRI"])/rri_frequency)
+                
+                strided_prediction_probabilities = [[] for i in range(total_duration)]
+                strided_predicted_classes = [[] for _ in range(total_duration)]
+
+                start_time = -stride_seconds
+                upper_bound = 0
+                # for start_time in range(0, total_duration-signal_length_seconds+stride_seconds, stride_seconds):
+                while upper_bound < total_duration:
+                    start_time += stride_seconds
+                    upper_bound = start_time + signal_length_seconds
+                    if upper_bound > total_duration:
+                        upper_bound = total_duration
+                        start_time = upper_bound - signal_length_seconds
+                    if start_time < 0: # happens when signal length is longer than total duration
+                        start_time = 0
+                        upper_bound = signal_length_seconds
+
+                    """
+                    Data Processing (Analogue to CustomSleepDataset class in neural_network_model.py)
+                    """
+
+                    rri = final_data_preprocessing(
+                        signal = copy.deepcopy(data_dict["RRI"][int(start_time*rri_frequency):int(upper_bound*rri_frequency)]), # type: ignore
+                        signal_id = "RRI",
+                        inlier_interval = rri_inlier_interval,
+                        target_frequency = rri_frequency,
+                        signal_length_seconds = signal_length_seconds,
+                        pad_with = pad_feature_with,
+                        reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                        **common_window_reshape_params,
+                        normalize = normalize_rri,
+                        **common_signal_normalization_params,
+                        datatype_mappings = [(np.float64, np.float32)],
+                        transform = feature_transform
+                    )
+
+                    rri = rri.unsqueeze(0) # type: ignore # add batch dimension (= 1)
+                    rri = rri.to(device) # type: ignore
+
+                    # Ensure RRI is of the correct data type
+                    if not isinstance(rri, torch.FloatTensor):
+                        rri = rri.float()
+
+                    # MAD preparation analogously to RRI
+                    if "MAD" in data_dict:
+                        mad = final_data_preprocessing(
+                            signal = copy.deepcopy(data_dict["MAD"][int(start_time*mad_frequency):int(upper_bound*mad_frequency)]), # type: ignore
+                            signal_id = "MAD",
+                            inlier_interval = mad_inlier_interval,
+                            target_frequency = mad_frequency,
+                            signal_length_seconds = signal_length_seconds,
+                            pad_with = pad_feature_with,
+                            reshape_to_overlapping_windows = reshape_to_overlapping_windows,
+                            **common_window_reshape_params,
+                            normalize = normalize_mad,
+                            **common_signal_normalization_params,
+                            datatype_mappings = [(np.float64, np.float32)],
+                            transform = feature_transform
+                        )
+
+                        mad = mad.unsqueeze(0) # type: ignore # add batch dimension (= 1)
+                        mad = mad.to(device) # type: ignore
+
+                        if not isinstance(mad, torch.FloatTensor):
+                            mad = mad.float()
+                    else:
+                        mad = None
+                
+                    """
+                    Applying Neural Network Model
+                    """
+
+                    # predictions in windows
+                    if reshape_to_overlapping_windows:
+                        predictions_probability_in_windows = neural_network_model(rri, mad)
+
+                        """
+                        Preparing Predicted Sleep Phases
+                        """
+
+                        predictions_probability_in_windows = predictions_probability_in_windows.cpu().numpy()
+                        predictions_in_windows = predictions_probability_in_windows.argmax(1)
+
+                        for i in range(len(predictions_in_windows)):
+                            for j in range(window_duration_seconds):
+                                this_index = start_time + int(i*(window_duration_seconds - overlap_seconds)) + j # type: ignore
+                                if this_index >= total_duration:
+                                    break
+                                strided_prediction_probabilities[this_index].append(predictions_probability_in_windows[i])
+                                strided_predicted_classes[this_index].append(predictions_in_windows[i])
+                    
+                    # predictions not in windows
+                    else:
+                        predictions_probability = neural_network_model(rri, mad)
+
+                        predictions_probability = predictions_probability.cpu().numpy()
+                        predicted = predictions_probability.argmax(1)
+
+                        # for i in range(start_time, upper_bound):
+                        for i in range(int(start_time+0.1*signal_length_seconds), int(upper_bound-0.2*signal_length_seconds)):
+                            strided_prediction_probabilities[i].append(predictions_probability[0])
+                            strided_predicted_classes[i].append(predicted[0])
+                
+                # fill empty entries
+                normal_breathing_probability = [0 for _ in range(number_target_classes)]
+                normal_breathing_probability[0] = 1
+                for i in range(0, len(strided_prediction_probabilities)):
+                    if len(strided_prediction_probabilities[i]) != 0:
+                        break
+                    if len(strided_prediction_probabilities[i]) == 0:
+                        strided_prediction_probabilities[i].append(normal_breathing_probability)
+                        strided_predicted_classes[i].append(0)
+                for i in range(len(strided_prediction_probabilities)-1, -1, -1):
+                    if len(strided_prediction_probabilities[i]) != 0:
+                        break
+                    if len(strided_prediction_probabilities[i]) == 0:
+                        strided_prediction_probabilities[i].append(normal_breathing_probability)
+                        strided_predicted_classes[i].append(0)
+                
+                # combine strided predictions
+                resolution_seconds = signal_length_seconds
+
+                combined_predicted_probabilities = []
+                combined_predicted_classes = []
+
+                current_apnea_event_position = -1
+                start_appending_at = -1
+                for i in range(0, len(strided_prediction_probabilities), resolution_seconds):
+                    collected_probabilities = list()
+                    collected_classes = list()
+                    max_bound = min(i + resolution_seconds, len(strided_prediction_probabilities))
+                    current_apnea_event = 0
+
+                    for j in range(i, max_bound):
+                        collected_probabilities.extend(strided_prediction_probabilities[j])
+
+                        if j > start_appending_at: # prevent that apnea event is assigned to multiple time intervals (only let apneas pass that dont result from overlapping segments)
+                            collected_classes.extend(strided_predicted_classes[j])
+
+                            if current_apnea_event == 0:
+                                for k in range(len(strided_predicted_classes[j])):
+                                    if strided_predicted_classes[j][k] > 0:
+                                        current_apnea_event = strided_predicted_classes[j][k]
+                                        current_apnea_event_position = j + int(signal_length_seconds) + 1
+                                        break
+                        else:
+                            collected_classes.append(0)
+                    
+                    start_appending_at = current_apnea_event_position
+                    
+                    combined_predicted_probabilities.append(collected_probabilities)
+                    combined_predicted_classes.append(collected_classes)
+
+                mean_combined_prediction_probabilities = []
+                for i in range(len(combined_predicted_probabilities)):
+                    mean_combined_prediction_probabilities.append(np.array(combined_predicted_probabilities[i]).mean(axis=0))
+                mean_combined_prediction_probabilities = np.array(mean_combined_prediction_probabilities)
+
+                predictions_from_combined_probabilities = np.array(mean_combined_prediction_probabilities).argmax(axis=1)
+                
+                predictions_from_combined_classes = list()
+                for row in combined_predicted_classes:
+                    values, counts = np.unique(row, return_counts=True)
+                    if len(values) > 1:
+                        # remove 0 predictions if other classes are present
+                        if 0 in values:
+                            index_of_0 = np.where(values == 0)[0][0]
+                            values = np.delete(values, index_of_0)
+                            counts = np.delete(counts, index_of_0)
+
+                    predictions_from_combined_classes.append(values[np.argmax(counts)])
+                predictions_from_combined_classes = np.array(predictions_from_combined_classes)
+
+                # save results to existing dictionary
+                results = copy.deepcopy(data_dict)
+                results[results_key + "_target_classes"] = target_classes
+                results[results_key + "_frequency"] = 1 / resolution_seconds
+                results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
+                results[results_key + "_from_prob"] = predictions_from_combined_probabilities
+                results[results_key + "_prediction_classes"] = combined_predicted_classes
+                results[results_key + "_from_class"] = predictions_from_combined_classes
+                results[results_key] = predictions_from_combined_probabilities
+                    
+                
+                pickle.dump(results, working_file)
+            
+            except:
+                unpredictable_signals.append(data_dict["ID"]) # type: ignore
+
+                results = copy.deepcopy(data_dict)
+                pickle.dump(results, working_file)
+
+                continue
+
+            finally:        
+                # update progress
+                progress_bar.update()
+
+    working_file.close()
+
+    # rename working file
+    if os.path.exists(path_to_save_results):
+        os.remove(path_to_save_results)
+    create_directories_along_path(path_to_save_results)
+    os.rename(working_file_path, path_to_save_results)
     
     # Print unpredictable signals to console
     number_unpredictable_signals = len(unpredictable_signals)
@@ -3197,14 +4035,6 @@ def print_model_performance(
             - Attention: if average not specified, the performance values are printed for average = 'macro', 'weighted' and None
     number_of_decimals: int
         the number of decimals to round the results to
-    
-        # collect results if requested
-            if collect_results:
-                this_predicted_results_reshaped = pred.argmax(1).view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                this_actual_results_reshaped = slp.view(int(slp.shape[0]/windows_per_signal), windows_per_signal).cpu().numpy()
-                
-                predicted_results = np.append(predicted_results, this_predicted_results_reshaped, axis=0)
-                actual_results = np.append(actual_results, this_actual_results_reshaped, axis=0)
     """
 
     # load signal processing parameters
