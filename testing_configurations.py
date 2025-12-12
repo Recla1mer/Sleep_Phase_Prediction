@@ -1497,7 +1497,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
     }
 
     hyperparameters_gif = {
-        "batch_size": 8, # 64m for 120s data | 90K (87221) / 32 => 2726 steps per epoch
+        "batch_size": 8,
         "number_epochs": 20,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 2,
@@ -2135,9 +2135,9 @@ if __name__ == "__main__":
     except:
         pass
 
-    if True:
+    if False:
         nako_directory = "Processed_NAKO/"
-        nako_paths = [nako_directory + "NAKO-994_Results.pkl", nako_directory + "NAKO-609_Results.pkl", nako_directory + "NAKO-419_Results.pkl", nako_directory + "NAKO-84_Results.pkl", nako_directory + "NAKO-33a_Results.pkl", nako_directory + "NAKO-33b_Results.pkl"]
+        nako_paths = [nako_directory + "NAKO-994.pkl", nako_directory + "NAKO-609.pkl", nako_directory + "NAKO-419.pkl", nako_directory + "NAKO-84.pkl", nako_directory + "NAKO-33a.pkl", nako_directory + "NAKO-33b.pkl"]
 
         stage_prediction_paths = []
         apnea_prediction_paths = []

@@ -3240,8 +3240,6 @@ def main_model_predicting_apnea(
     if reshape_to_overlapping_windows:
         window_duration_seconds = common_window_reshape_params["window_duration_seconds"]
         overlap_seconds = common_window_reshape_params["overlap_seconds"]
-    
-    slp_duration_seconds = int(1 / slp_frequency)
 
     # list to track unpredicatable signals
     unpredictable_signals = []
@@ -4448,8 +4446,8 @@ def run_model_performance_evaluation_SSG(
     with open(path_to_model_directory + project_configuration_file, "rb") as f:
         project_configuration = pickle.load(f)
         signal_length_seconds = project_configuration["signal_length_seconds"]
-    if signal_length_seconds > 7 * 3600:
-        apply_inference = False
+    # if signal_length_seconds > 7 * 3600:
+    #     apply_inference = False
     del project_configuration, signal_length_seconds
 
     """

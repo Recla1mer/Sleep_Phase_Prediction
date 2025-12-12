@@ -104,6 +104,7 @@ def create_latex_table_row(
         path_to_model_directory: str,
         performance_of: str, # "Splitted", "Complete_Probability", "Complete_Majority"
         transform = [],
+        round_to_decimals = 3,
         ):
     """
     """
@@ -140,3 +141,245 @@ def create_latex_table_row(
         )
     else:
         raise ValueError("Unknown \'performance_of\' value.")
+    
+    accuracy = round(accuracy, round_to_decimals)
+    kappa = round(kappa, round_to_decimals)
+    f1 = round(f1, round_to_decimals) # type: ignore
+    
+    return "\\num{" + str(accuracy) + "} & \\num{" + str(kappa) + "} & \\num{" + str(f1) + "} \\\\"
+
+
+def single_apnea_table():
+
+    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    class_names = ["A", "AH"]
+
+    print("\nSingle Apnea")
+    print("\nSplitted Table Rows")
+    for network_index in range(len(network_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "A":
+                apnea_transform = []
+            else:
+                apnea_transform = [[2,1]]
+
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text += create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Splitted", #"Complete_Probability", "Complete_Majority"
+                                transform = apnea_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                
+                print(text)
+    
+    print("\nCombined Table Rows")
+    for network_index in range(len(network_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "A":
+                apnea_transform = []
+            else:
+                apnea_transform = [[2,1]]
+
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Complete_Majority",
+                                transform = apnea_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                
+                print(text)
+
+
+def multi_apnea_table():
+
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
+    network_model_names = ["LSM", "LSM_Residual"]
+    class_names = ["A", "AH"]
+
+    print("\nMulti Apnea")
+    print("\nSplitted Table Rows")
+    for model_index in range(len(network_model_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "A":
+                apnea_transform = []
+            else:
+                apnea_transform = [[2,1]]
+
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Splitted",
+                                transform = apnea_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                
+                print(text)
+    
+    print("\nCombined Table Rows")
+    for model_index in range(len(network_model_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "A":
+                apnea_transform = []
+            else:
+                apnea_transform = [[2,1]]
+
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Complete_Majority",
+                                transform = apnea_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+
+                print(text)
+
+def single_stage_table():
+
+    class_names = ["ArtifactAsWake", "FullClass"]
+    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    sleep_transform = []
+
+    print("\nSingle Stage")
+    print("\nSplitted Table Rows")
+    for network_index in range(len(network_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "ArtifactAsWake":
+                sleep_transform = []
+            else:
+                sleep_transform = [[0, 1]]
+
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Splitted",
+                                transform = sleep_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                
+                print(text)
+    
+    print("\nCombined Table Rows")
+    for network_index in range(len(network_names)):
+        for class_index in range(len(class_names)):
+            if class_names[class_index] == "ArtifactAsWake":
+                sleep_transform = []
+            else:
+                sleep_transform = [[0, 1]]
+                
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Complete_Probability",
+                                transform = sleep_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+
+                print(text)
+
+
+def multi_stage_table():
+
+    window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
+    network_model_names = ["LSM", "LSM_Residual"]
+
+    print("\nMulti Stage")
+    print("\nSplitted Table Rows")
+    for model_index in range(len(network_model_names)):
+        for window_index in range(len(window_and_class_names)):
+            if window_and_class_names[window_index] == "Overlap_FullClass":
+                stage_transform = [[0, 1]]
+            else:
+                stage_transform = []
+            
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Splitted",
+                                transform = stage_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+
+                print(text)
+    
+    print("\nCombined Table Rows")
+    for model_index in range(len(network_model_names)):
+        for window_index in range(len(window_and_class_names)):
+            if window_and_class_names[window_index] == "Overlap_FullClass":
+                stage_transform = [[0, 1]]
+            else:
+                stage_transform = []
+            
+            for clean_index in range(len(cleaning_names)):
+                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
+
+                text = "& " + latex_cleaning[clean_index] + "&"
+                try:
+                    text = create_latex_table_row(
+                                path_to_model_directory = identifier,
+                                performance_of = "Complete_Probability",
+                                transform = stage_transform,
+                                round_to_decimals = 3,
+                            )
+                except:
+                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                    
+                print(text)
+
+
+if __name__ == "__main__":
+    single_stage_table()
+    multi_stage_table()
+
+    single_apnea_table()
+    multi_apnea_table()
