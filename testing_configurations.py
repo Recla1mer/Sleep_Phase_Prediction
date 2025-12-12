@@ -2135,35 +2135,38 @@ if __name__ == "__main__":
     except:
         pass
 
-    if False:
+    if True:
         nako_directory = "Processed_NAKO/"
         nako_paths = [nako_directory + "NAKO-994.pkl", nako_directory + "NAKO-609.pkl", nako_directory + "NAKO-419.pkl", nako_directory + "NAKO-84.pkl", nako_directory + "NAKO-33a.pkl", nako_directory + "NAKO-33b.pkl"]
 
-        stage_prediction_paths = []
-        apnea_prediction_paths = []
+        stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
+        stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
+        
+        apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
+        apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
 
         for path in nako_paths:
 
             print_headline(f"Predicting Sleep Stages and Apnea Events within: {path}")
 
-            for stage_path in stage_prediction_paths:
+            for stage_path_index in range(len(stage_prediction_paths)):
                 main_model_predicting_stage_inference(
-                    path_to_model_state = stage_path + model_state_after_shhs_gif_file,
+                    path_to_model_state = stage_prediction_paths[stage_path_index] + model_state_after_shhs_gif_file,
                     path_to_data_directory = path,
-                    path_to_project_configuration = stage_path + project_configuration_file,
+                    path_to_project_configuration = stage_prediction_paths[stage_path_index] + project_configuration_file,
                     path_to_save_results = path,
                     inference = True,
-                    results_key = "SLP"
+                    results_key = stage_prediction_keys[stage_path_index]
                 )
 
-            for apnea_path in apnea_prediction_paths:
+            for apnea_path_index in range(len(apnea_prediction_paths)):
                 main_model_predicting_apnea_inference(
-                    path_to_model_state = apnea_path + model_state_after_shhs_gif_file,
+                    path_to_model_state = apnea_prediction_paths[apnea_path_index] + model_state_after_shhs_gif_file,
                     path_to_data_directory = path,
-                    path_to_project_configuration = apnea_path + project_configuration_file,
+                    path_to_project_configuration = apnea_prediction_paths[apnea_path_index] + project_configuration_file,
                     path_to_save_results = path,
                     inference = True,
-                    results_key = "SAE"
+                    results_key = apnea_prediction_keys[apnea_path_index]
                 )
 
 

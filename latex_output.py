@@ -166,7 +166,7 @@ def single_apnea_table():
             else:
                 apnea_transform = [[2,1]]
             
-            class_names[class_index]
+            print(class_names[class_index])
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"

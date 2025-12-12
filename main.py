@@ -2463,7 +2463,7 @@ def main_model_predicting_stage_inference(
         for data_dict in data_generator:
             
             try:
-                total_duration = int(len(data_dict["RRI"])/rri_frequency)
+                total_duration = min(int(len(data_dict["RRI"])/rri_frequency), int(len(data_dict["MAD"])/mad_frequency))
                 
                 strided_prediction_probabilities = [[] for i in range(total_duration)]
                 strided_predicted_classes = [[] for _ in range(total_duration)]
@@ -3777,7 +3777,7 @@ def main_model_predicting_apnea_inference(
         for data_dict in data_generator:
             
             try:
-                total_duration = int(len(data_dict["RRI"])/rri_frequency)
+                total_duration = min(int(len(data_dict["RRI"])/rri_frequency), int(len(data_dict["MAD"])/mad_frequency))
                 
                 strided_prediction_probabilities = [[] for i in range(total_duration)]
                 strided_predicted_classes = [[] for _ in range(total_duration)]
