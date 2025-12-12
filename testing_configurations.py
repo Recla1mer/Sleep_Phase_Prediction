@@ -2138,7 +2138,7 @@ if __name__ == "__main__":
     if True:
         nako_directory = "Processed_NAKO/"
         nako_paths = [nako_directory + "NAKO-994.pkl", nako_directory + "NAKO-609.pkl", nako_directory + "NAKO-419.pkl", nako_directory + "NAKO-84.pkl", nako_directory + "NAKO-33a.pkl", nako_directory + "NAKO-33b.pkl"]
-        nako_size = [None, None, None, None, None, None]
+        nako_size = [37059, 267752, 223486, 255086, 7365, 9691]
 
         stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
         stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
