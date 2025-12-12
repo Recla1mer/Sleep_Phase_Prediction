@@ -159,11 +159,14 @@ def single_apnea_table():
     print("\nSingle Apnea")
     print("\nSplitted Table Rows")
     for network_index in range(len(network_names)):
+        print(network_names[network_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "A":
                 apnea_transform = []
             else:
                 apnea_transform = [[2,1]]
+            
+            class_names[class_index]
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
@@ -183,11 +186,14 @@ def single_apnea_table():
     
     print("\nCombined Table Rows")
     for network_index in range(len(network_names)):
+        print(network_names[network_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "A":
                 apnea_transform = []
             else:
                 apnea_transform = [[2,1]]
+            
+            print(class_names[class_index])
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
@@ -216,11 +222,14 @@ def multi_apnea_table():
     print("\nMulti Apnea")
     print("\nSplitted Table Rows")
     for model_index in range(len(network_model_names)):
+        print(network_model_names[model_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "A":
                 apnea_transform = []
             else:
                 apnea_transform = [[2,1]]
+            
+            print(class_names[class_index])
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
@@ -240,11 +249,14 @@ def multi_apnea_table():
     
     print("\nCombined Table Rows")
     for model_index in range(len(network_model_names)):
+        print(network_model_names[model_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "A":
                 apnea_transform = []
             else:
                 apnea_transform = [[2,1]]
+            
+            print(class_names[class_index])
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
@@ -273,11 +285,14 @@ def single_stage_table():
     print("\nSingle Stage")
     print("\nSplitted Table Rows")
     for network_index in range(len(network_names)):
+        print(network_names[network_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "ArtifactAsWake":
                 sleep_transform = []
             else:
                 sleep_transform = [[0, 1]]
+            
+            print(class_names[class_index])
 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
@@ -297,11 +312,14 @@ def single_stage_table():
     
     print("\nCombined Table Rows")
     for network_index in range(len(network_names)):
+        print(network_names[network_index])
         for class_index in range(len(class_names)):
             if class_names[class_index] == "ArtifactAsWake":
                 sleep_transform = []
             else:
                 sleep_transform = [[0, 1]]
+            
+            print(class_names[class_index])
                 
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
@@ -330,11 +348,14 @@ def multi_stage_table():
     print("\nMulti Stage")
     print("\nSplitted Table Rows")
     for model_index in range(len(network_model_names)):
+        print(network_model_names[model_index])
         for window_index in range(len(window_and_class_names)):
             if window_and_class_names[window_index] == "Overlap_FullClass":
                 stage_transform = [[0, 1]]
             else:
                 stage_transform = []
+            
+            print(window_and_class_names[window_index])
             
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
@@ -354,11 +375,14 @@ def multi_stage_table():
     
     print("\nCombined Table Rows")
     for model_index in range(len(network_model_names)):
+        print(network_model_names[model_index])
         for window_index in range(len(window_and_class_names)):
             if window_and_class_names[window_index] == "Overlap_FullClass":
                 stage_transform = [[0, 1]]
             else:
                 stage_transform = []
+            
+            print(window_and_class_names[window_index])
             
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
