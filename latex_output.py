@@ -89,7 +89,7 @@ def calc_perf_values(
         for i in range(len(all_predicted_results)):
             for j in range(len(transform)):
                 if all_actual_results[i] == transform[j][0]:
-                    all_actual_results = transform[j][1]
+                    all_actual_results[i] = transform[j][1]
                     break
 
     # Calculate and print accuracy and cohen's kappa score
@@ -168,7 +168,7 @@ def single_apnea_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
                     text += create_latex_table_row(
                                 path_to_model_directory = identifier,
@@ -192,9 +192,9 @@ def single_apnea_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Complete_Majority",
                                 transform = apnea_transform,
@@ -225,9 +225,9 @@ def multi_apnea_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Splitted",
                                 transform = apnea_transform,
@@ -249,9 +249,9 @@ def multi_apnea_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Complete_Majority",
                                 transform = apnea_transform,
@@ -282,9 +282,9 @@ def single_stage_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Splitted",
                                 transform = sleep_transform,
@@ -306,9 +306,9 @@ def single_stage_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Complete_Probability",
                                 transform = sleep_transform,
@@ -339,9 +339,9 @@ def multi_stage_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Splitted",
                                 transform = stage_transform,
@@ -363,9 +363,9 @@ def multi_stage_table():
             for clean_index in range(len(cleaning_names)):
                 identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + "&"
+                text = "& " + latex_cleaning[clean_index] + " & "
                 try:
-                    text = create_latex_table_row(
+                    text += create_latex_table_row(
                                 path_to_model_directory = identifier,
                                 performance_of = "Complete_Probability",
                                 transform = stage_transform,
@@ -373,7 +373,7 @@ def multi_stage_table():
                             )
                 except:
                     text += "\\num{0} & \\num{0} & \\num{0} \\\\"
-                    
+
                 print(text)
 
 
