@@ -2261,7 +2261,8 @@ def main_model_predicting_stage_inference(
         path_to_project_configuration: str,
         path_to_save_results: str,
         inference = False,
-        results_key = "SLP"
+        results_key = "SLP",
+        data_length = None
     ):
     """
     Applies the trained neural network model to the processed data. The processed data is accessed using the
@@ -2335,11 +2336,14 @@ def main_model_predicting_stage_inference(
     ------------------
     """
 
-    data_generator = load_from_pickle(path_to_data_directory)
-    dataset_length = 0
-    for _ in data_generator:
-        dataset_length += 1
-    del data_generator
+    if data_length == None:
+        data_generator = load_from_pickle(path_to_data_directory)
+        dataset_length = 0
+        for _ in data_generator:
+            dataset_length += 1
+        del data_generator
+    else:
+        dataset_length = data_length
 
     data_generator = load_from_pickle(path_to_data_directory)
 
@@ -3574,7 +3578,8 @@ def main_model_predicting_apnea_inference(
         path_to_project_configuration: str,
         path_to_save_results: str,
         inference = False,
-        results_key = "SAE"
+        results_key = "SAE",
+        data_length = None
     ):
     """
     Applies the trained neural network model to the processed data. The processed data is accessed using the
@@ -3648,11 +3653,14 @@ def main_model_predicting_apnea_inference(
     ------------------
     """
 
-    data_generator = load_from_pickle(path_to_data_directory)
-    dataset_length = 0
-    for _ in data_generator:
-        dataset_length += 1
-    del data_generator
+    if data_length == None:
+        data_generator = load_from_pickle(path_to_data_directory)
+        dataset_length = 0
+        for _ in data_generator:
+            dataset_length += 1
+        del data_generator
+    else:
+        dataset_length = data_length
 
     data_generator = load_from_pickle(path_to_data_directory)
 

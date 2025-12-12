@@ -2138,6 +2138,7 @@ if __name__ == "__main__":
     if True:
         nako_directory = "Processed_NAKO/"
         nako_paths = [nako_directory + "NAKO-994.pkl", nako_directory + "NAKO-609.pkl", nako_directory + "NAKO-419.pkl", nako_directory + "NAKO-84.pkl", nako_directory + "NAKO-33a.pkl", nako_directory + "NAKO-33b.pkl"]
+        nako_size = [None, None, None, None, None, None]
 
         stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
         stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
@@ -2145,7 +2146,8 @@ if __name__ == "__main__":
         apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
         apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
 
-        for path in nako_paths:
+        for nako_path_index in range(len(nako_paths)):
+            path = nako_paths[nako_path_index]
 
             print_headline(f"Predicting Sleep Stages and Apnea Events within: {path}")
 
@@ -2156,7 +2158,8 @@ if __name__ == "__main__":
                     path_to_project_configuration = stage_prediction_paths[stage_path_index] + project_configuration_file,
                     path_to_save_results = path,
                     inference = True,
-                    results_key = stage_prediction_keys[stage_path_index]
+                    results_key = stage_prediction_keys[stage_path_index],
+                    data_length = nako_size[nako_path_index]
                 )
 
             for apnea_path_index in range(len(apnea_prediction_paths)):
@@ -2166,7 +2169,8 @@ if __name__ == "__main__":
                     path_to_project_configuration = apnea_prediction_paths[apnea_path_index] + project_configuration_file,
                     path_to_save_results = path,
                     inference = True,
-                    results_key = apnea_prediction_keys[apnea_path_index]
+                    results_key = apnea_prediction_keys[apnea_path_index],
+                    data_length = nako_size[nako_path_index]
                 )
 
 
