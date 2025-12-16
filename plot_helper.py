@@ -362,7 +362,7 @@ def plot_distribution_of_score(
     """
 
     # Default values
-    kwargs.setdefault("figsize", [3.4, 2.7])
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
     kwargs.setdefault("title", "")
     kwargs.setdefault("xlabel", "")
     kwargs.setdefault("ylabel", "count")
@@ -501,9 +501,12 @@ def plot_distribution_of_score(
 
 def plot_confusion_matrix(
         path_to_model_directory: str,
-        dataset: str, # "SHHS" or "GIF"
+        dataset: str, # "SHHS_Complete", "SHHS_Splitted", "GIF_Complete" or "GIF_Splitted"
         prediction_result_key: str,
         actual_result_key: str,
+        remove_classes = [],
+        map_classes = [],
+        save_path = "",
         **kwargs
     ):
     """
@@ -545,10 +548,10 @@ def plot_confusion_matrix(
     """
 
     # Default values
-    kwargs.setdefault("figsize", [3.4, 2.7])
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
     kwargs.setdefault("title", "")
     kwargs.setdefault("xlabel", "Predicted Class")
-    kwargs.setdefault("ylabel", "Real Class")
+    kwargs.setdefault("ylabel", "Actual Class")
 
     kwargs.setdefault("cmap", "Blues")
     kwargs.setdefault("values_format", ".1%") # or None, 'd', '.2g'
@@ -563,18 +566,23 @@ def plot_confusion_matrix(
     # access dictionary that maps sleep stages (display labels) to integers
     sleep_stage_to_label = project_configuration["target_classes"]
 
-    # Create a list of the integer labels, sorted
-    integer_labels = np.array([value for value in sleep_stage_to_label.values()])
-    integer_labels = np.unique(integer_labels)
-    integer_labels.sort()
-
-    # Create a list of the display labels
+    integer_labels = []
     display_labels = []
-    for integer_label in integer_labels:
-        for key, value in sleep_stage_to_label.items():
-            if value == integer_label:
-                display_labels.append(key)
-                break
+    for key, value in sleep_stage_to_label.items():
+        if key not in remove_classes and value not in integer_labels:
+            integer_labels.append(value)
+            display_labels.append(key)
+    
+    for label_index in range(len(display_labels)):
+        if display_labels[label_index] == "artifact":
+            display_labels[label_index] = "Art"
+        elif display_labels[label_index] == "wake":
+            display_labels[label_index] = "Wake"
+    
+    for label_index in range(len(display_labels)):
+        for map_index in range(len(map_classes)):
+            if display_labels[label_index] == map_classes[map_index][0]:
+                display_labels[label_index] = map_classes[map_index][1]
 
     # variables to store results
     all_predicted_results = np.empty(0)
@@ -596,6 +604,20 @@ def plot_confusion_matrix(
         # Add the results to the arrays
         all_predicted_results = np.append(all_predicted_results, predicted_results)
         all_actual_results = np.append(all_actual_results, actual_results)
+    
+    if len(remove_classes) > 0:
+        remove_values = []
+        for rem_clas in remove_classes:
+            if rem_clas in sleep_stage_to_label:
+                remove_values.append(sleep_stage_to_label[rem_clas])
+    
+        remove_result_indices = []
+        for result_index in range(len(all_actual_results)):
+            if all_actual_results[result_index] in remove_values or all_predicted_results[result_index] in remove_values:
+                remove_result_indices.append(result_index)
+        
+        all_predicted_results = np.delete(all_predicted_results, remove_result_indices)
+        all_actual_results = np.delete(all_actual_results, remove_result_indices)
 
     # Plot the confusion matrix
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
@@ -614,7 +636,11 @@ def plot_confusion_matrix(
     
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
 
-    plt.show()
+    if len(save_path) == 0:
+        plt.show()
+    else:
+        plt.savefig(save_path, format="pdf", dpi=200)#, bbox_inches="tight")
+        plt.close()
 
 
 def plot_actual_predicted(
@@ -773,18 +799,97 @@ def plot_actual_predicted(
     plt.show()
 
 
-if __name__ == "__main__":
+tex_correction = 0.5
+tex_look = {
+    "text.usetex": True,
+    # "text.latex.preamble": \usepackage{amsmath}\usepackage{amssymb},
+    "font.family": "serif",
+    "font.serif": "Computer Modern",
+    #
+    "legend.fontsize": 10-tex_correction,
+    "xtick.labelsize": 10-tex_correction,
+    "ytick.labelsize": 10-tex_correction,
+    # "font.size": 12-tex_correction,
+    "font.size": 10-tex_correction,
+    "axes.titlesize": 12-tex_correction,
+    "axes.labelsize": 12-tex_correction,
+    #
+    "savefig.format": "pdf",
+    #
+    "savefig.bbox": "tight",
+    "savefig.transparent": False,
+    "savefig.dpi": 600,
+}
 
-    model_directory_path = "SAE_Multiple_2min_AE_LSM_RAW/"
-    model_directory_path = "SAE_Local_120s_AE_RAW/"
+python_correction = 0
+python_look = {
+    "legend.fontsize": 8+python_correction,
+    "xtick.labelsize": 8+python_correction,
+    "ytick.labelsize": 8+python_correction,
+    "font.size": 10+python_correction,
+    "axes.titlesize": 10+python_correction,
+    "axes.labelsize": 10+python_correction,
+    #
+    "savefig.format": "pdf",
+    #
+    "savefig.bbox": "tight",
+    "savefig.transparent": False,
+    "savefig.dpi": 600,
+}
+
+pt_to_inch = 1./72.27
+cm_to_inch = 1/2.54
+
+# linewidth = 16.2*cm_to_inch
+# linewidth = 459.6215*pt_to_inch
+linewidth = 429.1688*pt_to_inch
+
+# fig_ratio = 3.4 / 2.7
+
+if __name__ == "__main__":
+    matplotlib.rcParams.update(tex_look)
+    
+    # multi-plots
+    fig_ratio = 4 / 3
+    linewidth *= 0.45 # 0.48, 0.5, 0.3, 0.322
+    linewidth = 193.1246 * pt_to_inch
+
+    # standalone plots
+    # fig_ratio = 3 / 2
+    # fig_ratio = 2 / 1
+    # linewidth *= 0.8
+    matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
+
+    model_directory_path = "SSG_Local_120s_FullClass_RAW/"
 
     plot_confusion_matrix(
         path_to_model_directory = model_directory_path,
-        dataset = "GIF", # "SHHS" or "GIF"
+        dataset = "GIF_Complete", # "SHHS" or "GIF"
         # normalize = None,
         # values_format = None,
         prediction_result_key = "Predicted",
         actual_result_key = "Actual",
+        remove_classes = ["artifact"],
+        values_format = None, #'d', '.2g'
+        normalize = None,
+        # values_format = ".1%", #'d', '.2g'
+        # normalize = "all"
+    )
+
+    model_directory_path = "SAE_Local_30s_AH_RAW/"
+
+    plot_confusion_matrix(
+        path_to_model_directory = model_directory_path,
+        dataset = "GIF_Splitted", # "SHHS" or "GIF"
+        # normalize = None,
+        # values_format = None,
+        prediction_result_key = "Predicted",
+        actual_result_key = "Actual",
+        remove_classes = ["artifact"],
+        values_format = None, #'d', '.2g'
+        normalize = None,
+        # values_format = ".1%", #'d', '.2g'
+        # normalize = "all"
     )
 
     raise SystemExit

@@ -1722,7 +1722,7 @@ if __name__ == "__main__":
             legend = False
         )
 
-    if True:
+    if False:
 
         # plot_apnea_occurance_distribution(
         #     pickle_name = "gif_apnea_info.pkl",
