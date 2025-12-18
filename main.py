@@ -2431,14 +2431,8 @@ def main_model_predicting_stage_inference(
     -----------------------------
     """
 
-    working_file_path = "save_in_progress"
-    for char_pos in range(len(path_to_save_results)-1, -1, -1):
-        if path_to_save_results[char_pos] == "/":
-            working_file_path = path_to_save_results[:char_pos+1] + "save_in_progress"
-            break
-
-    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-    working_file = open(working_file_path, "ab")
+    create_directories_along_path(path_to_save_results)
+    results_file = open(path_to_save_results, "ab")
 
     """
     ------------------------
@@ -2600,7 +2594,9 @@ def main_model_predicting_stage_inference(
                 predictions_from_combined_classes = np.array(predictions_from_combined_classes)
 
                 # save results to existing dictionary
-                results = copy.deepcopy(data_dict)
+                # results = copy.deepcopy(data_dict)
+                results = dict()
+                results["ID"] = data_dict["ID"]
                 results[results_key + "_target_classes"] = target_classes
                 results[results_key + "_frequency"] = 1 / resolution_seconds
                 results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
@@ -2609,12 +2605,16 @@ def main_model_predicting_stage_inference(
                 results[results_key + "_from_majority"] = predictions_from_combined_classes
                 results[results_key] = predictions_from_combined_probabilities
                 
-                pickle.dump(results, working_file)
+                pickle.dump(results, results_file)
             
             except:
-                unpredictable_signals.append(data_dict["ID"]) # type: ignore
-                results = copy.deepcopy(data_dict)
-                pickle.dump(results, working_file)
+                if "ID" in data_dict:
+                    unpredictable_signals.append(data_dict["ID"]) # type: ignore
+
+                    # results = copy.deepcopy(data_dict)
+                    results = dict()
+                    results["ID"] = data_dict["ID"]
+                    pickle.dump(results, results_file)
 
                 continue
 
@@ -2622,13 +2622,7 @@ def main_model_predicting_stage_inference(
                 # update progress
                 progress_bar.update()
 
-    working_file.close()
-
-    # rename working file
-    if os.path.exists(path_to_save_results):
-        os.remove(path_to_save_results)
-    create_directories_along_path(path_to_save_results)
-    os.rename(working_file_path, path_to_save_results)
+    results_file.close()
     
     # Print unpredictable signals to console
     number_unpredictable_signals = len(unpredictable_signals)
@@ -3524,6 +3518,7 @@ def main_model_predicting_apnea(
                         "Predicted": predictions_from_combined_probabilities,
                         "Predicted_2": predictions_from_combined_classes,
                         "Actual": slp,
+                        "Actual_in_seconds": data_dict["SLP"]
                     }
 
                 else:
@@ -3749,14 +3744,8 @@ def main_model_predicting_apnea_inference(
     -----------------------------
     """
 
-    working_file_path = "save_in_progress"
-    for char_pos in range(len(path_to_save_results)-1, -1, -1):
-        if path_to_save_results[char_pos] == "/":
-            working_file_path = path_to_save_results[:char_pos+1] + "save_in_progress"
-            break
-
-    working_file_path = find_non_existing_path(path_without_file_type = working_file_path, file_type = "pkl")
-    working_file = open(working_file_path, "ab")
+    create_directories_along_path(path_to_save_results)
+    results_file = open(path_to_save_results, "ab")
 
     """
     ------------------------
@@ -3777,7 +3766,7 @@ def main_model_predicting_apnea_inference(
     unpredictable_signals = []
 
     # variables to track progress
-    print("\nPredicting Sleep Stages:")
+    print("\nPredicting Apnea Events:")
     progress_bar = DynamicProgressBar(total = dataset_length)
 
     with torch.no_grad():
@@ -3960,7 +3949,9 @@ def main_model_predicting_apnea_inference(
                 predictions_from_combined_classes = np.array(predictions_from_combined_classes)
 
                 # save results to existing dictionary
-                results = copy.deepcopy(data_dict)
+                # results = copy.deepcopy(data_dict)
+                results = dict()
+                results["ID"] = data_dict["ID"]
                 results[results_key + "_target_classes"] = target_classes
                 results[results_key + "_frequency"] = 1 / resolution_seconds
                 results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
@@ -3970,13 +3961,16 @@ def main_model_predicting_apnea_inference(
                 results[results_key] = predictions_from_combined_probabilities
                     
                 
-                pickle.dump(results, working_file)
+                pickle.dump(results, results_file)
             
             except:
-                unpredictable_signals.append(data_dict["ID"]) # type: ignore
+                if "ID" in data_dict:
+                    unpredictable_signals.append(data_dict["ID"]) # type: ignore
 
-                results = copy.deepcopy(data_dict)
-                pickle.dump(results, working_file)
+                    # results = copy.deepcopy(data_dict)
+                    results = dict()
+                    results["ID"] = data_dict["ID"]
+                    pickle.dump(results, results_file)
 
                 continue
 
@@ -3984,13 +3978,7 @@ def main_model_predicting_apnea_inference(
                 # update progress
                 progress_bar.update()
 
-    working_file.close()
-
-    # rename working file
-    if os.path.exists(path_to_save_results):
-        os.remove(path_to_save_results)
-    create_directories_along_path(path_to_save_results)
-    os.rename(working_file_path, path_to_save_results)
+    results_file.close()
     
     # Print unpredictable signals to console
     number_unpredictable_signals = len(unpredictable_signals)

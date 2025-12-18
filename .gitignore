@@ -37,3 +37,8 @@ also_good
 323_461_389
 SSG_Local_30s_FullClass_Norm
 network_results.pkl
+network_training_behavior.pkl
+SAE_Local_30s_A_Norm
+SAE_Local_60s_A_Norm
+SAE_Local_180s_AH_Cleaned
+SAE_Local_120s_AH_RAW

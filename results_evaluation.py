@@ -471,7 +471,7 @@ def multi_stage_chb_collecting(
             print(window_and_class_names[window_index])
             if window_and_class_names[window_index] == "Overlap_FullClass":
                 stage_transform = [[0, 1]]
-                class_name = "FullCLass"
+                class_name = "FullClass"
             else:
                 stage_transform = []
                 class_name = "ArtifactAsWake"
@@ -528,7 +528,7 @@ def multi_stage_chb_collecting(
             print(window_and_class_names[window_index])
             if window_and_class_names[window_index] == "Overlap_FullClass":
                 stage_transform = [[0, 1]]
-                class_name = "FullCLass"
+                class_name = "FullClass"
             else:
                 stage_transform = []
                 class_name = "ArtifactAsWake"
@@ -624,7 +624,7 @@ def get_mean_of(
     for data_dict in results_generator:
         all_align = True
         for key in combinations:
-            if data_dict[key] != combinations[key]:
+            if data_dict[key] not in combinations[key]:
                 all_align = False
                 break
         
@@ -663,6 +663,703 @@ def compare_table(
         print(f"{combination_label[comb_index]} & {num} & \\num" + "{" + f"{round(mean_acc, round_to_decimals)}({round(std_acc, round_to_decimals)})" + "} & \\num" + "{" + f"{round(mean_kappa, round_to_decimals)}({round(std_kappa, round_to_decimals)})" + "} & \\num" + "{" + f"{round(mean_f1, round_to_decimals)}({round(std_f1, round_to_decimals)})" + "} \\\\")
 
 
+def print_compare_tables(path_to_results_file: str):
+    
+    possible_combinations = {
+        "method": ["practical"], # "independent" or "practical"
+        "task": ["stage"], # "stage" or "apnea"
+        "architecture": ["single"], # "single", "LSM" or "LSM_Residual"
+        "input_seconds": [30], # 30, 60, 120, 180, 300, 36000
+        "window_seconds": [0], # 0, 10, 120
+        "overlap_seconds": [0], # 0, 5, 90
+        "labeling": ["ArtifactAsWake"], # "ArtifactAsWake", "FullClass", "A" or "AH"
+        "transform": ["RAW"], # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
+    }
+
+    # single sleep stage
+
+    combination = {
+        "method": ["practical"], # "independent" or "practical"
+        "task": ["stage"], # "stage" or "apnea"
+        "architecture": ["single"], # "single", "LSM" or "LSM_Residual"
+        # "input_seconds": [30], # 30, 60, 120, 180, 300, 36000
+        # "window_seconds": [0], # 0, 10, 120
+        # "overlap_seconds": [0], # 0, 5, 90
+        # "labeling": ["ArtifactAsWake"], # "ArtifactAsWake", "FullClass", "A" or "AH"
+        # "transform": ["RAW"], # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
+    }
+
+    all_combinations = list()
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [30] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [60] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [120] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [180] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    del combination["input_seconds"]
+    combination["labeling"] = ["ArtifactAsWake"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["labeling"] = ["FullClass"]
+    all_combinations.append(copy.deepcopy(combination))
+    del combination["labeling"]
+    combination["transform"] = ["RAW"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["Cleaned"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["Norm"]
+    all_combinations.append(copy.deepcopy(combination))
+    
+    combination_labels = ["Any", "\\mdhighlight{\\qty{30}{s}}", "\\mdhighlight{\\qty{60}{s}}", "\\mdhighlight{\\qty{120}{s}}", "\\mdhighlight{\\qty{180}{s}}", "\\mdhighlight{W\\&A,\\,L,\\,D,\\,R}", "\\mdhighlight{W,\\,L,\\,D,\\,R,\\,A}", "\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+
+    compare_table(
+        results_file_path = path_to_results_file,
+        combinations = all_combinations,
+        combination_label = combination_labels,
+        round_to_decimals = 3
+    )
+
+    # multi sleep stage
+
+    combination = {
+        "method": ["practical"], # "independent" or "practical"
+        "task": ["stage"], # "stage" or "apnea"
+        "architecture": ["LSM", "LSM_Residual"], # "single", "LSM" or "LSM_Residual"
+        "input_seconds": [36000], # 30, 60, 120, 180, 300, 36000
+        "window_seconds": [120], # 0, 10, 120
+        # "overlap_seconds": [0], # 0, 5, 90
+        # "labeling": ["ArtifactAsWake"], # "ArtifactAsWake", "FullClass", "A" or "AH"
+        # "transform": ["RAW"], # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
+    }
+
+    all_combinations = list()
+    all_combinations.append(copy.deepcopy(combination))
+    
+    combination["architecture"] = ["LSM"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["architecture"] = ["LSM_Residual"]
+    all_combinations.append(copy.deepcopy(combination))
+
+    del combination["architecture"]
+    combination["overlap_seconds"] = [90] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["overlap_seconds"] = [0] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    
+    del combination["overlap_seconds"]
+    combination["labeling"] = ["ArtifactAsWake"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["labeling"] = ["FullClass"]
+    all_combinations.append(copy.deepcopy(combination))
+    
+    del combination["labeling"]
+    combination["transform"] = ["RAW"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["Cleaned"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["GlobalNorm"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["LocalNorm"]
+    all_combinations.append(copy.deepcopy(combination))
+    
+    combination_labels = ["Any", "Form A", "Form B", "\\mdhighlight{\\qty{10}{h}:\\qty{120}{s}:\\qty{90}{s}}", "\\mdhighlight{\\qty{10}{h}:\\qty{120}{s}:\\qty{0}{s}}", "\\mdhighlight{W\\&A,\\,L,\\,D,\\,R}", "\\mdhighlight{W,\\,L,\\,D,\\,R,\\,A}", "\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
+
+    compare_table(
+        results_file_path = path_to_results_file,
+        combinations = all_combinations,
+        combination_label = combination_labels,
+        round_to_decimals = 3
+    )
+
+    # single sleep apnea
+
+    combination = {
+        "method": ["practical"], # "independent" or "practical"
+        "task": ["apnea"], # "stage" or "apnea"
+        "architecture": ["single"], # "single", "LSM" or "LSM_Residual"
+        # "input_seconds": [30], # 30, 60, 120, 180, 300, 36000
+        # "window_seconds": [0], # 0, 10, 120
+        # "overlap_seconds": [0], # 0, 5, 90
+        # "labeling": ["ArtifactAsWake"], # "ArtifactAsWake", "FullClass", "A" or "AH"
+        # "transform": ["RAW"], # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
+    }
+
+    all_combinations = list()
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [30] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [60] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [120] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    combination["input_seconds"] = [180] # type: ignore
+    all_combinations.append(copy.deepcopy(combination))
+    del combination["input_seconds"]
+    combination["labeling"] = ["A"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["labeling"] = ["AH"]
+    all_combinations.append(copy.deepcopy(combination))
+    del combination["labeling"]
+    combination["transform"] = ["RAW"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["Cleaned"]
+    all_combinations.append(copy.deepcopy(combination))
+    combination["transform"] = ["Norm"]
+    all_combinations.append(copy.deepcopy(combination))
+    
+    combination_labels = ["Any", "\\mdhighlight{\\qty{30}{s}}", "\\mdhighlight{\\qty{60}{s}}", "\\mdhighlight{\\qty{120}{s}}", "\\mdhighlight{\\qty{180}{s}}", "\\mdhighlight{N,\\,A\\&H}", "\\mdhighlight{N,\\,A,\\,H}", "\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+
+    compare_table(
+        results_file_path = path_to_results_file,
+        combinations = all_combinations,
+        combination_label = combination_labels,
+        round_to_decimals = 3
+    )
+
+
+def loss_per_epoch_collecting(
+        parent_folder_path: str,
+        results_file_path: str,
+        task_network: str,
+        best_model_folder: str,
+    ):
+
+    all_folders = [folder for folder in os.listdir(parent_folder_path) if os.path.exists(parent_folder_path + folder + "/Loss_per_Epoch_GIF.pkl")]
+
+    training_loss = []
+    shhs_loss = []
+    chb_loss = []
+
+    best_training_loss = []
+    best_shhs_loss = []
+    best_chb_loss = []
+
+    for folder in all_folders:
+
+        folder += "/"
+
+        with open(parent_folder_path + folder + "Loss_per_Epoch_GIF.pkl", "rb") as f:
+            chb_data = pickle.load(f)
+        
+        if os.path.exists(parent_folder_path + folder + "Loss_per_Epoch_SHHS.pkl"):
+            with open(parent_folder_path + folder + "Loss_per_Epoch_SHHS.pkl", "rb") as f:
+                shhs_data = pickle.load(f)
+            
+            this_training_loss = []
+            this_shhs_loss = []
+            this_chb_loss = []
+            
+            this_training_loss.extend(shhs_data["train_avg_loss"])
+            this_shhs_loss.extend(shhs_data["SHHS_avg_loss"])
+            this_chb_loss.extend(shhs_data["GIF_avg_loss"])
+
+            this_training_loss.extend(chb_data["train_avg_loss"])
+            this_shhs_loss.extend(chb_data["SHHS_avg_loss"])
+            this_chb_loss.extend(chb_data["GIF_avg_loss"])
+
+            if folder == best_model_folder:
+                best_training_loss = copy.deepcopy(this_training_loss)
+                best_shhs_loss = copy.deepcopy(this_shhs_loss)
+                best_chb_loss = copy.deepcopy(this_chb_loss)
+            
+            training_loss.append(this_training_loss)
+            shhs_loss.append(this_shhs_loss)
+            chb_loss.append(this_chb_loss)
+        
+        else:
+            this_training_loss = chb_data["train_avg_loss"]
+            this_chb_loss = chb_data["GIF_avg_loss"]
+
+            if folder == best_model_folder:
+                best_training_loss = copy.deepcopy(this_training_loss)
+                best_chb_loss = copy.deepcopy(this_chb_loss)
+        
+            training_loss.append(this_training_loss)
+            chb_loss.append(this_chb_loss)
+    
+    if len(best_training_loss) == 0:
+        raise SystemError("Best Model not found.")
+    
+    results = {
+        "task_network": task_network,
+        "training_loss": training_loss,
+        "shhs_loss": shhs_loss,
+        "chb_loss": chb_loss,
+        "best_model": best_model_folder,
+        "best_training_loss": best_training_loss,
+        "best_shhs_loss": best_shhs_loss,
+        "best_chb_loss": best_chb_loss
+    }
+
+    with open(results_file_path, "ab") as f:
+        pickle.dump(results, f)
+
+
+def plot_loss_per_epoch(
+        results_file_path: str,
+        task_network: str,
+        train_border = 100.0,
+        shhs_border = 100.0,
+        chb_border = 100.0,
+        **kwargs
+    ):
+    """
+    """
+    
+    # Default values
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "Epoch")
+    kwargs.setdefault("ylabel", "Cross-Entropy Loss")
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 2)
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("linestyle", "-") # or "--", "-.", ":"
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+    kwargs.setdefault("markeredgewidth", 1)
+    kwargs.setdefault("markeredgecolor", "black")
+
+    plot_args = dict(
+        linewidth = kwargs["linewidth"],
+        linestyle = kwargs["linestyle"],
+        marker = kwargs["marker"],
+        markersize = kwargs["markersize"],
+        # markeredgewidth = kwargs["markeredgewidth"],
+        # markeredgecolor = kwargs["markeredgecolor"],
+    )
+
+    data_generator = load_from_pickle(results_file_path)
+    for data_dict in data_generator:
+        if data_dict["task_network"] == task_network:
+            results = copy.deepcopy(data_dict)
+            break
+    
+    if not results:
+        raise SystemError("Task Network COmbination not found.")
+
+    print(f"Task Network: {task_network}")
+    print(f"Best Model: {results["best_model"]}")
+    norm_border = 1
+    
+    accumulated_train_loss = []
+    accumulated_shhs_loss = []
+    accumulated_chb_loss = []
+
+    train_skipped = 0
+    for train_loss in results["training_loss"]:
+        if np.mean(train_loss) >= train_border:
+            train_skipped += 1
+            continue
+        if len(train_loss) == 80:
+            accumulated_train_loss.append(np.array(train_loss))
+        elif len(train_loss) == 40 or len(train_loss) == 20:
+            interpolated_signal = np.interp(
+                np.arange(0, len(train_loss), 0.5),
+                np.arange(0, len(train_loss)),
+                np.array(train_loss)
+                )
+            accumulated_train_loss.append(interpolated_signal)
+    
+    print(f"Skipped {train_skipped} training samples.")
+    mean_train_loss = np.mean(accumulated_train_loss, axis=0)
+    std_train_loss = np.std(accumulated_train_loss, axis=0)
+
+    train_skipped = 0
+    for i in range(1, len(mean_train_loss)-1):
+        if std_train_loss[i] > norm_border:
+            mean_train_loss[i] = (mean_train_loss[i-1] + mean_train_loss[i+1])/2
+            std_train_loss[i] = (std_train_loss[i-1] + std_train_loss[i+1])/2
+            train_skipped += 1
+    print(f"Normed {train_skipped} train samples.")
+    
+    if len(results["shhs_loss"]) > 0:
+        shhs_skipped = 0
+        for shhs_loss in results["shhs_loss"]:
+            if np.mean(shhs_loss) > shhs_border:
+                shhs_skipped += 1
+                continue
+            if len(shhs_loss) == 80:
+                accumulated_shhs_loss.append(np.array(shhs_loss))
+            elif len(shhs_loss) == 40 or len(shhs_loss) == 20:
+                interpolated_signal = np.interp(
+                    np.arange(0, len(shhs_loss), 0.5),
+                    np.arange(0, len(shhs_loss)),
+                    np.array(shhs_loss)
+                    )
+                accumulated_shhs_loss.append(interpolated_signal)
+        
+        print(f"Skipped {shhs_skipped} shhs samples.")
+        mean_shhs_loss = np.mean(accumulated_shhs_loss, axis=0)
+        std_shhs_loss = np.std(accumulated_shhs_loss, axis=0)
+
+        shhs_skipped = 0
+        for i in range(1, len(mean_shhs_loss)-1):
+            if std_shhs_loss[i] > norm_border:
+                shhs_skipped += 1
+                mean_shhs_loss[i] = (mean_shhs_loss[i-1] + mean_shhs_loss[i+1])/2
+                std_shhs_loss[i] = (std_shhs_loss[i-1] + std_shhs_loss[i+1])/2
+        print(f"Normed {shhs_skipped} shhs samples.")
+    
+    chb_skipped = 0
+    for chb_loss in results["chb_loss"]:
+        if np.mean(chb_loss) > chb_border:
+            chb_skipped += 1
+            continue
+        if len(chb_loss) == 80:
+            accumulated_chb_loss.append(np.array(chb_loss))
+        elif len(chb_loss) == 40 or len(chb_loss) == 20:
+            interpolated_signal = np.interp(
+                np.arange(0, len(chb_loss), 0.5),
+                np.arange(0, len(chb_loss)),
+                np.array(chb_loss)
+                )
+            accumulated_chb_loss.append(interpolated_signal)
+    
+    print(f"Skipped {chb_skipped} chb samples.")
+    mean_chb_loss = np.mean(accumulated_chb_loss, axis=0)
+    std_chb_loss = np.std(accumulated_chb_loss, axis=0)
+
+    chb_skipped = 0
+    for i in range(1, len(mean_chb_loss)-1):
+        if std_chb_loss[i] > norm_border:
+            mean_chb_loss[i] = (mean_chb_loss[i-1] + mean_chb_loss[i+1])/2
+            std_chb_loss[i] = (std_chb_loss[i-1] + std_chb_loss[i+1])/2
+            chb_skipped += 1
+
+    print(f"Normed {chb_skipped} shhs samples.")
+
+    if len(results["best_training_loss"]) == 80:
+        best_training_loss = np.array(results["best_training_loss"])
+    elif len(results["best_training_loss"]) == 40 or len(results["best_training_loss"]) == 20:
+        best_training_loss = np.interp(
+            np.arange(0, len(results["best_training_loss"]), 0.5),
+            np.arange(0, len(results["best_training_loss"])),
+            np.array(results["best_training_loss"])
+        )
+    
+    shhs_exists = True
+    if len(results["best_shhs_loss"]) == 80:
+        best_shhs_loss = np.array(results["best_shhs_loss"])
+    elif len(results["best_shhs_loss"]) == 40 or len(results["best_shhs_loss"]) == 20:
+        best_shhs_loss = np.interp(
+            np.arange(0, len(results["best_shhs_loss"]), 0.5),
+            np.arange(0, len(results["best_shhs_loss"])),
+            np.array(results["best_shhs_loss"])
+        )
+    else:
+        shhs_exists = False
+    
+    if len(results["best_chb_loss"]) == 80:
+        best_chb_loss = np.array(results["best_chb_loss"])
+    elif len(results["best_chb_loss"]) == 40 or len(results["best_chb_loss"]) == 20:
+        best_chb_loss = np.interp(
+            np.arange(0, len(results["best_chb_loss"]), 0.5),
+            np.arange(0, len(results["best_chb_loss"])),
+            np.array(results["best_chb_loss"])
+        )
+
+    x_axis = np.arange(1, len(best_training_loss)+1, 1)
+
+    training_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][0]
+    chb_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][2]
+    shhs_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][1]
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+    
+    ax.plot(x_axis, best_training_loss, label = "Training Loss", color = training_color, **plot_args)
+    ax.fill_between(x_axis, mean_train_loss-std_train_loss, mean_train_loss+std_train_loss, color = training_color, alpha = 0.6)
+
+    ax.plot(x_axis, best_chb_loss, label = "CHB Loss", color = chb_color, **plot_args)
+    ax.fill_between(x_axis, mean_chb_loss-std_chb_loss, mean_chb_loss+std_chb_loss, color = chb_color, alpha = 0.6)
+
+    if shhs_exists:
+        ax.plot(x_axis, best_shhs_loss, label = "SHHS Loss", color = shhs_color, **plot_args)
+        ax.fill_between(x_axis, mean_shhs_loss-std_shhs_loss, mean_shhs_loss+std_shhs_loss, color = shhs_color, alpha = 0.6) # type: ignore
+    
+    ax.legend(loc=kwargs["loc"])
+    
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    plt.show()
+
+
+def plot_kde_ahi(
+    model_directory_path: str,
+    performance_mode: str,
+    sample_seconds: int,
+    ahi = False,
+    show_kde = False,
+    tube_size = 0,
+    **kwargs
+    ):
+    """
+    MAIN FUNCTION: Plotting function to 'predicted_actual_filter_compare'
+
+    DESCRIPTION:
+    Plots scatter plot of predicted vs actual values of temperature. Also adds error 
+    tube around perfect line (predicted values = actual values) and prints number
+    of datapoints inside to console.
+
+    ARGUMENTS:
+    - pickle_name: location from which the data will be collected
+    - with_errorbars: if 'True': scatter points are plotted with error bars
+    - relative_reduce:  (float between 0 and 1) determines how much of original data
+                        is shown in the plot. See: 'randmoly_delete_from_list' for
+                        the point of this
+    - remove_zero:  remove datappoints with temperature=0 (not very professional so don't 
+                    touch this)
+    
+    NEW KEYWORD-ARGUMENTS:
+    - perfect_label: label for perfect line (see description above)
+    - line_alpha: alpha for perfect line (see description above)
+    - scatter_alpha: alpha for scatter points
+    - add_tube: if 'True': add cool tube around perfect line (see description above)
+    - tube_label: label for the tube
+    - tube_height: distance of tube from perfect line in y and -y direction
+
+    KNOWN KEYWORD-ARGUMENTS: (see seaborn and matplotlib documentation for explanation)
+    - title
+    - x_label
+    - y_label
+    - figsize
+    - label
+
+    - marker
+    - markersize
+    - linestyle
+    - linewidth
+    
+    - elinewidth
+    - ecolor
+    - capthick
+    - capsize
+    """
+
+    # Default values
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("title", "")
+    if ahi:
+        kwargs.setdefault("xlabel", "Predicted AHI")
+        kwargs.setdefault("ylabel", "Actual AHI")
+    else:
+        kwargs.setdefault("xlabel", "Predicted Events")
+        kwargs.setdefault("ylabel", "Actual Events")
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 2)
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("linestyle", "--") # or "--", "-.", ":"
+    
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+
+    kwargs.setdefault("levels", [0.05, 1])
+    kwargs.setdefault("fill", False)
+    kwargs.setdefault("colormap", 'viridis_r')
+
+    kwargs.setdefault("tube_label", "error tube: ")
+    kwargs.setdefault("perfect_label", "Predicted = Actual")
+    kwargs.setdefault("scatter_label", "data")
+
+    plot_args = dict(
+        linewidth = kwargs["linewidth"],
+        linestyle = kwargs["linestyle"],
+        alpha = kwargs["alpha"],
+        label = kwargs["perfect_label"]
+    )
+
+    scatter_args = dict(
+        marker = kwargs["marker"],
+        s = kwargs["markersize"],
+        label = kwargs["scatter_label"],
+    )
+
+    predicted_count = []
+    actual_count = []
+
+    predicted_ahi = []
+    actual_ahi = []
+
+    events_per_hour = int(3600 / sample_seconds)
+    if performance_mode == "Complete_Majority":
+        results_file = "Model_Performance_GIF_Complete_Validation_Pid.pkl"
+        data_generator = load_from_pickle(model_directory_path + results_file)
+        for data_dict in data_generator:
+            
+            num_predicted = 0
+            num_pred_ahi = 0
+            count_events = 1
+            for event in data_dict["Predicted_2"]:
+                if event != 0:
+                    num_predicted += 1
+                    num_pred_ahi += 1
+                
+                if count_events == events_per_hour:
+                    predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+                    num_pred_ahi = 0
+                    count_events = 1
+                
+                count_events += 1
+            
+            num_actual = 0
+            num_actual_ahi = 0
+            count_events = 1
+            for event in data_dict["Actual"]:
+                if event != 0:
+                    num_actual += 1
+                    num_actual_ahi += 1
+                
+                if count_events == events_per_hour:
+                    actual_ahi.append(copy.deepcopy(num_actual_ahi))
+                    num_actual_ahi = 0
+                    count_events = 1
+                
+                count_events += 1
+            
+            predicted_count.append(num_predicted)
+            actual_count.append(num_actual)
+
+    elif performance_mode == "Complete_Probability":
+        results_file = "Model_Performance_GIF_Complete_Validation_Pid.pkl"
+        data_generator = load_from_pickle(model_directory_path + results_file)
+        for data_dict in data_generator:
+            num_predicted = 0
+            for event in data_dict["Predicted"]:
+                if event != 0:
+                    num_predicted += 1
+            
+            num_actual = 0
+            for event in data_dict["Actual"]:
+                if event != 0:
+                    num_actual += 1
+            
+            predicted_count.append(num_predicted)
+            actual_count.append(num_actual)
+
+    elif performance_mode == "Splitted":
+        results_file = "Model_Performance_GIF_Splitted_Validation_Pid.pkl"
+        data_generator = load_from_pickle(model_directory_path + results_file)
+        for data_dict in data_generator:
+            num_predicted = 0
+            for event in data_dict["Predicted"]:
+                if event != 0:
+                    num_predicted += 1
+            
+            num_actual = 0
+            for event in data_dict["Actual"]:
+                if event != 0:
+                    num_actual += 1
+            
+            predicted_count.append(num_predicted)
+            actual_count.append(num_actual)
+
+    else:
+        raise SystemError("Unknown performance mode")
+    
+    if ahi:
+        predicted_events = predicted_ahi
+        actual_events = actual_ahi
+    else:
+        predicted_events = predicted_count
+        actual_events = actual_count
+    
+    global_max = max(max(predicted_events), max(actual_events))
+    global_min = min(min(predicted_events), min(actual_events))
+
+    x_axis = np.arange(0, global_max, 1)
+    perfect_predicted = np.arange(0, global_max, 1)
+
+    inside_tube = 0
+    outside_tube = 0
+
+    for i in range(0, len(predicted_events)):
+        if predicted_events[i] > actual_events[i] + tube_size:
+            outside_tube += 1
+        elif predicted_events[i] < actual_events[i] - tube_size:
+            outside_tube += 1
+        else:
+            inside_tube += 1
+    
+    print(f"Inside tube: {inside_tube} of {len(predicted_events)} ({round(inside_tube/len(predicted_events), 3)})")
+    print(f"Outside tube: {outside_tube} of {len(predicted_events)} ({round(outside_tube/len(predicted_events), 3)})")
+    
+    perfect_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][1]
+    scatter_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][0]
+    
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+
+    if show_kde:
+        data = dict()
+        data["actual"]=actual_events
+        data["predicted"]=predicted_events
+
+        sns.kdeplot(
+            data=data,
+            x="actual",
+            y="predicted",
+            fill=False,
+            levels=kwargs["levels"],
+            legend=True
+        )
+        sns.kdeplot(
+            data=data,
+            x="actual",
+            y="predicted",
+            fill=True,
+            levels=kwargs["levels"],
+            cmap = kwargs["colormap"]
+        )
+
+    else:
+        ax.scatter(
+            actual_events,
+            predicted_events,
+            color = scatter_color,
+            **scatter_args
+        )
+    ax.plot(
+        x_axis,
+        perfect_predicted,
+        color = perfect_color,
+        **plot_args
+    )
+    if tube_size > 0:
+        ax.fill_between(
+            x_axis, 
+            perfect_predicted - tube_size, 
+            perfect_predicted + tube_size, 
+            alpha=0.2, 
+            color = perfect_color,
+            label=kwargs["tube_label"] + str(tube_size)
+        )
+        
+        # plt.ylim([-tube_size, global_max+tube_size])
+        # plt.xlim([0, global_max])
+        plt.ylim([0, global_max])
+        plt.xlim([0, global_max])
+    
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    ax.legend(loc="best")
+    
+    plt.show()
+
 
 if __name__ == "__main__":
     path_to_results_file = "network_results.pkl"
@@ -673,58 +1370,63 @@ if __name__ == "__main__":
     # single_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_single/", results_file_path = path_to_results_file)
     # multi_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/", results_file_path = path_to_results_file)
 
-    possible_combinations = {
-        "method": "practical", # "independent" or "practical"
-        "task": "stage", # "stage" or "apnea"
-        "architecture": "single", # "single", "LSM" or "LSM_Residual"
-        "input_seconds": 30, # 30, 60, 120, 180, 300, 36000
-        "window_seconds": 0, # 0, 10, 120
-        "overlap_seconds": 0, # 0, 5, 90
-        "labeling": "ArtifactAsWake", # "ArtifactAsWake", "FullClass", "A" or "AH"
-        "transform": "RAW", # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
-    }
+    # print_compare_tables(path_to_results_file)
 
-    # single sleep stage
+    path_to_results_file = "network_training_behavior.pkl"
 
-    combination = {
-        "method": "practical", # "independent" or "practical"
-        "task": "stage", # "stage" or "apnea"
-        "architecture": "single", # "single", "LSM" or "LSM_Residual"
-        # "input_seconds": 30, # 30, 60, 120, 180, 300, 36000
-        # "window_seconds": 0, # 0, 10, 120
-        # "overlap_seconds": 0, # 0, 5, 90
-        # "labeling": "ArtifactAsWake", # "ArtifactAsWake", "FullClass", "A" or "AH"
-        # "transform": "RAW", # "RAW", "Cleaned", "GlobalNorm", "LocalNorm" or "Norm"
-    }
+    # loss_per_epoch_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_single/", results_file_path = path_to_results_file, task_network = "Stage_Single", best_model_folder = "SSG_Local_180s_FullClass_Norm/")
+    # loss_per_epoch_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_multi/", results_file_path = path_to_results_file, task_network = "Stage_Multi", best_model_folder = "SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/")
+    # loss_per_epoch_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_single/", results_file_path = path_to_results_file, task_network = "Apnea_Single", best_model_folder = "SAE_Local_60s_A_Norm/")
+    # loss_per_epoch_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/", results_file_path = path_to_results_file, task_network = "Apnea_Multi", best_model_folder = "")
 
-    all_combinations = list()
-    all_combinations.append(copy.deepcopy(combination))
-    combination["input_seconds"] = 30 # type: ignore
-    all_combinations.append(copy.deepcopy(combination))
-    combination["input_seconds"] = 60 # type: ignore
-    all_combinations.append(copy.deepcopy(combination))
-    combination["input_seconds"] = 120 # type: ignore
-    all_combinations.append(copy.deepcopy(combination))
-    combination["input_seconds"] = 180 # type: ignore
-    all_combinations.append(copy.deepcopy(combination))
-    del combination["input_seconds"]
-    combination["labeling"] = "ArtifactAsWake"
-    all_combinations.append(copy.deepcopy(combination))
-    combination["labeling"] = "FullClass"
-    all_combinations.append(copy.deepcopy(combination))
-    del combination["labeling"]
-    combination["transform"] = "RAW"
-    all_combinations.append(copy.deepcopy(combination))
-    combination["transform"] = "Cleaned"
-    all_combinations.append(copy.deepcopy(combination))
-    combination["transform"] = "Norm"
-    all_combinations.append(copy.deepcopy(combination))
+    # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Stage_Single")
+    # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Stage_Multi", train_border = 1, shhs_border = 1, chb_border = 1)
+    # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Apnea_Single")
+
+    model_path = "SAE_Local_30s_A_Norm/"
+
+    plot_kde_ahi(
+        model_directory_path = model_path,
+        performance_mode = "Complete_Majority",
+        sample_seconds = 30,
+        ahi = True,
+        show_kde = True,
+        tube_size = 5,
+        levels = [0.05, 0.2, 0.5, 0.7, 1]
+    )
+
+    model_path = "SAE_Local_60s_A_Norm/"
+
+    plot_kde_ahi(
+        model_directory_path = model_path,
+        performance_mode = "Complete_Majority",
+        sample_seconds = 60,
+        ahi = True,
+        show_kde = True,
+        tube_size = 5,
+        levels = [0.05, 0.2, 0.5, 0.7, 1]
+    )
     
-    combination_labels = ["Any", "\\mdhighlight{\\qty{30}{s}}", "\\mdhighlight{\\qty{60}{s}}", "\\mdhighlight{\\qty{120}{s}}", "\\mdhighlight{\\qty{180}{s}}", "\\mdhighlight{W\\&A,\\,L,\\,D,\\,R}", "\\mdhighlight{W,\\,L,\\,D,\\,R,\\,A}", "\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+    model_path = "SAE_Local_120s_AH_RAW/"
 
-    compare_table(
-        results_file_path = path_to_results_file,
-        combinations = all_combinations,
-        combination_label = combination_labels,
-        round_to_decimals = 3
+    plot_kde_ahi(
+        model_directory_path = model_path,
+        performance_mode = "Complete_Majority",
+        sample_seconds = 120,
+        ahi = True,
+        show_kde = True,
+        tube_size = 5,
+        levels = [0.05, 0.2, 0.5, 0.7, 1]
+    )
+    
+    model_path = "SAE_Local_180s_AH_Cleaned/"
+
+    plot_kde_ahi(
+        model_directory_path = model_path,
+        performance_mode = "Complete_Majority",
+        sample_seconds = 180,
+        ahi = True,
+        show_kde = True,
+        tube_size = 5,
+        levels = [0.05, 0.2, 0.5, 0.7, 1]
     )

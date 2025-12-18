@@ -12,6 +12,7 @@ import shutil
 import os
 import io
 import sys
+import shutil
 
 global_send_email = False
 
@@ -2094,6 +2095,47 @@ def train_and_test_short_sequence_model_on_apnea_events():
                 )
 
 
+def split_results(
+        path_to_data_directory: str,
+        results_key: str,
+        save_path: str,
+    ):
+    
+    data_generator = load_from_pickle(path_to_data_directory)
+    results_file = open(save_path, "ab")
+
+    for data_dict in data_generator:
+        try:
+            results = dict()
+            results["ID"] = data_dict["ID"]
+            results[results_key + "_target_classes"] = data_dict[results_key + "_target_classes"]
+            results[results_key + "_frequency"] = data_dict[results_key + "_frequency"]
+            results[results_key + "_prediction_probability"] = data_dict[results_key + "_prediction_probability"]
+            results[results_key + "_from_prob"] = data_dict[results_key + "_from_prob"]
+            results[results_key + "_prediction_classes"] = data_dict[results_key + "_prediction_classes"]
+            results[results_key + "_from_class"] = data_dict[results_key + "_from_class"]
+            results[results_key] = data_dict[results_key]
+
+            pickle.dump(results, results_file)
+        except:
+            continue
+    
+    results_file.close()
+
+
+def move_file(
+        file_to_move: str,
+        new_locations: list,
+    ):
+
+    file_size = os.path.getsize(file_to_move)
+
+    for location in new_locations:
+        total, used, free = shutil.disk_usage(location)
+        if free > file_size:
+            shutil.move(file_to_move, location)
+
+
 if __name__ == "__main__":
 
     # run_model_performance_evaluation_SAE(
@@ -2137,6 +2179,43 @@ if __name__ == "__main__":
 
     if True:
         nako_directory = "Processed_NAKO/"
+        nako_paths = ["NAKO-994.pkl", "NAKO-609.pkl", "NAKO-419.pkl", "NAKO-84.pkl", "NAKO-33a.pkl", "NAKO-33b.pkl"]
+        nako_size = [37059, 267752, 223486, 255086, 7365, 9691]
+
+        stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
+        stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
+        
+        apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
+        apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
+
+        for nako_path_index in range(len(nako_paths)):
+            path = nako_directory + nako_paths[nako_path_index]
+
+            print_headline(f"Predicting Sleep Stages and Apnea Events within: {path}")
+
+            for stage_path_index in range(len(stage_prediction_paths)):
+                save_path = nako_paths[nako_path_index][:-4] + "/" + stage_prediction_paths[stage_path_index][:-1] + "_" + nako_paths[nako_path_index]
+                create_directories_along_path(save_path)
+
+                split_results(
+                    path_to_data_directory = path,
+                    results_key = stage_prediction_keys[stage_path_index],
+                    save_path = save_path,
+                )
+
+            for apnea_path_index in range(len(apnea_prediction_paths)):
+                save_path = nako_paths[nako_path_index][:-4] + "/" + apnea_prediction_paths[apnea_path_index][:-1] + "_" + nako_paths[nako_path_index]
+                create_directories_along_path(save_path)
+
+                split_results(
+                    path_to_data_directory = path,
+                    results_key = apnea_prediction_keys[apnea_path_index],
+                    save_path = save_path,
+                )
+
+
+    if False:
+        nako_directory = "Processed_NAKO/"
         nako_paths = [nako_directory + "NAKO-994.pkl", nako_directory + "NAKO-609.pkl", nako_directory + "NAKO-419.pkl", nako_directory + "NAKO-84.pkl", nako_directory + "NAKO-33a.pkl", nako_directory + "NAKO-33b.pkl"]
         nako_size = [37059, 267752, 223486, 255086, 7365, 9691]
 
@@ -2172,174 +2251,3 @@ if __name__ == "__main__":
                     results_key = apnea_prediction_keys[apnea_path_index],
                     data_length = nako_size[nako_path_index]
                 )
-
-
-if False:
-    build_default_datasets_for_training_and_testing()
-
-    buffer = io.StringIO()
-    sys.stdout = buffer
-
-    # sys.stdout = sys.__stdout__
-
-    success = 0
-
-    try:
-        train_and_test_long_sequence_model_on_sleep_staging_data()
-
-        print(buffer.getvalue())
-
-        send_email_notification(
-            email_subject="LSM on Sleep Staging - Completed",
-            email_body=buffer.getvalue()
-        )
-
-        success += 1
-    
-    except:
-        pass
-
-    finally:
-        buffer.truncate(0)
-        buffer.seek(0)
-
-    try:
-        train_and_test_short_sequence_model_on_sleep_staging_data()
-
-        print(buffer.getvalue())
-
-        send_email_notification(
-            email_subject="SSM on Sleep Staging - Completed",
-            email_body=buffer.getvalue()
-        )
-
-        success += 1
-    
-    except:
-        pass
-
-    finally:
-        buffer.truncate(0)
-        buffer.seek(0)
-
-    try:
-        train_and_test_long_sequence_model_on_apnea_events()
-
-        print(buffer.getvalue())
-
-        send_email_notification(
-            email_subject="LSM on Apnea Events - Completed",
-            email_body=buffer.getvalue()
-        )
-
-        success += 1
-    
-    except:
-        pass
-
-    finally:
-        buffer.truncate(0)
-        buffer.seek(0)
-
-    try:
-        train_and_test_long_sequence_model_varying_duration_on_apnea_events()
-
-        print(buffer.getvalue())
-
-        send_email_notification(
-            email_subject="Varying LSM on Apnea Events - Completed",
-            email_body=buffer.getvalue()
-        )
-
-        success += 1
-    
-    except:
-        pass
-
-    finally:
-        buffer.truncate(0)
-        buffer.seek(0)
-
-    try:
-        train_and_test_short_sequence_model_on_apnea_events()
-
-        print(buffer.getvalue())
-
-        send_email_notification(
-            email_subject="SSM on Apnea Events - Completed",
-            email_body=buffer.getvalue()
-        )
-
-        success += 1
-    
-    except:
-        pass
-
-    finally:
-        buffer.truncate(0)
-        buffer.seek(0)
-    
-    send_email_notification(
-        email_subject="All Training and Testing Completed",
-        email_body=f"All training and testing pipelines have been completed successfully. ({success}/5)"
-    )
-
-
-if False:
-    # fix_project_configuration_3()
-    # print_project_configuration()
-    # raise SystemExit("Testing configurations...")
-
-    # fix_project_configuration_2()
-    # print_project_configuration()
-    
-    # fix_file_info("Processed_NAKO/NAKO-33a.pkl")
-
-    # data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33a.pkl")
-    # print(data_manager.file_info)
-
-    data_manager = SleepDataManager(file_path="Processed_NAKO/NAKO-33a.pkl")
-    data_manager.reverse_signal_split()
-
-    # -----------------------------------------------------------
-
-    shhs_data_manager = SleepDataManager(directory_path = default_shhs_path)
-    shhs_training_data_manager = SleepDataManager(directory_path = default_shhs_path, pid = "train")
-    shhs_validation_data_manager = SleepDataManager(directory_path = default_shhs_path, pid = "validation")
-
-    gif_data_manager = SleepDataManager(directory_path = default_gif_path)
-    gif_training_data_manager = SleepDataManager(directory_path = default_gif_path, pid = "train")
-    gif_validation_data_manager = SleepDataManager(directory_path = default_gif_path, pid = "validation")
-
-    print(len(shhs_data_manager), len(shhs_training_data_manager), len(shhs_validation_data_manager))
-    print(len(gif_data_manager), len(gif_training_data_manager), len(gif_validation_data_manager))
-
-    signal_cropping_parameters = {
-        "signal_length_seconds": 30,
-        "shift_length_seconds_interval": (30, 30)
-    }
-
-    gif_data_manager.crop_oversized_data(**signal_cropping_parameters)
-    shhs_data_manager.crop_oversized_data(**signal_cropping_parameters)
-
-    print(len(shhs_data_manager), len(shhs_training_data_manager), len(shhs_validation_data_manager))
-    print(len(gif_data_manager), len(gif_training_data_manager), len(gif_validation_data_manager))
-
-    # -----------------------------------------------------------
-
-    data_manager = SleepDataManager(directory_path = default_shhs_path, pid="train")
-    count = 0
-    for data in data_manager:
-        count += 1
-
-    print(count, data_manager.database_configuration["number_datapoints"])
-
-    data_manager = SleepDataManager(directory_path = "10h_SHHS_Data/", pid="train")
-
-    count = 0
-    for data in data_manager:
-        count += 1
-
-    print(count, data_manager.database_configuration["number_datapoints"])
-
-    raise SystemExit
