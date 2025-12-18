@@ -1146,6 +1146,8 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
     default_project_configuration.update(dataset_class_transform_parameters)
     default_project_configuration.update(filter_parameters)
 
+    del sampling_frequency_parameters, padding_parameters, pid_distribution_parameters, dataset_class_transform_parameters, filter_parameters
+
     labeling_W_L_D_R_A = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
         "target_classes": {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifact": 0},
@@ -1158,9 +1160,6 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "priority_order": [3, 2, 1, 0],
     }
 
-    class_adjustments = [labeling_W_L_D_R_A, labeling_WA_L_D_R]
-    class_names = ["FullClass", "ArtifactAsWake"]
-
     sample_structure_10h_120s_90s = {
         "signal_length_seconds": 36000,
         "shift_length_seconds_interval": (3600, 7200),
@@ -1169,8 +1168,8 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "overlap_seconds": 90,
         "windows_per_signal": 1197,
         # affecting network parameters
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 120),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 120),
+        "datapoints_per_rri_window": int(default_project_configuration["RRI_frequency"] * 120),
+        "datapoints_per_mad_window": int(default_project_configuration["MAD_frequency"] * 120),
         # affecting data
         "shhs_min_duration_hours": 7,
         "gif_min_duration_hours": 7,
@@ -1184,15 +1183,12 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "overlap_seconds": 0,
         "windows_per_signal": 300,
         # affecting network parameters
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * 120),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * 120),
+        "datapoints_per_rri_window": int(default_project_configuration["RRI_frequency"] * 120),
+        "datapoints_per_mad_window": int(default_project_configuration["MAD_frequency"] * 120),
         # affecting data
         "shhs_min_duration_hours": 7,
         "gif_min_duration_hours": 7,
     }
-
-    sample_structure_adjustments = [sample_structure_10h_120s_90s, sample_structure_10h_120s_0s]
-    sample_structure_names = ["Overlap", "NoOverlap"]
 
     raw = {
         "rri_inlier_interval": (None, None),
@@ -1225,9 +1221,6 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         "normalization_technique": "z-score",
         "normalization_mode": "local",
     }
-
-    cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
-    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
 
     non_res_model = {
         "neural_network_model": LongSequenceModel,
@@ -1269,14 +1262,21 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
         }
     }
 
-    network_model_adjustments = [non_res_model, res_model]
-    network_model_names = ["LSM", "LSM_Residual"]
+    class_adjustments = [labeling_W_L_D_R_A, labeling_WA_L_D_R]
+    class_names = ["FullClass", "ArtifactAsWake"]
 
-    del sampling_frequency_parameters, padding_parameters, pid_distribution_parameters, dataset_class_transform_parameters, filter_parameters
+    sample_structure_adjustments = [sample_structure_10h_120s_90s, sample_structure_10h_120s_0s]
+    sample_structure_names = ["Overlap", "NoOverlap"]
 
     # all share same signal cropping parameters, so we need to create only one database to draw data from
     shhs_directory_path = "10h_SHHS_SSG_Data/"
     gif_directory_path = "10h_GIF_SSG_Data/"
+
+    cleaning_adjustments = [raw, cleaned, global_norm, local_norm]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+
+    network_model_adjustments = [non_res_model, res_model]
+    network_model_names = ["LSM", "LSM_Residual"]
 
     if not os.path.exists(shhs_directory_path) or not os.path.exists(gif_directory_path):
         copy_and_split_default_database_SSG(
@@ -1323,9 +1323,9 @@ def train_and_test_long_sequence_model_on_sleep_staging_data():
 def train_and_test_short_sequence_model_on_sleep_staging_data():
 
     """
-    ==========================================================
-    Default Project Configuration for Local Short-Time Models
-    ==========================================================
+    =======================================================
+    Default Project Configuration for Long-Sequence Models
+    =======================================================
     """
 
     sampling_frequency_parameters = {
@@ -1334,20 +1334,9 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         "SLP_frequency": 1/30,
     }
 
-    signal_cropping_parameters = {
-        "signal_length_seconds": 30,
-        "shift_length_seconds_interval": (30, 30),
-    }
-
     padding_parameters = {
         "pad_feature_with": 0,
         "pad_target_with": 0
-    }
-
-    value_mapping_parameters = {
-        "rri_inlier_interval": (None, None),
-        "mad_inlier_interval": (None, None),
-        "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
     }
 
     pid_distribution_parameters = {
@@ -1367,59 +1356,85 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         "target_transform": None,
     }
 
-    window_reshape_parameters = {
-        "reshape_to_overlapping_windows": False,
-    }
-
-    signal_normalization_parameters = {
-        "normalize_rri": False,
-        "normalize_mad": False,
+    filter_parameters = {
+        "shhs_filter_ids": [],
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
     }
 
     neural_network_model_parameters = {
         "neural_network_model": ShortSequenceModel,
-        "number_target_classes": 4,
         "rri_convolutional_channels": [1, 8, 16, 32, 64],
         "mad_convolutional_channels": [1, 8, 16, 32, 64],
         "max_pooling_layers": 5,
         "fully_connected_features": 128,
-        "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
-        "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * signal_cropping_parameters["signal_length_seconds"]),
-    }
-
-    filter_shhs_data_parameters = {
-        "shhs_min_duration_hours": 0,
-        "shhs_filter_ids": []
-    }
-
-    filter_gif_data_parameters = {
-        "gif_min_duration_hours": 0,
-        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
     }
 
     default_project_configuration = dict()
     default_project_configuration.update(sampling_frequency_parameters)
-    default_project_configuration.update(signal_cropping_parameters)
     default_project_configuration.update(padding_parameters)
-    default_project_configuration.update(value_mapping_parameters)
     default_project_configuration.update(pid_distribution_parameters)
-    default_project_configuration.update(window_reshape_parameters)
-    default_project_configuration.update(signal_normalization_parameters)
     default_project_configuration.update(dataset_class_transform_parameters)
+    default_project_configuration.update(filter_parameters)
     default_project_configuration.update(neural_network_model_parameters)
-    default_project_configuration.update(filter_shhs_data_parameters)
-    default_project_configuration.update(filter_gif_data_parameters)
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_shhs_data_parameters, filter_gif_data_parameters
+    del sampling_frequency_parameters, padding_parameters, pid_distribution_parameters, dataset_class_transform_parameters, filter_parameters, neural_network_model_parameters
 
-    artifact_as_wake = {
+    labeling_W_L_D_R_A = {
+        "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
+        "target_classes": {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifact": 0},
+    }
+
+    labeling_WA_L_D_R = {
         "number_target_classes": 4,
         "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
     }
-    
-    full_class = {
-        "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
-        "target_classes": {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifact": 0},
+
+    sample_structure_30s = {
+        "signal_length_seconds": 30,
+        "shift_length_seconds_interval": (30, 30),
+        "reshape_to_overlapping_windows": False,
+        # affecting network parameters
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
+        # affecting data
+        "shhs_min_duration_hours": 0,
+        "gif_min_duration_hours": 0,
+    }
+
+    sample_structure_60s = {
+        "signal_length_seconds": 60,
+        "shift_length_seconds_interval": (60, 60),
+        "reshape_to_overlapping_windows": False,
+        # affecting network parameters
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
+        # affecting data
+        "shhs_min_duration_hours": 0,
+        "gif_min_duration_hours": 0,
+    }
+
+    sample_structure_120s = {
+        "signal_length_seconds": 120,
+        "shift_length_seconds_interval": (120, 120),
+        "reshape_to_overlapping_windows": False,
+        # affecting network parameters
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
+        # affecting data
+        "shhs_min_duration_hours": 0,
+        "gif_min_duration_hours": 0,
+    }
+
+    sample_structure_180s = {
+        "signal_length_seconds": 180,
+        "shift_length_seconds_interval": (180, 180),
+        "reshape_to_overlapping_windows": False,
+        # affecting network parameters
+        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 180),
+        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 180),
+        # affecting data
+        "shhs_min_duration_hours": 0,
+        "gif_min_duration_hours": 0,
     }
 
     raw = {
@@ -1445,35 +1460,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         "normalization_mode": "local", # "local" or "global" makes no difference for 1D data
     }
 
-    thirty_second_network = {
-        "signal_length_seconds": 30,
-        "shift_length_seconds_interval": (30, 30),
-        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 30),
-        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 30),
-    }
-
-    sixty_second_network = {
-        "signal_length_seconds": 60,
-        "shift_length_seconds_interval": (60, 60),
-        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 60),
-        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 60),
-    }
-
-    hundred_twenty_second_network = {
-        "signal_length_seconds": 120,
-        "shift_length_seconds_interval": (120, 120),
-        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 120),
-        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 120),
-    }
-
-    hundred_eighty_second_network = {
-        "signal_length_seconds": 180,
-        "shift_length_seconds_interval": (180, 180),
-        "rri_datapoints": int(default_project_configuration["RRI_frequency"] * 180),
-        "mad_datapoints": int(default_project_configuration["MAD_frequency"] * 180),
-    }
-
-    hyperparameters_shhs = {
+    neural_network_hyperparameters_shhs = {
         "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
         "number_epochs": 20,
         "lr_scheduler_parameters": {
@@ -1484,7 +1471,7 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         }
     }
 
-    hyperparameters_gif = {
+    neural_network_hyperparameters_gif = {
         "batch_size": 8,
         "number_epochs": 20,
         "lr_scheduler_parameters": {
@@ -1495,54 +1482,54 @@ def train_and_test_short_sequence_model_on_sleep_staging_data():
         }
     }
 
-    class_adjustments = [artifact_as_wake, full_class]
-    class_names = ["ArtifactAsWake", "FullClass"]
+    class_adjustments = [labeling_W_L_D_R_A, labeling_WA_L_D_R]
+    class_names = ["FullClass", "ArtifactAsWake"]
+
+    sample_structure_adjustments = [sample_structure_180s, sample_structure_120s, sample_structure_60s, sample_structure_30s]
+    sample_structure_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
+
+    shhs_directory_paths = ["180s_SHHS_SSG_Data/", "120s_SHHS_SSG_Data/", "60s_SHHS_SSG_Data/", "30s_SHHS_SSG_Data/"]
+    gif_directory_paths = ["180s_GIF_SSG_Data/", "120s_GIF_SSG_Data/", "60s_GIF_SSG_Data/", "30s_GIF_SSG_Data/"]
 
     cleaning_adjustments = [raw, cleaned, norm]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
 
-    network_adjustments = [hundred_eighty_second_network, hundred_twenty_second_network, sixty_second_network, thirty_second_network]
-    network_names = ["Local_180s", "Local_120s", "Local_60s", "Local_30s"]
-
-    # different networks have different signal cropping parameters, so we need to create a database for each network
-    shhs_directory_paths = ["180s_SHHS_SSG_Data/", "120s_SHHS_SSG_Data/", "60s_SHHS_SSG_Data/", "30s_SHHS_SSG_Data/"]
-    gif_directory_paths = ["180s_GIF_SSG_Data/", "120s_GIF_SSG_Data/", "60s_GIF_SSG_Data/", "30s_GIF_SSG_Data/"]
-    for net_adjust_index in range(len(network_adjustments)):
+    for sample_structure_index in range(len(sample_structure_adjustments)):
         copy_and_split_default_database_SSG(
             path_to_default_shhs_database = default_complete_shhs_SSG_path,
             path_to_default_gif_database = default_complete_gif_SSG_path,
-            path_to_save_shhs_database = shhs_directory_paths[net_adjust_index],
-            path_to_save_gif_database = gif_directory_paths[net_adjust_index],
-            project_configuration = network_adjustments[net_adjust_index]
+            path_to_save_shhs_database = shhs_directory_paths[sample_structure_index],
+            path_to_save_gif_database = gif_directory_paths[sample_structure_index],
+            project_configuration = sample_structure_adjustments[sample_structure_index]
         )
 
     for clean_index in range(len(cleaning_adjustments)):
-        project_configuration = copy.deepcopy(default_project_configuration)
-        project_configuration.update(cleaning_adjustments[clean_index])
-
         for class_index in range(len(class_adjustments)):
-            project_configuration.update(class_adjustments[class_index])
-            
-            for network_index in range(len(network_adjustments)):
-                project_configuration.update(network_adjustments[network_index])
+            for sample_structure_index in range(len(sample_structure_adjustments)):
+                    project_configuration = copy.deepcopy(default_project_configuration)
+                    project_configuration.update(cleaning_adjustments[clean_index])
+                    project_configuration.update(class_adjustments[class_index])
+                    project_configuration.update(sample_structure_adjustments[sample_structure_index])
 
-                identifier = "SSG_" + network_names[network_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index]
-                print_headline("Running " + identifier, "=")
+                    identifier = "SSG_" + sample_structure_names[sample_structure_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index]
+                    print_headline("Running " + identifier, "=")
 
-                identifier += "/"
+                    identifier += "/"
 
-                main_pipeline_SSG(
-                    project_configuration = project_configuration,
-                    path_to_model_directory = identifier,
-                    neural_network_hyperparameters_shhs = hyperparameters_shhs,
-                    neural_network_hyperparameters_gif = hyperparameters_gif,
-                    path_to_shhs_database = shhs_directory_paths[network_index],
-                    path_to_default_shhs_database = default_complete_shhs_SSG_path,
-                    path_to_gif_database = gif_directory_paths[network_index],
-                    path_to_default_gif_database = default_complete_gif_SSG_path,
-                    send_email = global_send_email,
-                    email_subject = identifier
-                )
+                    main_pipeline_SSG(
+                        project_configuration = project_configuration,
+                        path_to_model_directory = identifier,
+                        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
+                        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+                        path_to_shhs_database = shhs_directory_paths[sample_structure_index],
+                        path_to_default_shhs_database = default_complete_shhs_SSG_path,
+                        path_to_gif_database = gif_directory_paths[sample_structure_index],
+                        path_to_default_gif_database = default_complete_gif_SSG_path,
+                        send_email = global_send_email,
+                        email_subject = identifier
+                    )
+    
+    del project_configuration, default_project_configuration
 
 
 def train_and_test_long_sequence_model_on_apnea_events():
@@ -1556,7 +1543,7 @@ def train_and_test_long_sequence_model_on_apnea_events():
     sampling_frequency_parameters = {
         "RRI_frequency": 4,
         "MAD_frequency": 1,
-        "SLP_frequency": 1/30,
+        "SLP_frequency": 1,
     }
 
     padding_parameters = {
@@ -1828,15 +1815,27 @@ def train_and_test_long_sequence_model_on_apnea_events():
 
                     identifier += "/"
 
-                    main_pipeline_SAE(
-                        project_configuration = project_configuration,
-                        path_to_model_directory = identifier,
-                        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
-                        path_to_gif_database = gif_directory_paths[sample_structure_index],
-                        path_to_default_gif_database = default_complete_gif_SAE_path,
-                        send_email = global_send_email,
-                        email_subject = identifier
-                    )
+                    if "10h" in gif_directory_paths[sample_structure_index]:
+                        main_pipeline_SAE(
+                            project_configuration = project_configuration,
+                            path_to_model_directory = identifier,
+                            neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+                            path_to_gif_database = gif_directory_paths[sample_structure_index],
+                            path_to_default_gif_database = default_reduced_gif_SAE_path,
+                            send_email = global_send_email,
+                            email_subject = identifier
+                        )
+                    else:
+                        main_pipeline_SAE(
+                            project_configuration = project_configuration,
+                            path_to_model_directory = identifier,
+                            neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+                            path_to_gif_database = gif_directory_paths[sample_structure_index],
+                            path_to_default_gif_database = default_complete_gif_SAE_path,
+                            send_email = global_send_email,
+                            email_subject = identifier
+                        )
+
     
     del project_configuration, default_project_configuration
 
@@ -1852,7 +1851,7 @@ def train_and_test_short_sequence_model_on_apnea_events():
     sampling_frequency_parameters = {
         "RRI_frequency": 4,
         "MAD_frequency": 1,
-        "SLP_frequency": 1/30,
+        "SLP_frequency": 1,
     }
 
     padding_parameters = {
@@ -1903,19 +1902,16 @@ def train_and_test_short_sequence_model_on_apnea_events():
     apnea_hypopnea_type = {
         "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
         "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
-        "priority_order": [2, 1, 0],
     }
 
     apnea_hypopnea = {
         "number_target_classes": 3, # 5 sleep stages: wake, LS, DS, REM, artifact
         "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 2, "Obstructive Hypopnea": 2, "Central Hypopnea": 2},
-        "priority_order": [2, 1, 0],
     }
 
     apnea_event = {
         "number_target_classes": 2, # 5 sleep stages: wake, LS, DS, REM, artifact
         "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 1, "Obstructive Hypopnea": 1, "Central Hypopnea": 1},
-        "priority_order": [2, 1, 0],
     }
 
     sample_structure_30s = {
@@ -2185,12 +2181,6 @@ if __name__ == "__main__":
 
     try:
         # train_and_test_long_sequence_model_on_apnea_events()
-        pass
-    except:
-        pass
-
-    try:
-        # train_and_test_long_sequence_model_varying_duration_on_apnea_events()
         pass
     except:
         pass

@@ -3543,11 +3543,3 @@ class BigDataManager:
         current_file_path = self.pid_paths[self.current_pid]
 
         return f"File path: {current_file_path}\nDatabase Configuration: {self.database_configuration}"
-
-
-find_suitable_window_parameters(
-    signal_length = 36000,
-    number_windows_range = (1000, 1400000),
-    window_size_range = (10, 15),
-    minimum_window_size_overlap_difference = 1
-)
