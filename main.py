@@ -2599,11 +2599,11 @@ def main_model_predicting_stage_inference(
                 results["ID"] = data_dict["ID"]
                 results[results_key + "_target_classes"] = target_classes
                 results[results_key + "_frequency"] = 1 / resolution_seconds
-                results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
+                # results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
                 results[results_key + "_from_probability"] = predictions_from_combined_probabilities
-                results[results_key + "_prediction_classes"] = combined_predicted_classes
-                results[results_key + "_from_majority"] = predictions_from_combined_classes
-                results[results_key] = predictions_from_combined_probabilities
+                # results[results_key + "_prediction_classes"] = combined_predicted_classes
+                results[results_key + "_from_class"] = predictions_from_combined_classes
+                # results[results_key] = predictions_from_combined_probabilities
                 
                 pickle.dump(results, results_file)
             
@@ -3446,7 +3446,7 @@ def main_model_predicting_apnea(
                             upper_border = original_signal_length
 
                         this_slp = final_data_preprocessing(
-                            signal = data_dict["SLP"][lower_border:upper_border],
+                            signal = copy.deepcopy(data_dict["SLP"][lower_border:upper_border]),
                             signal_id = "SLP_apnea_predict",
                             slp_label_mapping = slp_label_mapping,
                             target_frequency = slp_frequency,
@@ -3954,11 +3954,11 @@ def main_model_predicting_apnea_inference(
                 results["ID"] = data_dict["ID"]
                 results[results_key + "_target_classes"] = target_classes
                 results[results_key + "_frequency"] = 1 / resolution_seconds
-                results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
-                results[results_key + "_from_prob"] = predictions_from_combined_probabilities
-                results[results_key + "_prediction_classes"] = combined_predicted_classes
+                # results[results_key + "_prediction_probability"] = mean_combined_prediction_probabilities
+                results[results_key + "_from_probability"] = predictions_from_combined_probabilities
+                # results[results_key + "_prediction_classes"] = combined_predicted_classes
                 results[results_key + "_from_class"] = predictions_from_combined_classes
-                results[results_key] = predictions_from_combined_probabilities
+                # results[results_key] = predictions_from_combined_classes
                     
                 
                 pickle.dump(results, results_file)
