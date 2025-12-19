@@ -1102,6 +1102,8 @@ def plot_kde_ahi(
     only_show_correct_predictions = False,
     show_kde = False,
     tube_size = 0,
+    actual_upper_border = None,
+    linear_fit = False,
     **kwargs
     ):
     """
@@ -1195,111 +1197,93 @@ def plot_kde_ahi(
 
     events_per_hour = int(3600 / sample_seconds)
     if performance_mode == "Complete_Majority":
+        predict_dict_key = "Predicted_2"
         results_file = "Model_Performance_GIF_Complete_Validation_Pid.pkl"
-        data_generator = load_from_pickle(model_directory_path + results_file)
-        for data_dict in data_generator:
-            
-            if only_show_correct_predictions:
-                num_predicted = 0
-                num_pred_ahi = 0
-                count_events = 1
-                for event_index in range(len(data_dict["Predicted_2"])):
-                    if data_dict["Predicted_2"][event_index] != 0 and data_dict["Actual"][event_index] != 0:
-                        num_predicted += 1
-                        num_pred_ahi += 1
-                    
-                    if count_events == events_per_hour:
-                        predicted_ahi.append(copy.deepcopy(num_pred_ahi))
-                        num_pred_ahi = 0
-                        count_events = 1
-                    
-                    count_events += 1
-            else:
-                num_predicted = 0
-                num_pred_ahi = 0
-                count_events = 1
-                for event in data_dict["Predicted_2"]:
-                    if event != 0:
-                        num_predicted += 1
-                        num_pred_ahi += 1
-                    
-                    if count_events == events_per_hour:
-                        predicted_ahi.append(copy.deepcopy(num_pred_ahi))
-                        num_pred_ahi = 0
-                        count_events = 1
-                    
-                    count_events += 1
-            
-            if high_focus:
-                num_actual = 0
-                num_actual_ahi = 0
-                count_events = 1
-                for event_iteration in range(len(data_dict["Actual_in_seconds"])-1):
-                    if data_dict["Actual_in_seconds"][event_iteration] == 0 and data_dict["Actual_in_seconds"][event_iteration+1] != 0:
-                        num_actual += 1
-                        num_actual_ahi += 1
-                    
-                    if count_events == 3600:
-                        actual_ahi.append(copy.deepcopy(num_actual_ahi))
-                        num_actual_ahi = 0
-                        count_events = 1
-                    
-                    count_events += 1
-            else:
-                num_actual = 0
-                num_actual_ahi = 0
-                count_events = 1
-                for event in data_dict["Actual"]:
-                    if event != 0:
-                        num_actual += 1
-                        num_actual_ahi += 1
-                    
-                    if count_events == events_per_hour:
-                        actual_ahi.append(copy.deepcopy(num_actual_ahi))
-                        num_actual_ahi = 0
-                        count_events = 1
-                    
-                    count_events += 1
-            
-            predicted_count.append(num_predicted)
-            actual_count.append(num_actual)
-
     elif performance_mode == "Complete_Probability":
+        predict_dict_key = "Predicted"
         results_file = "Model_Performance_GIF_Complete_Validation_Pid.pkl"
-        data_generator = load_from_pickle(model_directory_path + results_file)
-        for data_dict in data_generator:
-            num_predicted = 0
-            for event in data_dict["Predicted"]:
-                if event != 0:
-                    num_predicted += 1
-            
-            num_actual = 0
-            for event in data_dict["Actual"]:
-                if event != 0:
-                    num_actual += 1
-            
-            predicted_count.append(num_predicted)
-            actual_count.append(num_actual)
-
     elif performance_mode == "Splitted":
+        predict_dict_key = "Predicted"
         results_file = "Model_Performance_GIF_Splitted_Validation_Pid.pkl"
-        data_generator = load_from_pickle(model_directory_path + results_file)
-        for data_dict in data_generator:
-            num_predicted = 0
-            for event in data_dict["Predicted"]:
-                if event != 0:
-                    num_predicted += 1
-            
-            num_actual = 0
-            for event in data_dict["Actual"]:
-                if event != 0:
-                    num_actual += 1
-            
-            predicted_count.append(num_predicted)
-            actual_count.append(num_actual)
-
     else:
         raise SystemError("Unknown performance mode")
+    
+    data_generator = load_from_pickle(model_directory_path + results_file)
+    
+    for data_dict in data_generator:
+        
+        num_predicted = 0
+        num_pred_ahi = 0
+        count_events = 1
+        if only_show_correct_predictions:
+            for event_index in range(len(data_dict[predict_dict_key])):
+                if data_dict[predict_dict_key][event_index] != 0 and data_dict["Actual"][event_index] != 0:
+                    num_predicted += 1
+                    num_pred_ahi += 1
+                
+                if count_events == events_per_hour:
+                    predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+                    num_pred_ahi = 0
+                    count_events = 0
+                
+                count_events += 1
+            
+            if count_events > 1:
+                predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+
+        else:
+            for event in data_dict[predict_dict_key]:
+                if event != 0:
+                    num_predicted += 1
+                    num_pred_ahi += 1
+                
+                if count_events == events_per_hour:
+                    predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+                    num_pred_ahi = 0
+                    count_events = 0
+                
+                count_events += 1
+            
+            if count_events > 1:
+                predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+        
+        num_actual = 0
+        num_actual_ahi = 0
+        count_events = 1
+        if high_focus:
+            for event_iteration in range(len(data_dict["Actual_in_seconds"])-1):
+                if data_dict["Actual_in_seconds"][event_iteration] == 0 and data_dict["Actual_in_seconds"][event_iteration+1] != 0:
+                    num_actual += 1
+                    num_actual_ahi += 1
+                
+                if count_events == 3600:
+                    actual_ahi.append(copy.deepcopy(num_actual_ahi))
+                    num_actual_ahi = 0
+                    count_events = 0
+                
+                count_events += 1
+            
+            if count_events > 1:
+                actual_ahi.append(copy.deepcopy(num_actual_ahi))
+
+        else:
+            for event in data_dict["Actual"]:
+                if event != 0:
+                    num_actual += 1
+                    num_actual_ahi += 1
+                
+                if count_events == events_per_hour:
+                    actual_ahi.append(copy.deepcopy(num_actual_ahi))
+                    num_actual_ahi = 0
+                    count_events = 0
+                
+                count_events += 1
+            
+            if count_events > 1:
+                actual_ahi.append(copy.deepcopy(num_actual_ahi))
+        
+        predicted_count.append(num_predicted)
+        actual_count.append(num_actual)
     
     if ahi:
         predicted_events = predicted_ahi
@@ -1307,6 +1291,11 @@ def plot_kde_ahi(
     else:
         predicted_events = predicted_count
         actual_events = actual_count
+    
+    if actual_upper_border is not None:
+        for i in range(len(actual_events)):
+            if actual_events[i] > actual_upper_border:
+                actual_events[i] = actual_upper_border
     
     global_max = max(max(predicted_events), max(actual_events))
     global_min = min(min(predicted_events), min(actual_events))
@@ -1330,6 +1319,7 @@ def plot_kde_ahi(
     
     perfect_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][1]
     scatter_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][0]
+    linear_fit_color = matplotlib.rcParams["axes.prop_cycle"].by_key()['color'][3]
     
     fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
     ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
@@ -1342,16 +1332,16 @@ def plot_kde_ahi(
 
         sns.kdeplot(
             data=data,
-            x="actual",
-            y="predicted",
+            x="predicted",
+            y="actual",
             fill=False,
             levels=kwargs["levels"],
             legend=True
         )
         sns.kdeplot(
             data=data,
-            x="actual",
-            y="predicted",
+            x="predicted",
+            y="actual",
             fill=True,
             levels=kwargs["levels"],
             cmap = kwargs["colormap"]
@@ -1359,11 +1349,31 @@ def plot_kde_ahi(
 
     else:
         ax.scatter(
-            actual_events,
             predicted_events,
+            actual_events,
             color = scatter_color,
             **scatter_args
         )
+    if linear_fit:
+        max_actual = int(3600/sample_seconds)
+        cropped_actual = copy.deepcopy(actual_events)
+        # for i in range(len(cropped_actual)):
+        #     if cropped_actual[i] > max_actual:
+        #         cropped_actual[i] = max_actual
+        for i in range(len(cropped_actual)-1, -1, -1):
+            if cropped_actual[i] <= 5:
+                del cropped_actual[i]
+                del predicted_events[i]
+
+        m, b = np.polyfit(predicted_events, cropped_actual, 1)
+        linear_curve_y = [m + b * x for x in x_axis]
+
+        ax.plot(
+            x_axis,
+            linear_curve_y,
+            color = linear_fit_color
+        )
+
     ax.plot(
         x_axis,
         perfect_predicted,
@@ -1390,7 +1400,7 @@ def plot_kde_ahi(
     plt.ylim(kwargs["ylim"])
     plt.xlim(kwargs["xlim"])
 
-    ax.legend(loc="best")
+    ax.legend(loc=kwargs["loc"])
     
     plt.show()
 
@@ -1417,63 +1427,74 @@ if __name__ == "__main__":
     # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Stage_Multi", train_border = 1, shhs_border = 1, chb_border = 1)
     # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Apnea_Single")
 
-    high_focus = False
+    high_focus = True
+    performance_mode = "Complete_Majority"
     only_show_correct_predictions = False
     ahi = True
-    show_kde = True
+    show_kde = False
+    levels = [0.01, 0.05, 0.2, 0.5, 0.7, 1]
+    loc = "lower right"
 
     model_path = "SAE_Local_30s_A_Norm/"
 
     plot_kde_ahi(
         model_directory_path = model_path,
-        performance_mode = "Complete_Majority",
+        performance_mode = performance_mode,
         sample_seconds = 30,
         ahi = ahi,
         high_focus = high_focus,
         only_show_correct_predictions = only_show_correct_predictions,
         show_kde = show_kde,
         tube_size = 5,
-        levels = [0.05, 0.2, 0.5, 0.7, 1]
+        levels = levels,
+        # actual_upper_border = 120,
+        loc = loc
     )
 
     model_path = "SAE_Local_60s_A_Norm/"
 
     plot_kde_ahi(
         model_directory_path = model_path,
-        performance_mode = "Complete_Majority",
+        performance_mode = performance_mode,
         sample_seconds = 60,
         ahi = ahi,
         high_focus = high_focus,
         only_show_correct_predictions = only_show_correct_predictions,
         show_kde = show_kde,
         tube_size = 5,
-        levels = [0.05, 0.2, 0.5, 0.7, 1]
+        levels = levels,
+        # actual_upper_border = 60,
+        loc = loc
     )
     
     model_path = "SAE_Local_120s_AH_RAW/"
 
     plot_kde_ahi(
         model_directory_path = model_path,
-        performance_mode = "Complete_Majority",
+        performance_mode = performance_mode,
         sample_seconds = 120,
         ahi = ahi,
         high_focus = high_focus,
         only_show_correct_predictions = only_show_correct_predictions,
         show_kde = show_kde,
         tube_size = 5,
-        levels = [0.05, 0.2, 0.5, 0.7, 1]
+        levels = levels,
+        # actual_upper_border = 30,
+        loc = loc
     )
     
     model_path = "SAE_Local_180s_AH_Cleaned/"
 
     plot_kde_ahi(
         model_directory_path = model_path,
-        performance_mode = "Complete_Majority",
+        performance_mode = performance_mode,
         sample_seconds = 180,
         ahi = ahi,
         high_focus = high_focus,
         only_show_correct_predictions = only_show_correct_predictions,
         show_kde = show_kde,
         tube_size = 5,
-        levels = [0.05, 0.2, 0.5, 0.7, 1]
+        levels = levels,
+        # actual_upper_border = 20,
+        loc = loc
     )

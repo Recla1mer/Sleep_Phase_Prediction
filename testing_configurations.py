@@ -2134,27 +2134,6 @@ def minimize_data(
     
     results_file.close()
 
-if False:
-    stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
-    stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
-
-    apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
-    apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
-
-    for path_index in range(len(stage_prediction_paths)):
-        path = stage_prediction_paths[path_index]
-        minimize_data(
-            full_results_path = "NAKO-994/" + stage_prediction_paths[path_index][:-1] + "_NAKO-994.pkl",
-            minimize_data_path = "NAKO-994/" + stage_prediction_paths[path_index][:-1] + "_NAKO-994_minimized.pkl",
-            results_key = stage_prediction_keys[path_index],
-        )
-
-    minimize_data(
-        full_results_path = "NAKO-994/" + "SAE_Local_60s_A_Norm" + "_NAKO-994.pkl",
-        minimize_data_path = "NAKO-994/" + "SAE_Local_60s_A_Norm" + "_NAKO-994_minimized.pkl",
-        results_key = "SAE_Local_60s",
-    )
-
 
 if __name__ == "__main__":
 
@@ -2192,19 +2171,19 @@ if __name__ == "__main__":
         pass
 
 
-    if False:
+    if True:
         nako_directory = "Processed_NAKO/"
-        nako_paths = ["NAKO-994.pkl", "NAKO-609.pkl", "NAKO-419.pkl", "NAKO-84.pkl", "NAKO-33a.pkl", "NAKO-33b.pkl"]
-        nako_size = [37059, 267752, 223486, 255086, 7365, 9691]
+        nako_paths = ["NAKO-609.pkl", "NAKO-419.pkl", "NAKO-84.pkl", "NAKO-33a.pkl", "NAKO-33b.pkl", "NAKO-994.pkl"]
+        nako_size = [267752, 223486, 255086, 7365, 9691, 37059]
 
-        stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/", "SSG_Local_120s_ArtifactAsWake_Cleaned/"]
-        stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s", "SSG_Local_120s"]
+        stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/"]
+        stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s"]
         
         apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
         apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
 
         for nako_path_index in range(len(nako_paths)):
-            path = nako_paths[nako_path_index]
+            path = nako_directory + nako_paths[nako_path_index]
 
             print_headline(f"Predicting Sleep Stages and Apnea Events within: {path}")
 
@@ -2221,6 +2200,12 @@ if __name__ == "__main__":
                     data_length = nako_size[nako_path_index]
                 )
 
+                if global_send_email:
+                    try:
+                        send_email_notification(email_subject="Status Update", email_body=f"Finished {nako_paths[nako_path_index]} using {stage_prediction_paths[stage_path_index]}.")
+                    except:
+                        pass
+
             for apnea_path_index in range(len(apnea_prediction_paths)):
                 save_path = nako_paths[nako_path_index][:-4] + "/" + apnea_prediction_paths[apnea_path_index][:-1] + "_" + nako_paths[nako_path_index]
 
@@ -2233,3 +2218,9 @@ if __name__ == "__main__":
                     results_key = apnea_prediction_keys[apnea_path_index],
                     data_length = nako_size[nako_path_index]
                 )
+
+                if global_send_email:
+                    try:
+                        send_email_notification(email_subject="Status Update", email_body=f"Finished {nako_paths[nako_path_index]} using {apnea_prediction_paths[apnea_path_index]}.")
+                    except:
+                        pass

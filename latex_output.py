@@ -1296,22 +1296,6 @@ if __name__ == "__main__":
     # single_apnea_table()
     # multi_apnea_table()
 
-    create_latex_table_row(
-        path_to_model_directory = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_multi/SSG_Local_30s_FullClass_Norm/",
-        performance_of = "Splitted", # "Splitted", "Complete_Probability", "Complete_Majority"
-        transform = [[0, 1]],
-        round_to_decimals = 3,
-        )
-    
-    create_latex_table_row(
-        path_to_model_directory = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_multi/SSG_Local_30s_FullClass_Norm/",
-        performance_of = "Complete_Probability", #"Complete_Majority"
-        transform = [[0, 1]],
-        round_to_decimals = 3,
-        )
-
-
-
     matplotlib.rcParams.update(tex_look)
     
     # multi-plots
