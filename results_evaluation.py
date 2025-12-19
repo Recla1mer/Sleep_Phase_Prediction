@@ -1098,6 +1098,8 @@ def plot_kde_ahi(
     performance_mode: str,
     sample_seconds: int,
     ahi = False,
+    high_focus = True,
+    only_show_correct_predictions = False,
     show_kde = False,
     tube_size = 0,
     **kwargs
@@ -1166,7 +1168,7 @@ def plot_kde_ahi(
 
     kwargs.setdefault("levels", [0.05, 1])
     kwargs.setdefault("fill", False)
-    kwargs.setdefault("colormap", 'viridis_r')
+    kwargs.setdefault("colormap", 'Blues_r') # Blues, viridis_r
 
     kwargs.setdefault("tube_label", "error tube: ")
     kwargs.setdefault("perfect_label", "Predicted = Actual")
@@ -1197,35 +1199,67 @@ def plot_kde_ahi(
         data_generator = load_from_pickle(model_directory_path + results_file)
         for data_dict in data_generator:
             
-            num_predicted = 0
-            num_pred_ahi = 0
-            count_events = 1
-            for event in data_dict["Predicted_2"]:
-                if event != 0:
-                    num_predicted += 1
-                    num_pred_ahi += 1
-                
-                if count_events == events_per_hour:
-                    predicted_ahi.append(copy.deepcopy(num_pred_ahi))
-                    num_pred_ahi = 0
-                    count_events = 1
-                
-                count_events += 1
+            if only_show_correct_predictions:
+                num_predicted = 0
+                num_pred_ahi = 0
+                count_events = 1
+                for event_index in range(len(data_dict["Predicted_2"])):
+                    if data_dict["Predicted_2"][event_index] != 0 and data_dict["Actual"][event_index] != 0:
+                        num_predicted += 1
+                        num_pred_ahi += 1
+                    
+                    if count_events == events_per_hour:
+                        predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+                        num_pred_ahi = 0
+                        count_events = 1
+                    
+                    count_events += 1
+            else:
+                num_predicted = 0
+                num_pred_ahi = 0
+                count_events = 1
+                for event in data_dict["Predicted_2"]:
+                    if event != 0:
+                        num_predicted += 1
+                        num_pred_ahi += 1
+                    
+                    if count_events == events_per_hour:
+                        predicted_ahi.append(copy.deepcopy(num_pred_ahi))
+                        num_pred_ahi = 0
+                        count_events = 1
+                    
+                    count_events += 1
             
-            num_actual = 0
-            num_actual_ahi = 0
-            count_events = 1
-            for event in data_dict["Actual"]:
-                if event != 0:
-                    num_actual += 1
-                    num_actual_ahi += 1
-                
-                if count_events == events_per_hour:
-                    actual_ahi.append(copy.deepcopy(num_actual_ahi))
-                    num_actual_ahi = 0
-                    count_events = 1
-                
-                count_events += 1
+            if high_focus:
+                num_actual = 0
+                num_actual_ahi = 0
+                count_events = 1
+                for event_iteration in range(len(data_dict["Actual_in_seconds"])-1):
+                    if data_dict["Actual_in_seconds"][event_iteration] == 0 and data_dict["Actual_in_seconds"][event_iteration+1] != 0:
+                        num_actual += 1
+                        num_actual_ahi += 1
+                    
+                    if count_events == 3600:
+                        actual_ahi.append(copy.deepcopy(num_actual_ahi))
+                        num_actual_ahi = 0
+                        count_events = 1
+                    
+                    count_events += 1
+            else:
+                num_actual = 0
+                num_actual_ahi = 0
+                count_events = 1
+                for event in data_dict["Actual"]:
+                    if event != 0:
+                        num_actual += 1
+                        num_actual_ahi += 1
+                    
+                    if count_events == events_per_hour:
+                        actual_ahi.append(copy.deepcopy(num_actual_ahi))
+                        num_actual_ahi = 0
+                        count_events = 1
+                    
+                    count_events += 1
             
             predicted_count.append(num_predicted)
             actual_count.append(num_actual)
@@ -1383,14 +1417,21 @@ if __name__ == "__main__":
     # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Stage_Multi", train_border = 1, shhs_border = 1, chb_border = 1)
     # plot_loss_per_epoch(results_file_path = path_to_results_file, task_network = "Apnea_Single")
 
+    high_focus = False
+    only_show_correct_predictions = False
+    ahi = True
+    show_kde = True
+
     model_path = "SAE_Local_30s_A_Norm/"
 
     plot_kde_ahi(
         model_directory_path = model_path,
         performance_mode = "Complete_Majority",
         sample_seconds = 30,
-        ahi = True,
-        show_kde = True,
+        ahi = ahi,
+        high_focus = high_focus,
+        only_show_correct_predictions = only_show_correct_predictions,
+        show_kde = show_kde,
         tube_size = 5,
         levels = [0.05, 0.2, 0.5, 0.7, 1]
     )
@@ -1401,8 +1442,10 @@ if __name__ == "__main__":
         model_directory_path = model_path,
         performance_mode = "Complete_Majority",
         sample_seconds = 60,
-        ahi = True,
-        show_kde = True,
+        ahi = ahi,
+        high_focus = high_focus,
+        only_show_correct_predictions = only_show_correct_predictions,
+        show_kde = show_kde,
         tube_size = 5,
         levels = [0.05, 0.2, 0.5, 0.7, 1]
     )
@@ -1413,8 +1456,10 @@ if __name__ == "__main__":
         model_directory_path = model_path,
         performance_mode = "Complete_Majority",
         sample_seconds = 120,
-        ahi = True,
-        show_kde = True,
+        ahi = ahi,
+        high_focus = high_focus,
+        only_show_correct_predictions = only_show_correct_predictions,
+        show_kde = show_kde,
         tube_size = 5,
         levels = [0.05, 0.2, 0.5, 0.7, 1]
     )
@@ -1425,8 +1470,10 @@ if __name__ == "__main__":
         model_directory_path = model_path,
         performance_mode = "Complete_Majority",
         sample_seconds = 180,
-        ahi = True,
-        show_kde = True,
+        ahi = ahi,
+        high_focus = high_focus,
+        only_show_correct_predictions = only_show_correct_predictions,
+        show_kde = show_kde,
         tube_size = 5,
         levels = [0.05, 0.2, 0.5, 0.7, 1]
     )
