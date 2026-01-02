@@ -231,7 +231,7 @@ def multi_apnea_chb_collecting(
     
     results_file = open(results_file_path, "ab")
 
-    print("\nSingle Apnea")
+    print("\nMulti Apnea")
     print("\nSplitted Table Rows")
     for network_index in range(len(network_model_names)):
         print(network_model_names[network_index])
@@ -480,7 +480,7 @@ def multi_stage_chb_collecting(
 
     results_file = open(results_file_path, "ab")
 
-    print("\nSingle Stage")
+    print("\nMulti Stage")
     print("\nSplitted Table Rows")
     for network_index in range(len(network_model_names)):
         print(network_model_names[network_index])

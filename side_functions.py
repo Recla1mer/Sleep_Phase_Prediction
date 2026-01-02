@@ -9,6 +9,7 @@ import time
 import numpy as np
 import os
 import smtplib
+from email.message import EmailMessage
 import shutil
 import sys
 import tty
@@ -578,7 +579,49 @@ def send_email_notification(email_subject: str, email_body: str):
         server.login("", "")
         server.sendmail(sender_email, recipient_email, f"Subject: {email_subject}\n\n{email_body}")
 
+
+def send_email_notification_with_attachement(email_subject: str, email_body: str, file_path: str):
+    """
+    Sends an email notification.
+
+    ARGUMENTS:
+    ------------------------------
+    subject: str
+        email subject
+    body: str
+        email body
+
+    RETURNS:
+    ------------------------------
+    None
+    """
+
+    # Set up email parameters
+    sender_email = ""
+    recipient_email = ""
+
+    msg = EmailMessage()
+    msg["From"] = sender_email
+    msg["To"] = recipient_email
+    msg["Subject"] = email_subject
+    msg.set_content(email_body)
+
+    with open(file_path, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="octet-stream",
+            filename=file_path
+        )
+
+    # Send email
+    with smtplib.SMTP_SSL("smtpauth.uni-halle.de", 465) as server:
+        # server.set_debuglevel(1)
+        server.login("", "")
+        server.send_message(msg)
+
 # send_email_notification(email_subject="test", email_body="test")
+# send_email_notification_with_attachement(email_subject="test", email_body="test", file_path="test.pkl")
 
 if False:
     # total = 100

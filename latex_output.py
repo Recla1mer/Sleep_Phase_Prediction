@@ -552,7 +552,7 @@ def single_apnea_table():
                 print(text)
 
 
-def multi_apnea_table():
+def multi_apnea_table(parent_folder_path = ""):
 
     data_strucutre_names = ["300s_10s_0s", "300s_10s_5s"]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
@@ -580,7 +580,7 @@ def multi_apnea_table():
                     text = "& " + latex_cleaning[clean_index] + " & "
                     try:
                         text += create_latex_table_row(
-                                    path_to_model_directory = identifier,
+                                    path_to_model_directory = parent_folder_path + identifier,
                                     performance_of = "Splitted",
                                     transform = apnea_transform,
                                     round_to_decimals = 3,
@@ -609,7 +609,7 @@ def multi_apnea_table():
                     text = "& " + latex_cleaning[clean_index] + " & "
                     try:
                         text += create_latex_table_row(
-                                    path_to_model_directory = identifier,
+                                    path_to_model_directory = parent_folder_path + identifier,
                                     performance_of = "Complete_Majority",
                                     transform = apnea_transform,
                                     round_to_decimals = 3,
@@ -683,7 +683,7 @@ def single_stage_table():
                 print(text)
 
 
-def multi_stage_table():
+def multi_stage_table(parent_folder_path = ""):
 
     data_strucutre_names = ["10h_120s_0s", "10h_120s_90s"]
     class_names = ["ArtifactAsWake", "FullClass"]
@@ -712,7 +712,7 @@ def multi_stage_table():
                     text = "& " + latex_cleaning[clean_index] + " & "
                     try:
                         text += create_latex_table_row(
-                                    path_to_model_directory = identifier,
+                                    path_to_model_directory = parent_folder_path + identifier,
                                     performance_of = "Splitted",
                                     transform = sleep_transform,
                                     round_to_decimals = 3,
@@ -741,7 +741,7 @@ def multi_stage_table():
                     text = "& " + latex_cleaning[clean_index] + " & "
                     try:
                         text += create_latex_table_row(
-                                    path_to_model_directory = identifier,
+                                    path_to_model_directory = parent_folder_path + identifier,
                                     performance_of = "Complete_Probability",
                                     transform = sleep_transform,
                                     round_to_decimals = 3,
@@ -1377,14 +1377,42 @@ def rename_multi_stage():
 
 if __name__ == "__main__":
     # single_stage_table()
-    # multi_stage_table()
+    multi_stage_table(parent_folder_path = "/home/yaopeng/Desktop/stage_nets_multi/")
 
     # single_apnea_table()
-    # multi_apnea_table()
+    multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
+
+    raise SystemExit
     
-    rename_single_stage()
-    rename_multi_stage()
-    rename_multi_apnea()
+    buffer = io.StringIO()
+    sys.stdout = buffer
+    
+    # single_stage_table()
+    multi_stage_table(parent_folder_path = "/home/yaopeng/Desktop/stage_nets_multi/")
+
+    try:
+        send_email_notification(
+            email_subject="Multi Stage Table",
+            email_body=buffer.getvalue()
+        )
+    
+    except:
+        pass
+
+    buffer.truncate(0)
+    buffer.seek(0)
+
+    # single_apnea_table()
+    multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
+
+    try:
+        send_email_notification(
+            email_subject="Multi Apnea Table",
+            email_body=buffer.getvalue()
+        )
+    
+    except:
+        pass
 
     raise SystemExit
 
