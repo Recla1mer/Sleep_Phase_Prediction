@@ -108,7 +108,7 @@ def single_apnea_chb_collecting(
 
     cleaning_names = ["RAW", "Cleaned", "Norm"]
     
-    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    network_names = ["30s", "60s", "120s", "180s"]
     network_seconds = [30, 60, 120, 180]
     
     class_names = ["A", "AH"]
@@ -224,114 +224,130 @@ def multi_apnea_chb_collecting(
         results_file_path: str
     ):
 
-    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
     network_model_names = ["LSM", "LSM_Residual"]
+    data_structure_names = ["300s_10s_0s", "300s_10s_5s"]
     class_names = ["A", "AH"]
-
+    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    
     results_file = open(results_file_path, "ab")
 
-    print("\nMulti Apnea")
+    print("\nSingle Apnea")
     print("\nSplitted Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        
-        for class_index in range(len(class_names)):
-            print(class_names[class_index])
-            if class_names[class_index] == "A":
-                apnea_transform = []
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+
+        for data_struct_index in range(len(data_structure_names)):
+            print(data_structure_names[data_struct_index])
+            if data_structure_names[data_struct_index] == "300s_10s_0s":
+                overlap = 0
             else:
-                apnea_transform = [[2,1]]
-
-            for clean_index in range(len(cleaning_names)):
-                print(cleaning_names[clean_index])
-                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
-                path_to_model_directory = parent_folder_path + identifier
-
-                # path to save the predictions
-                gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
-
-                try:
-                    accuracy, kappa, f1, precision, recall = calc_perf_values(
-                        paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
-                        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-                        prediction_result_key = "Predicted",
-                        actual_result_key = "Actual",
-                        transform = apnea_transform,
-                        additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
-                    )
-
-                    results = {
-                        "method": "independent",
-                        "task": "apnea",
-                        "architecture": network_model_names[model_index],
-                        "input_seconds": 300,
-                        "window_seconds": 10,
-                        "overlap_seconds": 5,
-                        "labeling": class_names[class_index],
-                        "transform": cleaning_names[clean_index],
-                        "accuracy": accuracy,
-                        "kappa": kappa,
-                        "f1": f1,
-                        "precision": precision,
-                        "recall": recall
-                    }
-
-                    pickle.dump(results, results_file)
+                overlap = 5
+        
+            for class_index in range(len(class_names)):
+                print(class_names[class_index])
+                if class_names[class_index] == "A":
+                    apnea_transform = []
+                else:
+                    apnea_transform = [[2,1]]
                 
-                except:
-                    print("Folder not found.")
+                for clean_index in range(len(cleaning_names)):
+                    print(cleaning_names[clean_index])
+                    identifier = "SAE_" + network_model_names[network_index] + "_" + data_structure_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+                    path_to_model_directory = parent_folder_path + identifier
+
+                    # path to save the predictions
+                    gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
+                    
+                    try:
+                        accuracy, kappa, f1, precision, recall = calc_perf_values(
+                            paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
+                            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+                            prediction_result_key = "Predicted",
+                            actual_result_key = "Actual",
+                            transform = apnea_transform,
+                            additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
+                        )
+
+                        results = {
+                            "method": "independent",
+                            "task": "apnea",
+                            "architecture": network_model_names[network_index],
+                            "input_seconds": 300,
+                            "window_seconds": 10,
+                            "overlap_seconds": overlap,
+                            "labeling": class_names[class_index],
+                            "transform": cleaning_names[clean_index],
+                            "accuracy": accuracy,
+                            "kappa": kappa,
+                            "f1": f1,
+                            "precision": precision,
+                            "recall": recall
+                        }
+
+                        pickle.dump(results, results_file)
+                    
+                    except:
+                        print("Folder not found.")
     
     print("\nCombined Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        
-        for class_index in range(len(class_names)):
-            print(class_names[class_index])
-            if class_names[class_index] == "A":
-                apnea_transform = []
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+
+        for data_struct_index in range(len(data_structure_names)):
+            print(data_structure_names[data_struct_index])
+            if data_structure_names[data_struct_index] == "300s_10s_0s":
+                overlap = 0
             else:
-                apnea_transform = [[2,1]]    
-
-            for clean_index in range(len(cleaning_names)):
-                print(cleaning_names[clean_index])
-                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
-                path_to_model_directory = parent_folder_path + identifier
-
-                # path to save the predictions
-                gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
+                overlap = 5
+        
+            for class_index in range(len(class_names)):
+                print(class_names[class_index])
+                if class_names[class_index] == "A":
+                    apnea_transform = []
+                else:
+                    apnea_transform = [[2,1]]
                 
-                try:
-                    accuracy, kappa, f1, precision, recall = calc_perf_values(
-                        paths_to_pkl_files = [gif_complete_validation_pid_results_path],
-                        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-                        prediction_result_key = "Predicted_2",
-                        actual_result_key = "Actual",
-                        transform = apnea_transform,
-                        additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
-                    )
+                for clean_index in range(len(cleaning_names)):
+                    print(cleaning_names[clean_index])
+                    identifier = "SAE_" + network_model_names[network_index] + "_" + data_structure_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+                    path_to_model_directory = parent_folder_path + identifier
 
-                    results = {
-                        "method": "practical",
-                        "task": "apnea",
-                        "architecture": network_model_names[model_index],
-                        "input_seconds": 300,
-                        "window_seconds": 10,
-                        "overlap_seconds": 5,
-                        "labeling": class_names[class_index],
-                        "transform": cleaning_names[clean_index],
-                        "accuracy": accuracy,
-                        "kappa": kappa,
-                        "f1": f1,
-                        "precision": precision,
-                        "recall": recall
-                    }
+                    # path to save the predictions
+                    gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
+                    
+                    try:
+                        accuracy, kappa, f1, precision, recall = calc_perf_values(
+                            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+                            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+                            prediction_result_key = "Predicted_2",
+                            actual_result_key = "Actual",
+                            transform = apnea_transform,
+                            additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
+                        )
 
-                    pickle.dump(results, results_file)
-                
-                except:
-                    print("Folder not found.")
+                        results = {
+                            "method": "practical",
+                            "task": "apnea",
+                            "architecture": network_model_names[network_index],
+                            "input_seconds": 300,
+                            "window_seconds": 10,
+                            "overlap_seconds": overlap,
+                            "labeling": class_names[class_index],
+                            "transform": cleaning_names[clean_index],
+                            "accuracy": accuracy,
+                            "kappa": kappa,
+                            "f1": f1,
+                            "precision": precision,
+                            "recall": recall
+                        }
+
+                        pickle.dump(results, results_file)
+                    
+                    except:
+                        print("Folder not found.")
     
     results_file.close()
+
 
 def single_stage_chb_collecting(
         parent_folder_path: str,
@@ -340,7 +356,7 @@ def single_stage_chb_collecting(
 
     class_names = ["ArtifactAsWake", "FullClass"]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
-    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    network_names = ["30s", "60s", "120s", "180s"]
     network_seconds = [30, 60, 120, 180]
     sleep_transform = []
 
@@ -456,126 +472,130 @@ def multi_stage_chb_collecting(
         results_file_path: str
     ):
 
-    window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
-    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+    data_structure_names = ["10h_120s_0s", "10h_120s_90s"]
+    class_names = ["ArtifactAsWake", "FullClass"]
+    cleaning_names = ["RAW", "Cleaned", "Norm"]
     network_model_names = ["LSM", "LSM_Residual"]
+    sleep_transform = []
 
     results_file = open(results_file_path, "ab")
 
-    print("\nMulti Stage")
+    print("\nSingle Stage")
     print("\nSplitted Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        
-        for window_index in range(len(window_and_class_names)):
-            print(window_and_class_names[window_index])
-            if window_and_class_names[window_index] == "Overlap_FullClass":
-                stage_transform = [[0, 1]]
-                class_name = "FullClass"
-            else:
-                stage_transform = []
-                class_name = "ArtifactAsWake"
-            
-            if window_and_class_names[window_index] == "NoOverlap_ArtifactAsWake":
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+
+        for data_struct_index in range(len(data_structure_names)):
+            print(data_structure_names[data_struct_index])
+
+            if data_structure_names[data_struct_index] == "10h_120s_0s":
                 overlap = 0
             else:
                 overlap = 90
-            
-            for clean_index in range(len(cleaning_names)):
-                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
-                path_to_model_directory = parent_folder_path + identifier
-                print(cleaning_names[clean_index])
-
-                # path to save the predictions
-                gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
+        
+            for class_index in range(len(class_names)):
+                print(class_names[class_index])
+                if class_names[class_index] == "ArtifactAsWake":
+                    sleep_transform = []
+                else:
+                    sleep_transform = [[0, 1]]
                 
-                try:
-                    accuracy, kappa, f1, precision, recall = calc_perf_values(
-                        paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
-                        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-                        prediction_result_key = "Predicted",
-                        actual_result_key = "Actual",
-                        transform = stage_transform,
-                        additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
-                    )
+                for clean_index in range(len(cleaning_names)):
+                    print(cleaning_names[clean_index])
+                    identifier = "SSG_" + network_model_names[network_index] + "_" + data_structure_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+                    path_to_model_directory = parent_folder_path + identifier
 
-                    results = {
-                        "method": "independent",
-                        "task": "stage",
-                        "architecture": network_model_names[model_index],
-                        "input_seconds": 36000,
-                        "window_seconds": 120,
-                        "overlap_seconds": overlap,
-                        "labeling": class_name,
-                        "transform": cleaning_names[clean_index],
-                        "accuracy": accuracy,
-                        "kappa": kappa,
-                        "f1": f1,
-                        "precision": precision,
-                        "recall": recall
-                    }
+                    # path to save the predictions
+                    gif_splitted_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Splitted_Validation_Pid.pkl"
 
-                    pickle.dump(results, results_file)
-                
-                except:
-                    print("Folder not found.")
+                    try:
+                        accuracy, kappa, f1, precision, recall = calc_perf_values(
+                            paths_to_pkl_files = [gif_splitted_validation_pid_results_path],
+                            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+                            prediction_result_key = "Predicted",
+                            actual_result_key = "Actual",
+                            transform = sleep_transform,
+                            additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
+                        )
+
+                        results = {
+                            "method": "independent",
+                            "task": "stage",
+                            "architecture": network_model_names[network_index],
+                            "input_seconds": 36000,
+                            "window_seconds": 120,
+                            "overlap_seconds": overlap,
+                            "labeling": class_names[class_index],
+                            "transform": cleaning_names[clean_index],
+                            "accuracy": accuracy,
+                            "kappa": kappa,
+                            "f1": f1,
+                            "precision": precision,
+                            "recall": recall
+                        }
+
+                        pickle.dump(results, results_file)
+                    
+                    except:
+                        print("Folder not found.")
     
     print("\nCombined Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        
-        for window_index in range(len(window_and_class_names)):
-            print(window_and_class_names[window_index])
-            if window_and_class_names[window_index] == "Overlap_FullClass":
-                stage_transform = [[0, 1]]
-                class_name = "FullClass"
-            else:
-                stage_transform = []
-                class_name = "ArtifactAsWake"
-            
-            if window_and_class_names[window_index] == "NoOverlap_ArtifactAsWake":
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+
+        for data_struct_index in range(len(data_structure_names)):
+            print(data_structure_names[data_struct_index])
+
+            if data_structure_names[data_struct_index] == "10h_120s_0s":
                 overlap = 0
             else:
                 overlap = 90
-            
-            for clean_index in range(len(cleaning_names)):
-                print(cleaning_names[clean_index])
-                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
-                path_to_model_directory = parent_folder_path + identifier
-
-                # path to save the predictions
-                gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
+        
+            for class_index in range(len(class_names)):
+                print(class_names[class_index])
+                if class_names[class_index] == "ArtifactAsWake":
+                    sleep_transform = []
+                else:
+                    sleep_transform = [[0, 1]]
                 
-                try:
-                    accuracy, kappa, f1, precision, recall = calc_perf_values(
-                        paths_to_pkl_files = [gif_complete_validation_pid_results_path],
-                        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-                        prediction_result_key = "Predicted",
-                        actual_result_key = "Actual",
-                        transform = stage_transform,
-                        additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
-                    )
+                for clean_index in range(len(cleaning_names)):
+                    print(cleaning_names[clean_index])
+                    identifier = "SSG_" + network_model_names[network_index] + "_" + data_structure_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+                    path_to_model_directory = parent_folder_path + identifier
 
-                    results = {
-                        "method": "practical",
-                        "task": "stage",
-                        "architecture": network_model_names[model_index],
-                        "input_seconds": 36000,
-                        "window_seconds": 120,
-                        "overlap_seconds": overlap,
-                        "labeling": class_name,
-                        "transform": cleaning_names[clean_index],
-                        "accuracy": accuracy,
-                        "kappa": kappa,
-                        "f1": f1,
-                        "precision": precision,
-                        "recall": recall
-                    }
+                    # path to save the predictions
+                    gif_complete_validation_pid_results_path = path_to_model_directory + model_performance_file[:-4] + "_GIF_Complete_Validation_Pid.pkl"
 
-                    pickle.dump(results, results_file)
-                
-                except:
-                    print("Folder not found.")
+                    try:
+                        accuracy, kappa, f1, precision, recall = calc_perf_values(
+                            paths_to_pkl_files = [gif_complete_validation_pid_results_path],
+                            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+                            prediction_result_key = "Predicted",
+                            actual_result_key = "Actual",
+                            transform = sleep_transform,
+                            additional_score_function_args = {"zero_division": np.nan, "average": "macro"}
+                        )
+
+                        results = {
+                            "method": "practical",
+                            "task": "stage",
+                            "architecture": network_model_names[network_index],
+                            "input_seconds": 36000,
+                            "window_seconds": 120,
+                            "overlap_seconds": overlap,
+                            "labeling": class_names[class_index],
+                            "transform": cleaning_names[clean_index],
+                            "accuracy": accuracy,
+                            "kappa": kappa,
+                            "f1": f1,
+                            "precision": precision,
+                            "recall": recall
+                        }
+
+                        pickle.dump(results, results_file)
+                    
+                    except:
+                        print("Folder not found.")
     
     results_file.close()
 
@@ -1415,9 +1435,11 @@ if __name__ == "__main__":
     # multi_stage_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_multi/", results_file_path = path_to_results_file)
 
     # single_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_single/", results_file_path = path_to_results_file)
-    # multi_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/", results_file_path = path_to_results_file)
+    multi_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/", results_file_path = path_to_results_file)
 
     # print_compare_tables(path_to_results_file)
+
+    raise SystemExit
 
     path_to_results_file = "network_training_behavior.pkl"
 

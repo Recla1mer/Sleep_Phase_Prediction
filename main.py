@@ -2617,8 +2617,6 @@ def main_model_predicting_stage_inference(
                     results["ID"] = data_dict["ID"]
                     pickle.dump(results, results_file)
 
-                continue
-
             finally:        
                 # update progress
                 progress_bar.update()
@@ -3874,8 +3872,11 @@ def main_model_predicting_apnea_inference(
                         predictions_probability = predictions_probability.cpu().numpy()
                         predicted = predictions_probability.argmax(1)
 
+                        append_until = int(upper_bound-0.2*signal_length_seconds)
+                        if append_until >= total_duration:
+                            append_until = total_duration - 1
                         # for i in range(start_time, upper_bound):
-                        for i in range(int(start_time+0.1*signal_length_seconds), int(upper_bound-0.2*signal_length_seconds)):
+                        for i in range(int(start_time+0.1*signal_length_seconds), append_until):
                             strided_prediction_probabilities[i].append(predictions_probability[0])
                             strided_predicted_classes[i].append(predicted[0])
                 
@@ -3972,8 +3973,6 @@ def main_model_predicting_apnea_inference(
                     results = dict()
                     results["ID"] = data_dict["ID"]
                     pickle.dump(results, results_file)
-
-                continue
 
             finally:        
                 # update progress

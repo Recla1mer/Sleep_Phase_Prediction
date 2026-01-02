@@ -33,7 +33,7 @@ def single_apnea_confusion_plot(
         save_folder = "/Users/propeter/Desktop/master_thesis/confusion_matrices/"
 ):
 
-    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    network_names = ["30s", "60s", "120s", "180s"]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
     class_names = ["A", "AH"]
 
@@ -114,6 +114,7 @@ def multi_apnea_confusion_plot(
         save_folder = "/Users/propeter/Desktop/master_thesis/confusion_matrices/"
 ):
 
+    data_strucutre_names = ["300s_10s_5s", "300s_10s_0s"]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
     class_names = ["A", "AH"]
     network_model_names = ["LSM", "LSM_Residual"]
@@ -492,7 +493,7 @@ def single_apnea_table():
 
     cleaning_names = ["RAW", "Cleaned", "Norm"]
     latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
-    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    network_names = ["30s", "60s", "120s", "180s"]
     class_names = ["A", "AH"]
 
     print("\nSingle Apnea")
@@ -553,6 +554,7 @@ def single_apnea_table():
 
 def multi_apnea_table():
 
+    data_strucutre_names = ["300s_10s_0s", "300s_10s_5s"]
     cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
     latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
     network_model_names = ["LSM", "LSM_Residual"]
@@ -562,63 +564,67 @@ def multi_apnea_table():
     print("\nSplitted Table Rows")
     for model_index in range(len(network_model_names)):
         print(network_model_names[model_index])
-        for class_index in range(len(class_names)):
-            if class_names[class_index] == "A":
-                apnea_transform = []
-            else:
-                apnea_transform = [[2,1]]
-            
-            print(class_names[class_index])
-
-            for clean_index in range(len(cleaning_names)):
-                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
-
-                text = "& " + latex_cleaning[clean_index] + " & "
-                try:
-                    text += create_latex_table_row(
-                                path_to_model_directory = identifier,
-                                performance_of = "Splitted",
-                                transform = apnea_transform,
-                                round_to_decimals = 3,
-                            )
-                except:
-                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+        for data_struct_index in range(len(data_strucutre_names)):
+            print(data_strucutre_names[data_struct_index])
+            for class_index in range(len(class_names)):
+                if class_names[class_index] == "A":
+                    apnea_transform = []
+                else:
+                    apnea_transform = [[2,1]]
                 
-                print(text)
+                print(class_names[class_index])
+
+                for clean_index in range(len(cleaning_names)):
+                    identifier = "SAE_" + network_model_names[model_index] + "_" + data_strucutre_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
+
+                    text = "& " + latex_cleaning[clean_index] + " & "
+                    try:
+                        text += create_latex_table_row(
+                                    path_to_model_directory = identifier,
+                                    performance_of = "Splitted",
+                                    transform = apnea_transform,
+                                    round_to_decimals = 3,
+                                )
+                    except:
+                        text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                    
+                    print(text)
     
     print("\nCombined Table Rows")
     for model_index in range(len(network_model_names)):
         print(network_model_names[model_index])
-        for class_index in range(len(class_names)):
-            if class_names[class_index] == "A":
-                apnea_transform = []
-            else:
-                apnea_transform = [[2,1]]
-            
-            print(class_names[class_index])
+        for data_struct_index in range(len(data_strucutre_names)):
+            print(data_strucutre_names[data_struct_index])
+            for class_index in range(len(class_names)):
+                if class_names[class_index] == "A":
+                    apnea_transform = []
+                else:
+                    apnea_transform = [[2,1]]
+                
+                print(class_names[class_index])
 
-            for clean_index in range(len(cleaning_names)):
-                identifier = "SAE_" + "Multiple_5min" + "_" + class_names[class_index] + "_" + network_model_names[model_index] + "_" + cleaning_names[clean_index] + "/"
+                for clean_index in range(len(cleaning_names)):
+                    identifier = "SAE_" + network_model_names[model_index] + "_" + data_strucutre_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                text = "& " + latex_cleaning[clean_index] + " & "
-                try:
-                    text += create_latex_table_row(
-                                path_to_model_directory = identifier,
-                                performance_of = "Complete_Majority",
-                                transform = apnea_transform,
-                                round_to_decimals = 3,
-                            )
-                except:
-                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                    text = "& " + latex_cleaning[clean_index] + " & "
+                    try:
+                        text += create_latex_table_row(
+                                    path_to_model_directory = identifier,
+                                    performance_of = "Complete_Majority",
+                                    transform = apnea_transform,
+                                    round_to_decimals = 3,
+                                )
+                    except:
+                        text += "\\num{0} & \\num{0} & \\num{0} \\\\"
 
-                print(text)
+                    print(text)
 
 def single_stage_table():
 
     class_names = ["ArtifactAsWake", "FullClass"]
     cleaning_names = ["RAW", "Cleaned", "Norm"]
     latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
-    network_names = ["Local_30s", "Local_60s", "Local_120s", "Local_180s"]
+    network_names = ["30s", "60s", "120s", "180s"]
     sleep_transform = []
 
     print("\nSingle Stage")
@@ -679,65 +685,71 @@ def single_stage_table():
 
 def multi_stage_table():
 
-    window_and_class_names = ["Overlap_ArtifactAsWake", "NoOverlap_ArtifactAsWake", "Overlap_FullClass"]
-    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
-    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
+    data_strucutre_names = ["10h_120s_0s", "10h_120s_90s"]
+    class_names = ["ArtifactAsWake", "FullClass"]
+    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
     network_model_names = ["LSM", "LSM_Residual"]
+    sleep_transform = []
 
     print("\nMulti Stage")
     print("\nSplitted Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        for window_index in range(len(window_and_class_names)):
-            if window_and_class_names[window_index] == "Overlap_FullClass":
-                stage_transform = [[0, 1]]
-            else:
-                stage_transform = []
-            
-            print(window_and_class_names[window_index])
-            
-            for clean_index in range(len(cleaning_names)):
-                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+        for data_struct_index in range(len(data_strucutre_names)):
+            print(data_strucutre_names[data_struct_index])
+            for class_index in range(len(class_names)):
+                if class_names[class_index] == "ArtifactAsWake":
+                    sleep_transform = []
+                else:
+                    sleep_transform = [[0, 1]]
+                
+                print(class_names[class_index])
 
-                text = "& " + latex_cleaning[clean_index] + " & "
-                try:
-                    text += create_latex_table_row(
-                                path_to_model_directory = identifier,
-                                performance_of = "Splitted",
-                                transform = stage_transform,
-                                round_to_decimals = 3,
-                            )
-                except:
-                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                for clean_index in range(len(cleaning_names)):
+                    identifier = "SSG_" + network_model_names[network_index] + "_" + data_strucutre_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                print(text)
+                    text = "& " + latex_cleaning[clean_index] + " & "
+                    try:
+                        text += create_latex_table_row(
+                                    path_to_model_directory = identifier,
+                                    performance_of = "Splitted",
+                                    transform = sleep_transform,
+                                    round_to_decimals = 3,
+                                )
+                    except:
+                        text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                    
+                    print(text)
     
     print("\nCombined Table Rows")
-    for model_index in range(len(network_model_names)):
-        print(network_model_names[model_index])
-        for window_index in range(len(window_and_class_names)):
-            if window_and_class_names[window_index] == "Overlap_FullClass":
-                stage_transform = [[0, 1]]
-            else:
-                stage_transform = []
-            
-            print(window_and_class_names[window_index])
-            
-            for clean_index in range(len(cleaning_names)):
-                identifier = "SSG_" + network_model_names[model_index] + "_" + window_and_class_names[window_index] + "_" + cleaning_names[clean_index] + "/"
+    for network_index in range(len(network_model_names)):
+        print(network_model_names[network_index])
+        for data_struct_index in range(len(data_strucutre_names)):
+            print(data_strucutre_names[data_struct_index])
+            for class_index in range(len(class_names)):
+                if class_names[class_index] == "ArtifactAsWake":
+                    sleep_transform = []
+                else:
+                    sleep_transform = [[0, 1]]
+                
+                print(class_names[class_index])
 
-                text = "& " + latex_cleaning[clean_index] + " & "
-                try:
-                    text += create_latex_table_row(
-                                path_to_model_directory = identifier,
-                                performance_of = "Complete_Probability",
-                                transform = stage_transform,
-                                round_to_decimals = 3,
-                            )
-                except:
-                    text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                for clean_index in range(len(cleaning_names)):
+                    identifier = "SSG_" + network_model_names[network_index] + "_" + data_strucutre_names[data_struct_index] + "_" + class_names[class_index] + "_" + cleaning_names[clean_index] + "/"
 
-                print(text)
+                    text = "& " + latex_cleaning[clean_index] + " & "
+                    try:
+                        text += create_latex_table_row(
+                                    path_to_model_directory = identifier,
+                                    performance_of = "Complete_Probability",
+                                    transform = sleep_transform,
+                                    round_to_decimals = 3,
+                                )
+                    except:
+                        text += "\\num{0} & \\num{0} & \\num{0} \\\\"
+                    
+                    print(text)
 
 
 def create_performance_box(
@@ -1296,7 +1308,9 @@ def rename_single_stage():
             for char_pos in range(0, len(dir)):
                 if dir[char_pos:char_pos+5] == "Local":
                     new_name = dir[:char_pos] + dir[char_pos+6:]
-            os.rename(dir, new_name)
+
+            print(dir, "        ", new_name)
+            # os.rename(dir, new_name)
 
 
 def rename_multi_apnea():
@@ -1324,7 +1338,8 @@ def rename_multi_apnea():
                     new_name += stuff
                     break
             
-            os.rename(dir, new_name)
+            print(dir, "        ", new_name)
+            # os.rename(dir, new_name)
 
 
 def rename_multi_stage():
@@ -1355,7 +1370,8 @@ def rename_multi_stage():
                     new_name += stuff
                     break
             
-            os.rename(dir, new_name)
+            print(dir, "        ", new_name)
+            # os.rename(dir, new_name)
 
 
 
