@@ -1377,12 +1377,10 @@ def rename_multi_stage():
 
 if __name__ == "__main__":
     # single_stage_table()
-    multi_stage_table(parent_folder_path = "/home/yaopeng/Desktop/stage_nets_multi/")
+    # multi_stage_table(parent_folder_path = "/home/yaopeng/Desktop/stage_nets_multi/")
 
     # single_apnea_table()
-    multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
-
-    raise SystemExit
+    # multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
     
     buffer = io.StringIO()
     sys.stdout = buffer

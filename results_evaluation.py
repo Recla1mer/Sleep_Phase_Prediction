@@ -1431,14 +1431,17 @@ def plot_kde_ahi(
 if __name__ == "__main__":
     path_to_results_file = "network_results.pkl"
 
-    parent_folder = "/media/yaopeng/"
-    parent_folder = "/Volumes/"
+    parent_folder = "/Volumes/NaKo-UniHalle/JPK_Results/"
+    parent_folder = "/media/yaopeng/NaKo-UniHalle/JPK_Results/"
+    parent_folder = "/home/yaopeng/Desktop/"
 
-    single_stage_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/stage_nets_single/", results_file_path = path_to_results_file)
-    multi_stage_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/stage_nets_multi/", results_file_path = path_to_results_file)
+    single_stage_chb_collecting(parent_folder_path = parent_folder + "stage_nets_single/", results_file_path = path_to_results_file)
+    multi_stage_chb_collecting(parent_folder_path = parent_folder + "stage_nets_multi/", results_file_path = path_to_results_file)
 
-    single_apnea_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/apneav_nets_single/", results_file_path = path_to_results_file)
-    multi_apnea_chb_collecting(parent_folder_path = parent_folder +  "NaKo-UniHalle/JPK_Results/apnea_nets_multi/", results_file_path = path_to_results_file)
+    single_apnea_chb_collecting(parent_folder_path = parent_folder + "apnea_nets_single/", results_file_path = path_to_results_file)
+    multi_apnea_chb_collecting(parent_folder_path = parent_folder +  "apnea_nets_multi/", results_file_path = path_to_results_file)
+
+    send_email_notification_with_attachement("Network Results", "Here are your results!", "network_results.pkl")
 
     # print_compare_tables(path_to_results_file)
 

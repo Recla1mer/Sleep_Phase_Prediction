@@ -12,7 +12,7 @@ import os
 import io
 import sys
 
-global_send_email = False
+global_send_email = True
 
 default_complete_shhs_SSG_path = "Default_SHHS_SSG_Data_All/"
 default_complete_gif_SSG_path = "Default_GIF_SSG_Data_All/"
@@ -2176,11 +2176,12 @@ if __name__ == "__main__":
         nako_paths = ["NAKO-609.pkl", "NAKO-419.pkl", "NAKO-84.pkl", "NAKO-33a.pkl", "NAKO-33b.pkl", "NAKO-994.pkl"]
         nako_size = [267752, 223486, 255086, 7365, 9691, 37059]
 
-        stage_prediction_paths = ["SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm/", "SSG_Local_180s_FullClass_Norm/"]
-        stage_prediction_keys = ["SSG_LSM", "SSG_Local_180s"]
+        stage_prediction_paths = ["SSG_LSM_Residual_10h_120s_90s_ArtifactAsWake_LocalNorm/", "SSG_180s_FullClass_Norm/"]
+        stage_prediction_paths = []
+        stage_prediction_keys = ["SSG_LSM", "SSG_180s"]
         
-        apnea_prediction_paths = ["SAE_Local_60s_A_Norm/", "SAE_Local_120s_AH_RAW/"]
-        apnea_prediction_keys = ["SAE_Local_60s", "SAE_Local_120s"]
+        apnea_prediction_paths = ["SAE_60s_A_Norm/", "SAE_120s_AH_RAW/"]
+        apnea_prediction_keys = ["SAE_60s", "SAE_120s"]
 
         for nako_path_index in range(len(nako_paths)):
             path = nako_directory + nako_paths[nako_path_index]

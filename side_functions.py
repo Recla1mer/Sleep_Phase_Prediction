@@ -8,8 +8,14 @@ In this file we provide functions that are used to keep the code a little bit cl
 import time
 import numpy as np
 import os
+
 import smtplib
 from email.message import EmailMessage
+global_sender_email = "@student.uni-halle.de"
+global_recipient_email = "@.com"
+global_login = ""
+global_password = ""
+
 import shutil
 import sys
 import tty
@@ -20,7 +26,6 @@ import signal
 
 from IPython import get_ipython # type: ignore
 from IPython.display import clear_output
-
 
 """
 ========================
@@ -569,15 +574,11 @@ def send_email_notification(email_subject: str, email_body: str):
     None
     """
 
-    # Set up email parameters
-    sender_email = ""
-    recipient_email = ""
-
     # Send email
     with smtplib.SMTP_SSL("smtpauth.uni-halle.de", 465) as server:
         # server.set_debuglevel(1)
-        server.login("", "")
-        server.sendmail(sender_email, recipient_email, f"Subject: {email_subject}\n\n{email_body}")
+        server.login(global_login, global_password)
+        server.sendmail(global_sender_email, global_recipient_email, f"Subject: {email_subject}\n\n{email_body}")
 
 
 def send_email_notification_with_attachement(email_subject: str, email_body: str, file_path: str):
@@ -596,13 +597,9 @@ def send_email_notification_with_attachement(email_subject: str, email_body: str
     None
     """
 
-    # Set up email parameters
-    sender_email = ""
-    recipient_email = ""
-
     msg = EmailMessage()
-    msg["From"] = sender_email
-    msg["To"] = recipient_email
+    msg["From"] = global_sender_email
+    msg["To"] = global_recipient_email
     msg["Subject"] = email_subject
     msg.set_content(email_body)
 
@@ -617,7 +614,7 @@ def send_email_notification_with_attachement(email_subject: str, email_body: str
     # Send email
     with smtplib.SMTP_SSL("smtpauth.uni-halle.de", 465) as server:
         # server.set_debuglevel(1)
-        server.login("", "")
+        server.login(global_login, global_password)
         server.send_message(msg)
 
 # send_email_notification(email_subject="test", email_body="test")
