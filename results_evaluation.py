@@ -1285,6 +1285,9 @@ def plot_kde_ahi(
         predicted_count.append(num_predicted)
         actual_count.append(num_actual)
     
+    print(f"Spearman Rank Correlation (Count): {spearmanr(actual_count, predicted_count)[0]}")
+    print(f"Spearman Rank Correlation (AHI): {spearmanr(actual_ahi, predicted_ahi)[0]}")
+    
     if ahi:
         predicted_events = predicted_ahi
         actual_events = actual_ahi
@@ -1436,6 +1439,7 @@ if __name__ == "__main__":
     loc = "lower right"
 
     model_path = "SAE_Local_30s_A_Norm/"
+    print(model_path)
 
     plot_kde_ahi(
         model_directory_path = model_path,
@@ -1452,6 +1456,7 @@ if __name__ == "__main__":
     )
 
     model_path = "SAE_Local_60s_A_Norm/"
+    print(model_path)
 
     plot_kde_ahi(
         model_directory_path = model_path,
@@ -1468,6 +1473,7 @@ if __name__ == "__main__":
     )
     
     model_path = "SAE_Local_120s_AH_RAW/"
+    print(model_path)
 
     plot_kde_ahi(
         model_directory_path = model_path,
@@ -1484,6 +1490,7 @@ if __name__ == "__main__":
     )
     
     model_path = "SAE_Local_180s_AH_Cleaned/"
+    print(model_path)
 
     plot_kde_ahi(
         model_directory_path = model_path,

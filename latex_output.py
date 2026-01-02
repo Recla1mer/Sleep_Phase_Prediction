@@ -1289,12 +1289,88 @@ def multi_stage_detailed_performance(
                         print("Folder not found.")
 
 
+def rename_single_stage():
+    all_directories = os.listdir()
+    for dir in all_directories:
+        if "Local" in dir:
+            for char_pos in range(0, len(dir)):
+                if dir[char_pos:char_pos+5] == "Local":
+                    new_name = dir[:char_pos] + dir[char_pos+6:]
+            os.rename(dir, new_name)
+
+
+def rename_multi_apnea():
+    all_directories = os.listdir()
+    for dir in all_directories:
+        if "5min" in dir:
+            new_name = "SAE_"
+            
+            if "LSM_Residual" in dir:
+                new_name += "LSM_Residual_"
+            else:
+                new_name += "LSM_"
+            
+            new_name += "300s_10s_5s_"
+
+            if "_AH_" in dir:
+                new_name += "AH_"
+            else:
+                new_name += "A_"
+
+            stuffs = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+            
+            for stuff in stuffs:
+                if stuff in dir:
+                    new_name += stuff
+                    break
+            
+            os.rename(dir, new_name)
+
+
+def rename_multi_stage():
+    all_directories = os.listdir()
+    for dir in all_directories:
+        if "SSG_LSM_" in dir:
+            new_name = "SSG_"
+            
+            if "LSM_Residual" in dir:
+                new_name += "LSM_Residual_"
+            else:
+                new_name += "LSM_"
+            
+            if "NoOverlap" in dir:
+                new_name += "10h_120s_0s_"
+            else:
+                new_name += "10h_120s_90s_"
+
+            if "FullClass" in dir:
+                new_name += "FullClass_"
+            else:
+                new_name += "ArtifactAsWake_"
+
+            stuffs = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+            
+            for stuff in stuffs:
+                if stuff in dir:
+                    new_name += stuff
+                    break
+            
+            os.rename(dir, new_name)
+
+
+
 if __name__ == "__main__":
     # single_stage_table()
     # multi_stage_table()
 
     # single_apnea_table()
     # multi_apnea_table()
+    
+    rename_single_stage()
+    rename_multi_stage()
+    rename_multi_apnea()
+
+    raise SystemExit
 
     matplotlib.rcParams.update(tex_look)
     
