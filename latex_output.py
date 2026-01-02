@@ -687,8 +687,8 @@ def multi_stage_table(parent_folder_path = ""):
 
     data_strucutre_names = ["10h_120s_0s", "10h_120s_90s"]
     class_names = ["ArtifactAsWake", "FullClass"]
-    cleaning_names = ["RAW", "Cleaned", "Norm"]
-    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}"]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
+    latex_cleaning = ["\\mdhighlight{Raw}", "\\mdhighlight{Cleaned}", "\\mdhighlight{SampleNorm}", "\\mdhighlight{WindowNorm}"]
     network_model_names = ["LSM", "LSM_Residual"]
     sleep_transform = []
 

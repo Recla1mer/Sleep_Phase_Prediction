@@ -227,7 +227,7 @@ def multi_apnea_chb_collecting(
     network_model_names = ["LSM", "LSM_Residual"]
     data_structure_names = ["300s_10s_0s", "300s_10s_5s"]
     class_names = ["A", "AH"]
-    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
     
     results_file = open(results_file_path, "ab")
 
@@ -474,7 +474,7 @@ def multi_stage_chb_collecting(
 
     data_structure_names = ["10h_120s_0s", "10h_120s_90s"]
     class_names = ["ArtifactAsWake", "FullClass"]
-    cleaning_names = ["RAW", "Cleaned", "Norm"]
+    cleaning_names = ["RAW", "Cleaned", "GlobalNorm", "LocalNorm"]
     network_model_names = ["LSM", "LSM_Residual"]
     sleep_transform = []
 
@@ -1431,11 +1431,14 @@ def plot_kde_ahi(
 if __name__ == "__main__":
     path_to_results_file = "network_results.pkl"
 
-    # single_stage_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_single/", results_file_path = path_to_results_file)
-    # multi_stage_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_multi/", results_file_path = path_to_results_file)
+    parent_folder = "/media/yaopeng/"
+    parent_folder = "/Volumes/"
 
-    # single_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_single/", results_file_path = path_to_results_file)
-    multi_apnea_chb_collecting(parent_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/", results_file_path = path_to_results_file)
+    single_stage_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/stage_nets_single/", results_file_path = path_to_results_file)
+    multi_stage_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/stage_nets_multi/", results_file_path = path_to_results_file)
+
+    single_apnea_chb_collecting(parent_folder_path = parent_folder + "NaKo-UniHalle/JPK_Results/apneav_nets_single/", results_file_path = path_to_results_file)
+    multi_apnea_chb_collecting(parent_folder_path = parent_folder +  "NaKo-UniHalle/JPK_Results/apnea_nets_multi/", results_file_path = path_to_results_file)
 
     # print_compare_tables(path_to_results_file)
 
