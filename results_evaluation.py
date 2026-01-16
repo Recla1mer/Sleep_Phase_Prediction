@@ -3548,138 +3548,145 @@ def main_sleep_period_criteria(
 
 
 def find_main_sleep_onset_offset(
-        sleep_stages_splitted: list,
+        sleep_stages: list,
         sleep_stage_classes: list,
         frequency: float,
-        fine_grain = True
+        fine_grain = True,
     ):
     
-    if len(sleep_stages_splitted) == 1:
-        met_main_period_criteria = main_sleep_period_criteria(
-                sleep_stages = sleep_stages_splitted[0],
-                sleep_stage_classes = sleep_stage_classes,
-                frequency = frequency
-            )
-        if not met_main_period_criteria:
-            return -1, -1
-        
-        shift = int(5*60*frequency)
-        interval_size = int(12*3600*frequency)
-
-        total_length = len(sleep_stages_splitted[0])
-        if interval_size > total_length:
-            lower_dense_index = 0
-            upper_dense_index = total_length - 1
-        elif interval_size + shift > total_length:
-            if retrieve_sleep_density(sleep_stages_splitted[0][:interval_size], sleep_stage_classes) > retrieve_sleep_density(sleep_stages_splitted[0][-interval_size:], sleep_stage_classes):
-                lower_dense_index = 0
-                upper_dense_index = interval_size - 1
-            else:
-                lower_dense_index = total_length - interval_size
-                upper_dense_index = total_length - 1
-        else:
-            lower_border = -shift
-            upper_border = 0
-            
-            last_density = 0
-            lower_dense_index = -1
-            upper_dense_index = -1
-            
-            while upper_border <= total_length:
-                lower_border += shift
-                upper_border = lower_border + interval_size
-
-                density = retrieve_sleep_density(sleep_stages_splitted[0][lower_border:upper_border], sleep_stage_classes)
-                if density > last_density:
-                    last_density = density
-                    lower_dense_index = lower_border
-                    upper_dense_index = upper_border - 1
-        
-        interval_size = int(30*60*frequency)
-        density_threshold = 0.8
-
-        # narrow in from lower density index
-        if sleep_stages_splitted[0][lower_dense_index] in sleep_stage_classes:
-            for sleep_onset in range(lower_dense_index, -1, -1):
-                if sleep_stages_splitted[0][sleep_onset] not in sleep_stage_classes:
-                    break
-            sleep_onset += 1
-        else:
-            for sleep_onset in range(lower_dense_index, upper_dense_index):
-                if sleep_stages_splitted[0][sleep_onset] in sleep_stage_classes:
-                    break
-        
-        while fine_grain:
-            density = retrieve_sleep_density(
-                sleep_stages = sleep_stages_splitted[0][sleep_onset:sleep_onset+interval_size],
-                sleep_stage_classes = sleep_stage_classes
-            )
-            if density < density_threshold: # skip next sleep and wake
-                last_wake = False
-                for sleep_onset in range(sleep_onset+1, upper_dense_index):
-                    if sleep_stages_splitted[0][sleep_onset] in sleep_stage_classes and last_wake:
-                        break
-                    if sleep_stages_splitted[0][sleep_onset] not in sleep_stage_classes:
-                        last_wake = True
-            else:
-                break
-        
-        # narrow in from upper density index
-        if sleep_stages_splitted[0][upper_dense_index] in sleep_stage_classes:
-            for sleep_offset in range(upper_dense_index, total_length):
-                if sleep_stages_splitted[0][sleep_offset] not in sleep_stage_classes:
-                    break
-            sleep_offset -= 1
-        else:
-            for sleep_offset in range(upper_dense_index, sleep_onset, -1):
-                if sleep_stages_splitted[0][sleep_offset] in sleep_stage_classes:
-                    break
-        
-        while fine_grain:
-            density = retrieve_sleep_density(
-                sleep_stages = sleep_stages_splitted[0][sleep_offset-interval_size:sleep_offset],
-                sleep_stage_classes = sleep_stage_classes
-            )
-            if density < density_threshold: # skip previous sleep and wake
-                last_wake = False
-                for sleep_offset in range(sleep_offset-1, sleep_onset, -1):
-                    if sleep_stages_splitted[0][sleep_offset] in sleep_stage_classes and last_wake:
-                        break
-                    if sleep_stages_splitted[0][sleep_offset] not in sleep_stage_classes:
-                        last_wake = True
-            else:
-                break
-        
-        return sleep_onset, sleep_offset
-    
-    elif len(sleep_stages_splitted) > 1:
-        sleep_amount = []
-        length_amount = []
-        for split_index in range(len(sleep_stages_splitted)):
-            this_slp_amount = 0
-            this_length = len(sleep_stages_splitted[split_index])
-            for stage_index in range(this_length):
-                if sleep_stages_splitted[split_index][stage_index] in sleep_stage_classes:
-                    this_slp_amount += 1
-            sleep_amount.append(this_slp_amount/frequency)
-            length_amount.append(this_length/frequency)
-        
-        big_sleep_amount = 0
-        for slp_am in sleep_amount:
-            if slp_am >= 1*3600:
-                big_sleep_amount += 1
-        
-        if big_sleep_amount == 0 or big_sleep_amount >= 2:
-            return -1, -1
-        elif big_sleep_amount == 1:
-            max_amount_slp = max(sleep_amount)
-            if max_amount_slp <= 4*3600:
-                return -1, -1
-            max_index = sleep_amount.index(max_amount_slp)
-            return find_main_sleep_onset_offset([sleep_stages_splitted[max_index]], sleep_stage_classes, frequency, fine_grain)
-
-    else:
+    met_main_period_criteria = main_sleep_period_criteria(
+            sleep_stages = sleep_stages,
+            sleep_stage_classes = sleep_stage_classes,
+            frequency = frequency
+        )
+    if not met_main_period_criteria:
         return -1, -1
+    
+    shift = int(5*60*frequency)
+    interval_size = int(12*3600*frequency)
+
+    total_length = len(sleep_stages)
+    if interval_size > total_length:
+        lower_dense_index = 0
+        upper_dense_index = total_length - 1
+    elif interval_size + shift > total_length:
+        if retrieve_sleep_density(sleep_stages[:interval_size], sleep_stage_classes) > retrieve_sleep_density(sleep_stages[-interval_size:], sleep_stage_classes):
+            lower_dense_index = 0
+            upper_dense_index = interval_size - 1
+        else:
+            lower_dense_index = total_length - interval_size
+            upper_dense_index = total_length - 1
+    else:
+        lower_border = -shift
+        upper_border = 0
+        
+        last_density = 0
+        lower_dense_index = -1
+        upper_dense_index = -1
+        
+        while upper_border < total_length:
+            lower_border += shift
+            upper_border = lower_border + interval_size
+            if upper_border > total_length:
+                upper_border = total_length
+                lower_border = total_length - interval_size
+
+            density = retrieve_sleep_density(sleep_stages[lower_border:upper_border], sleep_stage_classes)
+            if density > last_density:
+                last_density = density
+                lower_dense_index = lower_border
+                upper_dense_index = upper_border - 1
+    
+    interval_size = int(30*60*frequency)
+    density_threshold = 0.8
+
+    # narrow in from lower density index
+    if sleep_stages[lower_dense_index] in sleep_stage_classes:
+        for sleep_onset in range(lower_dense_index, -1, -1):
+            if sleep_stages[sleep_onset] not in sleep_stage_classes:
+                break
+        sleep_onset += 1
+    else:
+        for sleep_onset in range(lower_dense_index, upper_dense_index):
+            if sleep_stages[sleep_onset] in sleep_stage_classes:
+                break
+    
+    while fine_grain:
+        density = retrieve_sleep_density(
+            sleep_stages = sleep_stages[sleep_onset:sleep_onset+interval_size],
+            sleep_stage_classes = sleep_stage_classes
+        )
+        if density < density_threshold: # skip next sleep and wake
+            last_wake = False
+            for sleep_onset in range(sleep_onset+1, upper_dense_index):
+                if sleep_stages[sleep_onset] in sleep_stage_classes and last_wake:
+                    break
+                if sleep_stages[sleep_onset] not in sleep_stage_classes:
+                    last_wake = True
+        else:
+            break
+    
+    # narrow in from upper density index
+    if sleep_stages[upper_dense_index] in sleep_stage_classes:
+        for sleep_offset in range(upper_dense_index, total_length):
+            if sleep_stages[sleep_offset] not in sleep_stage_classes:
+                break
+        sleep_offset -= 1
+    else:
+        for sleep_offset in range(upper_dense_index, sleep_onset, -1):
+            if sleep_stages[sleep_offset] in sleep_stage_classes:
+                break
+    
+    while fine_grain:
+        density = retrieve_sleep_density(
+            sleep_stages = sleep_stages[sleep_offset-interval_size:sleep_offset],
+            sleep_stage_classes = sleep_stage_classes
+        )
+        if density < density_threshold: # skip previous sleep and wake
+            last_wake = False
+            for sleep_offset in range(sleep_offset-1, sleep_onset, -1):
+                if sleep_stages[sleep_offset] in sleep_stage_classes and last_wake:
+                    break
+                if sleep_stages[sleep_offset] not in sleep_stage_classes:
+                    last_wake = True
+        else:
+            break
+    
+    return sleep_onset, sleep_offset
+
+
+def find_main_in_collected_sleep_periods(
+        sleep_stages_splitted: list,
+        sleep_stage_classes: list,
+        frequency: float
+    ):
+    if len(sleep_stages_splitted) == 1:
+        return 0
+    
+    sleep_amount = []
+    length_amount = []
+    for split_index in range(len(sleep_stages_splitted)):
+        this_slp_amount = 0
+        this_length = len(sleep_stages_splitted[split_index])
+        for stage_index in range(this_length):
+            if sleep_stages_splitted[split_index][stage_index] in sleep_stage_classes:
+                this_slp_amount += 1
+        sleep_amount.append(this_slp_amount/frequency)
+        length_amount.append(this_length/frequency)
+    
+    big_sleep_amount = 0
+    for slp_am in sleep_amount:
+        if slp_am >= 1*3600:
+            big_sleep_amount += 1
+    
+    if big_sleep_amount == 0 or big_sleep_amount >= 2:
+        return -1
+    elif big_sleep_amount == 1:
+        max_amount_slp = max(sleep_amount)
+        if max_amount_slp <= 4*3600:
+            return -1
+        max_index = sleep_amount.index(max_amount_slp)
+        return max_index
 
 
 def smoothen_awake_time(
@@ -3687,7 +3694,7 @@ def smoothen_awake_time(
     sleep_stage_classes: list,
     sleep_onset: int,
     sleep_offset: int,
-    frequency: int,
+    frequency: float,
     density_threshold: float,
     wake_class: int
     ):
@@ -3777,11 +3784,15 @@ def summarize_nako(
 
     for folder_index in range(len(nako_paths)):
         dangerous_ids = []
-        nako_ids, nako_length, nako_nums, nako_tst, nako_spt, nako_apnea_distance = [], [], [], [], [], []
+        nako_common_ids, nako_stage_mapping, nako_target_frequency, nako_sleep_code, nako_sleep_onset_offset, nako_splits, nako_access_index, nako_split_collect_duration, nako_best_duration = [], [], [], [[], []], [[], []], [[], []], [[], []], [[], [], [], []], [[], [], [], []]
+        nako_stage_count, nako_stage_duration, nako_stage_ratio, nako_TST_duration, nako_WASO_duration, nako_WASO_ratio, nako_SPT_duration, nako_SPT_ratio = [[], []], [[], []], [[], []], [[], []], [[], []], [[], []], [[], []], [[], []]
+        
         for file_index in range(len(result_nets)):
-            summarize_ids, summarize_splits = [], []
             results_path = parent_folder + nako_paths[folder_index] + "/" + result_nets[file_index] + "_" + nako_paths[folder_index] + ".pkl"
             results_generator = load_from_pickle(results_path)
+
+            summarize_ids, summarize_splits = [], []
+            collected_stages, collected_apnea_events = [], []
             
             for data_dict in results_generator:
                 try:
@@ -3812,128 +3823,291 @@ def summarize_nako(
                         if common_id not in dangerous_ids:
                             dangerous_ids.append(common_id)
                         continue
+                    
+                    summarize_splits[id_index] += 1
+                    
+                    if file_index <= 1: # stage net
+                        collected_stages[id_index].append(classes_from_probability)
+                    else:
+                        collected_apnea_events[id_index].append(classes_from_majority)
+                
                 else:
                     summarize_ids.append(common_id)
+                    summarize_splits.append(1)
 
-                if file_index <= 1: # stage net
-                    sleep_classes = [target_classes[key] for key in ['LS', 'DS', 'REM']]
-                    this_length = len(classes_from_probability)
-
-                    this_tst = 0
-                    this_stage_start = -1
-                    this_stage_end = this_length
-                    
-                    for class_index in range(this_length):
-                        this_class = classes_from_probability[class_index]
-
-                        if this_class in sleep_classes:
-                            this_tst += 1
-                            this_stage_end = this_length
-                        else:
-                            this_stage_end = class_index
-                        
-                        if this_stage_start == -1:
-                            if this_class in sleep_classes:
-                                this_stage_start = class_index
-                else:
-                    this_apnea_start = -1
-                    this_apnea_end = 0
-
-                    this_length = len(classes_from_majority)
-                    
-                    for class_index in range(this_length):
-                        this_class = classes_from_majority[class_index]
-
-                        if this_class > 0:
-                            this_apnea_end = class_index
-                        
-                        if this_apnea_start == -1:
-                            if this_class > 0:
-                                this_apnea_start = class_index
-
-                common_id = id
-                for char_index in range(len(id)-1, -1, -1):
-                    if id[char_index] == "_":
-                        common_id = id[:char_index]
-                        break
-                
-                if common_id in long_ids:
-                    id_index = long_ids.index(common_id)
-                    
-                    if num_split_long_ids[id_index] != int(id[char_index+1:]):
-                        if common_id not in dangerous_ids:
-                            dangerous_ids.append(common_id)
-                        continue
-
-                    if file_index <= 1:
-                        TST[id_index] += this_tst/frequency
-                        if Stage_start[id_index] == -1 and this_stage_start > -1:
-                            Stage_start[id_index] = this_stage_start/frequency
-                        Stage_end[id_index] = length_long_ids[id_index] + this_stage_end/frequency
+                    if file_index <= 1: # stage net
+                        collected_stages.append([classes_from_probability])
                     else:
-                        if AE_start[id_index] == -1 and this_apnea_start > -1:
-                            AE_start[id_index] = this_apnea_start/frequency
-                        AE_end[id_index] = length_long_ids[id_index] + this_apnea_end/frequency
+                        collected_apnea_events.append([classes_from_majority])
                     
-                    length_long_ids[id_index] += this_length/frequency
-                    num_split_long_ids[id_index] += 1
-                    
-                else:
-                    long_ids.append(common_id)
-                    length_long_ids.append(this_length/frequency)
-                    num_split_long_ids.append(1)
-
-                    if file_index <= 1:
-                        TST.append(this_tst/frequency)
-                        if this_stage_start > -1:
-                            Stage_start.append(this_stage_start/frequency)
-                        else:
-                            Stage_start.append(-1)
-                        Stage_end.append(this_stage_end/frequency)
+                    if len(nako_stage_mapping)-1 == file_index:
+                        if nako_stage_mapping[file_index] != target_classes:
+                            raise SystemError("This should not happen")
                     else:
-                        if this_apnea_start > -1:
-                            AE_start.append(this_apnea_start/frequency)
-                        else:
-                            AE_start.append(-1)
-                        AE_end.append(this_apnea_end/frequency)
+                        nako_stage_mapping.append(target_classes)
+                    
+                    if len(nako_target_frequency)-1 == file_index:
+                        if nako_target_frequency[file_index] != frequency:
+                            raise SystemError("This should not happen")
+                    else:
+                        nako_target_frequency.append(frequency)
+            
+            print(len(collected_stages), len(collected_stages[0]), len(collected_stages[0][0]), len(summarize_splits), len(summarize_ids), summarize_splits[0])
             
             if file_index == 0:
-                nako_ids = [n_id for n_id in long_ids]
-                nako_length = [[n_length] for n_length in length_long_ids]
-                nako_nums = [[n_num] for n_num in num_split_long_ids]
-                nako_tst = [[n_tst] for n_tst in TST]
-                nako_spt = [[Stage_end[k]-Stage_start[k]] for k in range(len(Stage_start))]
-                nako_apnea_distance = [[] for _ in range(len(nako_ids))]
+                for common_id_index in range(len(summarize_ids)):
+                    if random.randint(0, 10) == 1:
+                        break
+                    nako_common_ids.append(summarize_ids[common_id_index])
+                    nako_splits[file_index].append(len(collected_stages[common_id_index]))
+
+                    if summarize_splits[common_id_index] != len(collected_stages[common_id_index]):
+                        raise SystemError("Counted Splits and Number of Stage-Arrays should be equal")
+                    
+                    print(f"Stage Mapping: {nako_stage_mapping[file_index]}")
+                    sleep_stage_classes = [nako_stage_mapping[file_index][key] for key in ["LS", "DS", "REM"]]
+                    wake_classes = np.unique([nako_stage_mapping[file_index][key] for key in ["wake", "artifact"]])
+                    sleep_frequency = nako_target_frequency[file_index]
+                    print(f"Stage classes: {sleep_stage_classes}")
+                    print(f"Wake classes: {wake_classes}")
+                    print(f"Stage Frequency: {sleep_frequency}")
+
+                    access_index = find_main_in_collected_sleep_periods(
+                        sleep_stages_splitted = collected_stages[common_id_index], # type: ignore
+                        sleep_stage_classes = sleep_stage_classes,
+                        frequency = sleep_frequency,
+                    )
+                    
+                    print(f"Access Index {access_index} of {len(collected_stages[common_id_index])}")
+
+                    if access_index == -1:
+                        plot_stage_course_simple(
+                            sleep_stages = collected_stages[common_id_index][access_index],
+                            target_classes = nako_stage_mapping[file_index],
+                            sleep_frequency = sleep_frequency,
+                            smoothen_wake_period = False,
+                            show_sleep_onset_offset = False,
+                        )
+                    else:
+                        plot_stage_course_simple(
+                            sleep_stages = collected_stages[common_id_index][access_index],
+                            target_classes = nako_stage_mapping[file_index],
+                            sleep_frequency = sleep_frequency,
+                            smoothen_wake_period = False,
+                            show_sleep_onset_offset = True,
+                        )
+
+                    if access_index == -1:
+                        sleep_onset, sleep_offset = -1, -1
+                    else:
+                        sleep_onset, sleep_offset = find_main_sleep_onset_offset(
+                            sleep_stages = collected_stages[common_id_index][access_index], # type: ignore
+                            sleep_stage_classes = sleep_stage_classes,
+                            frequency = sleep_frequency,
+                            fine_grain = True
+                        )
+
+                    print(f"Onset: {sleep_onset}")
+                    print(f"Offset: {sleep_offset}")
+
+                    nako_sleep_onset_offset[file_index].append([sleep_onset, sleep_offset])
+                    nako_access_index[file_index].append(access_index)
+
+                    error_code = 0
+                    if sleep_onset == -1 and sleep_offset == -1:
+                        error_code = 2
+                    elif len(collected_stages[common_id_index]) > 1:
+                        error_code = 1
+                    nako_sleep_code[file_index].append(error_code)
+
+                    print(f"Error Code: {error_code}")
+                    
+                    nako_split_collect_duration[file_index].append(sum([len(col_stages)/sleep_frequency for col_stages in collected_stages[common_id_index]]))
+                    if access_index == -1:
+                        nako_best_duration[file_index].append(-1)
+                        nako_stage_count[file_index].append(-1)
+                        nako_stage_duration[file_index].append(-1)
+                        nako_stage_ratio[file_index].append(-1)
+                        nako_TST_duration[file_index].append(-1)
+                        nako_SPT_duration[file_index].append(-1)
+                        nako_SPT_ratio[file_index].append(-1)
+                        nako_WASO_duration[file_index].append(-1)
+                        nako_WASO_ratio[file_index].append(-1)
+                    else:
+                        nako_best_duration[file_index].append(len(collected_stages[common_id_index][access_index])/frequency)
+
+                        print(f"Total Duration: {nako_split_collect_duration[file_index][-1]}")
+                        print(f"Best Duration: {nako_best_duration[file_index][-1]}")
+
+                        num_stage_classes = len(sleep_stage_classes) + len(wake_classes)
+                        stage_class_count = [0 for _ in range(num_stage_classes)]
+                        for best_stage_index in range(sleep_onset, sleep_offset+1):
+                            stage_class_count[collected_stages[common_id_index][access_index][best_stage_index]] += 1
+                        
+                        TST = (sleep_offset+1-sleep_onset)
+                        SPT = sum([stage_class_count[slp_cl] for slp_cl in sleep_stage_classes])
+                        WASO = sum([stage_class_count[slp_cl] for slp_cl in wake_classes])
+                        
+                        nako_stage_count[file_index].append(stage_class_count)
+                        nako_stage_duration[file_index].append(np.array(copy.deepcopy(stage_class_count))/sleep_frequency)
+                        nako_stage_ratio[file_index].append(np.array(copy.deepcopy(stage_class_count))/TST)
+
+                        print(f"Stage Count: {stage_class_count}")
+
+                        nako_TST_duration[file_index].append(TST/sleep_frequency)
+                        nako_SPT_duration[file_index].append(SPT/sleep_frequency)
+                        nako_SPT_ratio[file_index].append(SPT/TST)
+                        nako_WASO_duration[file_index].append(WASO/sleep_frequency)
+                        nako_WASO_ratio[file_index].append(WASO/TST)
+
+                        print(f"TST Duration: {TST/sleep_frequency}")
+                        print(f"SPT Duration: {SPT/sleep_frequency} ({SPT/TST})")
+                        print(f"WASO Duration: {WASO/sleep_frequency} ({WASO/TST})\n\n")
             
             elif file_index == 1:
-                for i in range(0, len(long_ids)):
-                    if long_ids[i] in nako_ids:
-                        ap_id_index = nako_ids.index(long_ids[i])
-                        nako_length[ap_id_index].append(length_long_ids[i])
-                        nako_nums[ap_id_index].append(num_split_long_ids[i])
-                        nako_tst[ap_id_index].append(TST[i])
-                        nako_spt[ap_id_index].append(Stage_end[i]-Stage_start[i])
+                pass
             
             else:
-                for i in range(0, len(long_ids)):
-                    if long_ids[i] in nako_ids:
-                        ap_id_index = nako_ids.index(long_ids[i])
-                        nako_length[ap_id_index].append(length_long_ids[i])
-                        nako_nums[ap_id_index].append(num_split_long_ids[i])
-                        nako_apnea_distance[ap_id_index].append(AE_end[i]-AE_start[i])
+                pass
         
-        save_results = {
-            "ids": nako_ids,
-            "duration_seconds": nako_length,
-            "splits": nako_nums,
-            "SPT": nako_tst,
-            "TST": nako_spt,
-            "AED": nako_apnea_distance,
-            "faulty_ids": dangerous_ids
-        }
+        # save_results = {
+        #     "ids": [],
+        #     "duration_seconds": [],
+        #     "splits": [],
+        #     "SPT": [],
+        #     "TST": [],
+        #     "AED": [],
+        #     "faulty_ids": dangerous_ids
+        # }
         
-        with open(save_folder + nako_paths[folder_index] + "_Summary.pkl", "ab") as f:
-            pickle.dump(save_results, f)
+        # with open(save_folder + nako_paths[folder_index] + "_Summary.pkl", "ab") as f:
+        #     pickle.dump(save_results, f)
+
+
+def plot_stage_course_simple(
+        sleep_stages,
+        target_classes,
+        sleep_frequency: float,
+        smoothen_wake_period = True,
+        show_sleep_onset_offset = False,
+        **kwargs
+    ):
+    
+    # Default values
+    kwargs.setdefault("figsize", matplotlib.rcParams["figure.figsize"])
+    kwargs.setdefault("title", "")
+    kwargs.setdefault("xlabel", "")
+    kwargs.setdefault("ylabel", "")
+    kwargs.setdefault("label", [])
+    kwargs.setdefault("loc", "best")
+    kwargs.setdefault("grid", False)
+
+    kwargs.setdefault("linewidth", 0.1)
+    kwargs.setdefault("alpha", 0.75)
+    kwargs.setdefault("linestyle", "-") # or "--", "-.", ":"
+    kwargs.setdefault("marker", None) # or "o", "x", "s", "d", "D", "v", "^", "<", ">", "p", "P", "h", "H", "8", "*", "+"
+    kwargs.setdefault("markersize", 4)
+    kwargs.setdefault("markeredgewidth", 1)
+    kwargs.setdefault("markeredgecolor", "black")
+
+    plot_args = {
+        "linewidth": kwargs["linewidth"],
+        "alpha": kwargs["alpha"],
+        "linestyle": kwargs["linestyle"],
+    }
+
+    better_slp_numbers = []
+    for stage in sleep_stages:
+        if stage == target_classes["wake"] or stage == target_classes["artifact"]:
+            better_slp_numbers.append(4) # Wake
+        elif stage == target_classes["LS"]:
+            better_slp_numbers.append(1) # LS
+        elif stage == target_classes["DS"]:
+            better_slp_numbers.append(2) # DS
+        elif stage == target_classes["REM"]:
+            better_slp_numbers.append(3) # REM
+    
+    if show_sleep_onset_offset or smoothen_wake_period:
+        sleep_onset_bad, sleep_offset_bad = find_main_sleep_onset_offset(
+            sleep_stages = better_slp_numbers, # type: ignore
+            sleep_stage_classes = [1, 2, 3],
+            frequency = sleep_frequency,
+            fine_grain = False
+        )
+
+        print(f"Bad Onset: {sleep_onset_bad}, Bad Offset: {sleep_offset_bad}")
+
+        sleep_onset, sleep_offset = find_main_sleep_onset_offset(
+            sleep_stages_splitted = better_slp_numbers, # type: ignore
+            sleep_stage_classes = [1, 2, 3],
+            frequency = sleep_frequency,
+            fine_grain = True
+        )
+
+        print(f"Used Onset: {sleep_onset}, Used Offset: {sleep_offset}")
+
+    if smoothen_wake_period:
+        better_slp_numbers = smoothen_awake_time(
+            sleep_stages = better_slp_numbers,
+            sleep_stage_classes = [1, 2, 3],
+            sleep_onset = sleep_onset,
+            sleep_offset = sleep_offset,
+            frequency = sleep_frequency, # type: ignore
+            density_threshold = 0.33,
+            wake_class = 4
+        )
+
+    stage_course = []
+    last_stage = -1
+    count = 0
+    for stage in better_slp_numbers:
+        if show_sleep_onset_offset:
+            if count == sleep_onset or count == sleep_onset_bad or count == sleep_offset or count == sleep_offset_bad:
+                stage_course.append([0, 20])
+                last_stage = -1
+        if stage == last_stage:
+            stage_course[-1][1] += 1
+        else:
+            stage_course.append([stage, 1])
+            last_stage = stage
+        count += 1
+    
+    wanted_hours = 24
+    stgs_per_second = len(better_slp_numbers) / (wanted_hours * 3600)
+
+    fig, ax = plt.subplots(figsize=kwargs["figsize"], constrained_layout=True)
+    ax.set(title=kwargs["title"], xlabel=kwargs["xlabel"], ylabel=kwargs["ylabel"])
+    ax.grid(kwargs["grid"])
+    if len(kwargs["label"]) > 0:
+        ax.legend(kwargs["label"], loc=kwargs["loc"])
+
+    stage_colors = [None, plt.rcParams["axes.prop_cycle"].by_key()['color'][1], plt.rcParams["axes.prop_cycle"].by_key()['color'][2], plt.rcParams["axes.prop_cycle"].by_key()['color'][3], plt.rcParams["axes.prop_cycle"].by_key()['color'][4]]
+    stage_counter = 0
+
+    for i in range(len(stage_course)):
+        better_x = range(int(stage_counter/stgs_per_second), int((stage_counter + stage_course[i][1])/stgs_per_second))
+        better_x = np.array(better_x) / 3600
+
+        ax.fill_between(
+            x = better_x,
+            y1 = 0,
+            y2 = stage_course[i][0],
+            color = stage_colors[stage_course[i][0]],
+            **plot_args,
+        )
+        stage_counter += stage_course[i][1]
+    
+    if target_classes["wake"] == target_classes["artifact"]:
+        plt.yticks([1, 2, 3, 4], ["LS", "DS", "REM", "W\&A"])
+    else:
+        plt.yticks([1, 2, 3, 4], ["LS", "DS", "REM", "Wake"])
+
+    kwargs.setdefault("ylim", plt.ylim())
+    kwargs.setdefault("xlim", plt.xlim())
+    plt.ylim(kwargs["ylim"])
+    plt.xlim(kwargs["xlim"])
+
+    plt.show()
             
 
 def plot_stage_course(
@@ -4022,7 +4196,7 @@ def plot_stage_course(
             better_slp_numbers.append(3) # REM
     
     if show_sleep_onset_offset or smoothen_wake_period:
-        sleep_onset_bad, sleep_offset_bad = find_main_sleep_onset_offset(
+        sleep_onset_bad, sleep_offset_bad, _ = find_main_sleep_onset_offset(
             sleep_stages_splitted = [better_slp_numbers], # type: ignore
             sleep_stage_classes = [1, 2, 3],
             frequency = sleep_frequency,
@@ -4031,7 +4205,7 @@ def plot_stage_course(
 
         print(f"Bad Onset: {sleep_onset_bad}, Bad Offset: {sleep_offset_bad}")
 
-        sleep_onset, sleep_offset = find_main_sleep_onset_offset(
+        sleep_onset, sleep_offset, _ = find_main_sleep_onset_offset(
             sleep_stages_splitted = [better_slp_numbers], # type: ignore
             sleep_stage_classes = [1, 2, 3],
             frequency = sleep_frequency,
@@ -4118,21 +4292,23 @@ if __name__ == "__main__":
 
     matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
 
+    summarize_nako()
+
     # good id single: '102480.edf', '301406.edf'
     # good id multiple: '126226.edf', '298034.edf'
 
-    plot_stage_course(
-        summary_folder = "NAKO_Summary/",
-        parent_folder = "/Volumes/NaKo-UniHalle/JPK_Results/NAKO_Stages_Apnea/",
-        nako_file = "NAKO-609", # "NAKO-609", "NAKO-419", "NAKO-84", "NAKO-33a", "NAKO-33b", "NAKO-994"
-        # model = "SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm", # "SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm", "SSG_Local_180s_FullClass_Norm"
-        model = "SSG_Local_180s_FullClass_Norm",
-        xlim = [0, 24],
-        # wanted_id = '214126.edf',
-        wanted_id = '183851.edf',
-        smoothen_wake_period = True,
-        show_sleep_onset_offset = True,
-    )
+    # plot_stage_course(
+    #     summary_folder = "NAKO_Summary/",
+    #     parent_folder = "/Volumes/NaKo-UniHalle/JPK_Results/NAKO_Stages_Apnea/",
+    #     nako_file = "NAKO-609", # "NAKO-609", "NAKO-419", "NAKO-84", "NAKO-33a", "NAKO-33b", "NAKO-994"
+    #     # model = "SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm", # "SSG_LSM_Residual_Overlap_ArtifactAsWake_LocalNorm", "SSG_Local_180s_FullClass_Norm"
+    #     model = "SSG_Local_180s_FullClass_Norm",
+    #     xlim = [0, 24],
+    #     # wanted_id = '214126.edf',
+    #     wanted_id = '183851.edf',
+    #     smoothen_wake_period = True,
+    #     show_sleep_onset_offset = True,
+    # )
 
     # plot_stage_course(
     #     summary_folder = "NAKO_Summary/",
