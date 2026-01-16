@@ -849,14 +849,15 @@ def create_performance_box(
                 display_labels[label_index] = map_classes[map_index][1]
 
     text_output = ""
-    text_output += "\\performancebox{\n"
-    text_output += "\t\\centering\n"
-    text_output += "\t\\footnotesize\n"
-    text_output += f"\tModeling Task: {modeling_task} \\hfill Network Architecture: {network_architecture}\n\n"
+    text_output += "\\begin{figure}[htbp]\n"
+    text_output += "\t\\performancebox{\n"
+    text_output += "\t\t\\centering\n"
+    text_output += "\t\t\\footnotesize\n"
+    text_output += f"\t\tModeling Task: {modeling_task} \\hfill Network Architecture: {network_architecture}\n\n"
 	
-    text_output += "\t\\smallskip\n"
-    text_output += "\t\\normalsize\n"
-    text_output += "\t\\textbf{Preprocessing Configuration:} \\hfill \\mdhighlight{"
+    text_output += "\t\t\\smallskip\n"
+    text_output += "\t\t\\normalsize\n"
+    text_output += "\t\t\\textbf{Preprocessing Configuration:} \\hfill \\mdhighlight{"
     text_output += sample_structure # type: ignore
     text_output += "} \\hfill \\mdhighlight{"
     text_output += signal_transformation
@@ -864,49 +865,52 @@ def create_performance_box(
     text_output += labeling_strategy
     text_output += "}\n\n"
 	
-    text_output += "\t\\smallskip\n"
-    text_output += "\t\\begin{minipage}{0.55\\linewidth}\n"
-    text_output += "\t\tAccuracy: \\num{"
+    text_output += "\t\t\\bigskip\n"
+    text_output += "\t\t\\begin{minipage}{0.55\\linewidth}\n"
+    text_output += "\t\t\tAccuracy: \\num{"
     text_output += str(accuracy)
     text_output += "} \\hfill Cohen's Kappa: \\num{"
     text_output += str(kappa)
     text_output += "}\n\n"
 
-    text_output += "\t\t\\bigskip\n"
-    text_output += "\t\t\\footnotesize\n"
-    text_output += "\t\t\\captionof*{table}{Per-Class Metrics:}\n"
-    text_output += "\t\t\\vspace{-7pt}\n"
-    text_output += "\t\t\\begin{tabularx}{\\linewidth}{c|" + "N"*len(f1) + "}\n"
-    text_output += "\t\t\t\\toprule\n"
-    text_output += "\t\t\t\\multirow{2}{*}{\\normalsize Metric} & \\multicolumn{" + str(len(f1)) + "}{c}{\\normalsize Class} \\\\\n"
-    text_output += "\t\t\t"
+    text_output += "\t\t\t\\bigskip\n"
+    text_output += "\t\t\t\\centering\n"
+    text_output += "\t\t\tPer-Class Metrics:\n\n"
+    text_output += "\t\t\t\\vspace{7pt}\n"
+    text_output += "\t\t\t\\footnotesize\n"
+    text_output += "\t\t\t\\begin{tabularx}{\\linewidth}{c|" + "N"*len(f1) + "}\n"
+    text_output += "\t\t\t\t\\toprule\n"
+    text_output += "\t\t\t\t\\multirow{2}{*}{\\normalsize Metric} & \\multicolumn{" + str(len(f1)) + "}{c}{\\normalsize Class} \\\\\n"
+    text_output += "\t\t\t\t"
     for index in order:
         text_output += "& " + display_labels[index] + " "
     text_output += "\\\\\n"
-    text_output += "\t\t\t\\midrule\n"
-    text_output += "\t\t\tPrecision "
+    text_output += "\t\t\t\t\\midrule\n"
+    text_output += "\t\t\t\tPrecision "
     for index in order:
         text_output += "& \\num{" + str(precision[index]) + "} "
     text_output += "\\\\\n"
-    text_output += "\t\t\tRecall "
+    text_output += "\t\t\t\tRecall "
     for index in order:
         text_output += "& \\num{" + str(recall[index]) + "} "
     text_output += "\\\\\n"
-    text_output += "\t\t\tF1-Score "
+    text_output += "\t\t\t\tF1-Score "
     for index in order:
         text_output += "& \\num{" + str(f1[index]) + "} "
     text_output += "\\\\\n"
-    text_output += "\t\t\t\\bottomrule\n"
-    text_output += "\t\t\\end{tabularx}\n"
-    text_output += "\t\\end{minipage}%\n"
-    text_output += "\t\\hfill\n"
-    text_output += "\t\\begin{minipage}{0.45\\linewidth}\n"
-    text_output += "\t\t\\centering\n"
-    text_output += "\t\t\\captionof*{figure}{Confusion Matrix:}\n"
-    text_output += "\t\t\\vspace{-5pt}\n"
-    text_output += "\t\t\\includegraphics{confusion_matrices/" + file_name + "}\n"
-    text_output += "\t\\end{minipage}\n"
-    text_output += "}"
+    text_output += "\t\t\t\t\\bottomrule\n"
+    text_output += "\t\t\t\\end{tabularx}\n"
+    text_output += "\t\t\\end{minipage}%\n"
+    text_output += "\t\t\\hfill\n"
+    text_output += "\t\t\\begin{minipage}{0.45\\linewidth}\n"
+    text_output += "\t\t\t\\centering\n"
+    text_output += "\t\t\tConfusion Matrix:\n\n"
+    text_output += "\t\t\t\\includegraphics{confusion_matrices/" + file_name + "}\n"
+    text_output += "\t\t\\end{minipage}\n"
+    text_output += "\t}\n"
+    text_output += "\t\\caption{...}\n"
+    text_output += "\t\\label{fig:performance_box_" + file_name[:-4] + "}\n"
+    text_output += "\\end{figure}"
 
     return text_output
 
@@ -1381,38 +1385,6 @@ if __name__ == "__main__":
 
     # single_apnea_table()
     # multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
-    
-    buffer = io.StringIO()
-    sys.stdout = buffer
-    
-    # single_stage_table()
-    multi_stage_table(parent_folder_path = "/home/yaopeng/Desktop/stage_nets_multi/")
-
-    try:
-        send_email_notification(
-            email_subject="Multi Stage Table",
-            email_body=buffer.getvalue()
-        )
-    
-    except:
-        pass
-
-    buffer.truncate(0)
-    buffer.seek(0)
-
-    # single_apnea_table()
-    multi_apnea_table(parent_folder_path = "/home/yaopeng/Desktop/apnea_nets_multi/")
-
-    try:
-        send_email_notification(
-            email_subject="Multi Apnea Table",
-            email_body=buffer.getvalue()
-        )
-    
-    except:
-        pass
-
-    raise SystemExit
 
     matplotlib.rcParams.update(tex_look)
     
@@ -1420,6 +1392,170 @@ if __name__ == "__main__":
     fig_ratio = 4 / 3
     linewidth *= 0.45 # 0.48, 0.5, 0.3, 0.322
     linewidth = 193.1246 * pt_to_inch
+    matplotlib.rcParams["figure.figsize"] = [linewidth, linewidth / fig_ratio]
+
+    remove_classes = ["artifact"]
+
+    save_folder = "/Users/propeter/Desktop/master_thesis/confusion_matrices/"
+
+    # single stage nets
+    single_stage_net_W_A = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_single/",
+        "file_name": "SSG_180s_FullClass_Norm.pdf",
+        "identifier": "SSG_180s_FullClass_Norm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_single/SSG_180s_FullClass_Norm/",
+        "modeling_task": "Sleep Stage Classification",
+        "performance_of": "Complete_Probability",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "W,\\,L,\\,D,\\,R,\\,A",
+        "sample_structure": "\\qty{180}{s}",
+        "signal_transformation": "SampleNorm",
+        "map_classes": [],
+        "remove_classes": ["artifact"],
+        "prediction_result_key": "Predicted",
+        "save_path": save_folder + "SSG_180s_FullClass_Norm.pdf"
+    }
+
+    single_stage_net_WA = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_single/",
+        "file_name": "SSG_180s_ArtifactAsWake_Norm.pdf",
+        "identifier": "SSG_180s_ArtifactAsWake_Norm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_single/SSG_180s_ArtifactAsWake_Norm/",
+        "modeling_task": "Sleep Stage Classification",
+        "performance_of": "Complete_Probability",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "W\\&A,\\,L,\\,D,\\,R",
+        "sample_structure": "\\qty{180}{s}",
+        "signal_transformation": "SampleNorm",
+        "map_classes": [["Wake", "W\&A"]],
+        "remove_classes": [],
+        "prediction_result_key": "Predicted",
+        "save_path": save_folder + "SSG_180s_ArtifactAsWake_Norm.pdf"
+    }
+
+    # multi stage nets
+    multi_stage_net_WA = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_multi/",
+        "file_name": "SSG_LSM_Residual_10h_120s_90s_ArtifactAsWake_LocalNorm.pdf",
+        "identifier": "SSG_LSM_Residual_10h_120s_90s_ArtifactAsWake_LocalNorm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_multi/SSG_LSM_Residual_10h_120s_90s_ArtifactAsWake_LocalNorm/",
+        "modeling_task": "Sleep Stage Classification",
+        "performance_of": "Complete_Probability",
+        "network_architecture": "Multi-Output (Form B)",
+        "labeling_strategy": "W\\&A,\\,L,\\,D,\\,R", # "W,\\,L,\\,D,\\,R,\\,A",
+        "sample_structure": "\\qty{10}{h}:\\qty{120}{s}:\\qty{90}{s}",
+        "signal_transformation": "WindowNorm",
+        "map_classes": [["Wake", "W\&A"]],
+        "remove_classes": [], # ["artifact"],
+        "prediction_result_key": "Predicted",
+        "save_path": save_folder + "SSG_LSM_Residual_10h_120s_90s_ArtifactAsWake_LocalNorm.pdf"
+    }
+
+    multi_stage_net_W_A = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_multi/",
+        "file_name": "SSG_LSM_Residual_10h_120s_90s_FullClass_LocalNorm.pdf",
+        "identifier": "SSG_LSM_Residual_10h_120s_90s_FullClass_LocalNorm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/stage_nets_multi/SSG_LSM_Residual_10h_120s_90s_FullClass_LocalNorm/",
+        "modeling_task": "Sleep Stage Classification",
+        "performance_of": "Complete_Probability",
+        "network_architecture": "Multi-Output (Form B)",
+        "labeling_strategy": "W,\\,L,\\,D,\\,R,\\,A",
+        "sample_structure": "\\qty{10}{h}:\\qty{120}{s}:\\qty{90}{s}",
+        "signal_transformation": "WindowNorm",
+        "map_classes": [],
+        "remove_classes": ["artifact"],
+        "prediction_result_key": "Predicted",
+        "save_path": save_folder + "SSG_LSM_Residual_10h_120s_90s_FullClass_LocalNorm.pdf"
+    }
+
+    # single apnea nets
+    single_apnea_net_60_A = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/",
+        "file_name": "SAE_60s_A_Norm.pdf",
+        "identifier": "SAE_60s_A_Norm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/SAE_60s_A_Norm/",
+        "modeling_task": "Sleep Apnea Detection",
+        "performance_of": "Complete_Majority",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "N,\\,A\\&H", # "N,\\,A,\\,H",
+        "sample_structure": "\\qty{60}{s}",
+        "signal_transformation": "SampleNorm",
+        "map_classes": [["Apnea", "A\&H"]],
+        "remove_classes": [],
+        "prediction_result_key": "Predicted_2",
+        "save_path": save_folder + "SAE_60s_A_Norm.pdf"
+    }
+
+    single_apnea_net_60_AH = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/",
+        "file_name": "SAE_60s_AH_Norm.pdf",
+        "identifier": "SAE_60s_AH_Norm/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/SAE_60s_AH_Norm/",
+        "modeling_task": "Sleep Apnea Detection",
+        "performance_of": "Complete_Majority",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "N,\\,A,\\,H",
+        "sample_structure": "\\qty{60}{s}",
+        "signal_transformation": "SampleNorm",
+        "map_classes": [],
+        "remove_classes": [],
+        "prediction_result_key": "Predicted_2",
+        "save_path": save_folder + "SAE_60s_AH_Norm.pdf"
+    }
+
+    single_apnea_net_120_A = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/",
+        "file_name": "SAE_120s_A_Cleaned.pdf",
+        "identifier": "SAE_120s_A_Cleaned/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/SAE_120s_A_Cleaned/",
+        "modeling_task": "Sleep Apnea Detection",
+        "performance_of": "Complete_Majority",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "N,\\,A\\&H",
+        "sample_structure": "\\qty{120}{s}",
+        "signal_transformation": "Cleaned",
+        "map_classes": [["Apnea", "A\&H"]],
+        "remove_classes": [],
+        "prediction_result_key": "Predicted_2",
+        "save_path": save_folder + "SAE_120s_A_Cleaned.pdf"
+    }
+
+    single_apnea_net_120_AH = {
+        "parent_folder_path": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/",
+        "file_name": "SAE_120s_AH_RAW.pdf",
+        "identifier": "SAE_120s_AH_RAW/",
+        "path_to_model_directory": "/Volumes/NaKo-UniHalle/JPK_Results/apnea_nets_single/SAE_120s_AH_RAW/",
+        "modeling_task": "Sleep Apnea Detection",
+        "performance_of": "Complete_Majority",
+        "network_architecture": "Single-Output",
+        "labeling_strategy": "N,\\,A,\\,H",
+        "sample_structure": "\\qty{120}{s}",
+        "signal_transformation": "RAW",
+        "map_classes": [],
+        "remove_classes": [],
+        "prediction_result_key": "Predicted_2",
+        "save_path": save_folder + "SAE_120s_AH_RAW.pdf"
+    }
+
+    performance_box_keys = {key: single_stage_net_WA[key] for key in ["path_to_model_directory", "performance_of", "modeling_task", "network_architecture", "sample_structure", "signal_transformation", "labeling_strategy", "file_name", "map_classes"]}
+    confusion_plot_keys = {key: single_stage_net_WA[key] for key in ["path_to_model_directory", "prediction_result_key", "remove_classes", "map_classes", "save_path"]}
+    # confusion_plot_keys["save_path"] = ""
+
+    print(create_performance_box(
+        transform = [],
+        round_to_decimals = 3,
+        order = [],
+        **performance_box_keys
+    ))
+    
+    plot_confusion_matrix(
+        dataset = "GIF_Complete",
+        actual_result_key = "Actual",
+        values_format = 'd',
+        normalize = None,
+        **confusion_plot_keys
+        # save_path = save_folder + identifier[:-1] + ".pdf"
+    )
 
     # standalone plots
     # fig_ratio = 3 / 2
@@ -1440,9 +1576,6 @@ if __name__ == "__main__":
     # multi_apnea_confusion_plot(parent_folder_path = parent_network_folder_path)
 
 
-
-
-
     parent_network_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/slp_nets_single/"
     # single_stage_detailed_performance(parent_folder_path = parent_network_folder_path)
     
@@ -1454,17 +1587,3 @@ if __name__ == "__main__":
     
     parent_network_folder_path = "/Volumes/NaKo-UniHalle/JPK_Results/sae_nets_multi/"
     # multi_apnea_detailed_performance(parent_folder_path = parent_network_folder_path)
-
-    # a = create_performance_box(path_to_model_directory = "SSG_Local_120s_FullClass_RAW/",
-    #     performance_of = "Complete_Probability",
-    #     transform = [],
-    #     round_to_decimals = 3,
-    #     order = [1, 2, 3, 4, 0],
-    #     modeling_task = "Sleep Phase Prediction",
-    #     network_architecture = "Single-Output",
-    #     sample_structure = "\\qty{10}{h}:\\qty{120}{s}:\\qty{90}{s}",
-    #     signal_transformation = "WindowNorm",
-    #     labeling_strategy = "W\\&ALDR",
-    # )
-
-    # print(a)

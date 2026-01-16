@@ -6,7 +6,7 @@ It is basically the less commented version of the notebook: "Classification_Demo
 """
 
 # IMPORTS
-from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, recall_score, f1_score, mean_absolute_error
 from scipy.stats import spearmanr
 import random
 
