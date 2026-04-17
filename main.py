@@ -7,7 +7,7 @@ It is basically the less commented version of the notebook: "Classification_Demo
 
 # IMPORTS
 from sklearn.metrics import cohen_kappa_score, accuracy_score, precision_score, recall_score, f1_score, mean_absolute_error
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 import random
 
 # LOCAL IMPORTS
@@ -349,7 +349,8 @@ import h5py
 
 def Process_SHHS_SSG_Dataset(
         path_to_shhs_dataset: str,
-        path_to_save_processed_data: str,
+        path_to_save_processed_data_original_length: str,
+        path_to_save_processed_data_uniform_length: str,
         path_to_project_configuration: str,
     ):
     """
@@ -382,11 +383,11 @@ def Process_SHHS_SSG_Dataset(
     """
 
     # abort if destination path exists to avoid accidental overwriting
-    if os.path.exists(path_to_save_processed_data):
+    if os.path.exists(path_to_save_processed_data_original_length) or os.path.exists(path_to_save_processed_data_uniform_length):
         return
 
     # initializing the database
-    shhs_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
+    shhs_data_manager = BigDataManager(directory_path = path_to_save_processed_data_uniform_length)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -448,6 +449,8 @@ def Process_SHHS_SSG_Dataset(
     if distribution_params["join_splitted_parts"]:
         # Train-, Validation- and Test-Pid Distribution
         shhs_data_manager.separate_train_test_validation(**distribution_params)
+
+        shutil.copytree(path_to_save_processed_data_uniform_length, path_to_save_processed_data_original_length)
 
         # Cropping datapoints with overlength (resulting in multiple splitted parts)
         shhs_data_manager.crop_oversized_data(**signal_crop_params)
@@ -559,8 +562,9 @@ def Process_GIF_Dataset_h5(
 
 def Process_GIF_SSG_Dataset(
         path_to_gif_dataset: str,
-        path_to_save_processed_data: str,
-        path_to_project_configuration: str
+        path_to_save_processed_data_original_length: str,
+        path_to_save_processed_data_uniform_length: str,
+        path_to_project_configuration: str,
     ):
     """
     This function processes our GIF dataset for Sleep Stage Annotations (SSA). It is designed to be a more specific. So, if you are not using
@@ -586,11 +590,11 @@ def Process_GIF_SSG_Dataset(
     """
 
     # abort if destination path exists to avoid accidental overwriting
-    if os.path.exists(path_to_save_processed_data):
+    if os.path.exists(path_to_save_processed_data_original_length) or os.path.exists(path_to_save_processed_data_uniform_length):
         return
 
     # initializing the database
-    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data_uniform_length)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -654,6 +658,8 @@ def Process_GIF_SSG_Dataset(
         # Train-, Validation- and Test-Pid Distribution
         gif_data_manager.separate_train_test_validation(**distribution_params)
 
+        shutil.copytree(path_to_save_processed_data_uniform_length, path_to_save_processed_data_original_length)
+
         # Cropping datapoints with overlength (resulting in multiple splitted parts)
         gif_data_manager.crop_oversized_data(**signal_crop_params)
     else:
@@ -666,8 +672,9 @@ def Process_GIF_SSG_Dataset(
 
 def Process_GIF_SAE_Dataset(
         path_to_gif_dataset: str,
-        path_to_save_processed_data: str,
-        path_to_project_configuration: str
+        path_to_save_processed_data_original_length: str,
+        path_to_save_processed_data_uniform_length: str,
+        path_to_project_configuration: str,
     ):
     """
     This function processes our GIF dataset for Sleep Apnea Events (SAE). It is designed to be a more specific. So, if you are not using
@@ -693,11 +700,11 @@ def Process_GIF_SAE_Dataset(
     """
 
     # abort if destination path exists to avoid accidental overwriting
-    if os.path.exists(path_to_save_processed_data):
+    if os.path.exists(path_to_save_processed_data_original_length) or os.path.exists(path_to_save_processed_data_uniform_length):
         return
 
     # initializing the database
-    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
+    gif_data_manager = BigDataManager(directory_path = path_to_save_processed_data_uniform_length)
 
     # load signal processing parameters
     with open(path_to_project_configuration, "rb") as f:
@@ -761,6 +768,8 @@ def Process_GIF_SAE_Dataset(
         # Train-, Validation- and Test-Pid Distribution
         gif_data_manager.separate_train_test_validation(**distribution_params)
 
+        shutil.copytree(path_to_save_processed_data_uniform_length, path_to_save_processed_data_original_length)
+
         # Cropping datapoints with overlength (resulting in multiple splitted parts)
         gif_data_manager.crop_oversized_data(**signal_crop_params)
     else:
@@ -769,112 +778,6 @@ def Process_GIF_SAE_Dataset(
 
         # Train-, Validation- and Test-Pid Distribution
         gif_data_manager.separate_train_test_validation(**distribution_params)
-
-
-def Process_NAKO_Dataset(
-        path_to_nako_dataset: str,
-        path_to_save_processed_data: str,
-        path_to_project_configuration: str
-    ):
-    """
-    If you processed the NAKO dataset using my other project: 'EDF_Processing', then the results of every .edf
-    file should be saved as dictionaries to a pickle file, in the following format:
-
-    {
-        "ID":     
-                Variation of the (.edf) file name the results were calculated for, 
-                (number appended if multiple valid ecgregions)
-        
-        "time_period":
-                List of the start and end time points (in seconds) of the time period in seconds
-        
-        "RRI":
-                List of RR-intervals calculated from the r-peak locations within this time period.
-        
-        "RRI_frequency":
-                Sampling frequency of the RR-intervals.
-        
-        "MAD":
-                List of Mean Amplitude Deviation values calculated from the wrist acceleration data within 
-                this time period.
-        
-        "MAD_frequency":
-                Sampling frequency of the MAD values. Corresponds to 1 / parameters["mad_time_period_seconds"].
-    }
-
-    This function processes our NAKO dataset. It is designed to be a more specific. So, if you are not using
-    the same data as we are, you need to write a similar function for your dataset. Nonetheless, this
-    quickly demonstrates how to quickly use the SleepDataManager class from dataset_processing.py 
-    to process a dataset.
-
-    The datapoints from the NAKO dataset are resaved to a pickle file using the SleepDataManager class.
-    The class is designed to save the data in a uniform way. How exactly can be altered using the
-    parameters this function accesses from "path_to_project_configuration". Afterwards we will use the 
-    class to split the data into training, validation, and test pids (individual files).
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    path_to_nako_dataset: str
-        the path to the NAKO dataset
-
-    Others: See 'Process_SHHS_Sleep_Dataset' function
-    """
-
-    # abort if destination path exists to avoid accidental overwriting
-    if os.path.exists(path_to_save_processed_data):
-        return
-
-    # initializing the database
-    nako_data_manager = BigDataManager(directory_path = path_to_save_processed_data)
-
-    # load signal processing parameters
-    with open(path_to_project_configuration, "rb") as f:
-        project_configuration = pickle.load(f)
-
-    # access sampling frequency parameters
-    freq_params = {key: project_configuration[key] for key in ["RRI_frequency", "MAD_frequency", "SLP_frequency"]} # sampling_frequency_parameters
-    nako_data_manager.change_uniform_frequencies(freq_params)
-
-    ########################### REWORK THIS PART IF YOU WANT TO USE THE NAKO DATASET ###########################
-
-    # access the NAKO dataset
-    nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
-
-    # count total data points in dataset
-    collect_ids = []
-    total_data_points = 0
-    for generator_entry in nako_dataset_generator:
-        collect_ids.append(generator_entry["ID"])
-        total_data_points += 1
-    
-    # check if all ids are unique:
-    nako_data_manager.check_if_ids_are_unique(collect_ids)
-    del collect_ids
-    
-    # reaccess the NAKO dataset
-    del nako_dataset_generator
-    nako_dataset_generator = load_from_pickle(path_to_nako_dataset)
-
-    # showing progress bar
-    print("\nPreproccessing datapoints from NAKO dataset (ensuring uniformity):")
-    progress_bar = DynamicProgressBar(total = total_data_points)
-
-    # saving all data from NAKO dataset to the pickle file
-    for generator_entry in nako_dataset_generator:
-        new_datapoint = {
-            "ID": generator_entry["ID"],
-            "RRI": generator_entry["RRI"],
-            "MAD": generator_entry["MAD"],
-            "RRI_frequency": generator_entry["RRI_frequency"],
-            "MAD_frequency": generator_entry["MAD_frequency"],
-        }
-
-        nako_data_manager.save(new_datapoint, unique_id=True)
-        progress_bar.update()
 
 
 """
@@ -1437,7 +1340,7 @@ Applying Trained Neural Network Model
 """
 
 
-def main_model_predicting_stage_validation_set(
+def main_model_predicting_stage_validation_set_uniform_length(
         path_to_model_state: str,
         path_to_data_directory: str,
         pid: str,
@@ -1532,7 +1435,7 @@ def main_model_predicting_stage_validation_set(
 
     # determine if data contains sleep phases
     if not "SLP" in data_manager.load(0): # type: ignore
-        raise ValueError("The apnea validation dataset must contain actual sleep phases for comparison.")
+        raise ValueError("The sleep stage validation dataset must contain actual sleep phases for comparison.")
 
     """
     --------------------------------
@@ -1827,7 +1730,7 @@ def main_model_predicting_stage_validation_set(
         print(unpredictable_signals)
 
 
-def main_model_predicting_stage(
+def main_model_predicting_stage_validation_set_original_length(
         path_to_model_state: str,
         path_to_data_directory: str,
         pid: str,
@@ -1923,9 +1826,8 @@ def main_model_predicting_stage(
     slp_frequency = data_manager.database_configuration["SLP_frequency"]
 
     # determine if data contains sleep phases
-    actual_results_available = False
-    if "SLP" in data_manager.load(0): # type: ignore
-        actual_results_available = True
+    if not "SLP" in data_manager.load(0): # type: ignore
+        raise ValueError("The sleep stage validation dataset must contain actual sleep phases for comparison.")
 
     """
     --------------------------------
@@ -2016,11 +1918,10 @@ def main_model_predicting_stage(
     """
 
     # prepare path that stores results, if necessary
-    if actual_results_available:
-        if os.path.exists(path_to_save_results):
-            os.remove(path_to_save_results)
-        else:
-            create_directories_along_path(path_to_save_results)
+    if os.path.exists(path_to_save_results):
+        os.remove(path_to_save_results)
+    else:
+        create_directories_along_path(path_to_save_results)
 
     """
     ------------------------
@@ -2058,14 +1959,11 @@ def main_model_predicting_stage(
                 strided_prediction_probabilities = [[] for i in range(total_duration)]
                 strided_predicted_classes = [[] for _ in range(total_duration)]
 
-                if actual_results_available:
-                    actual_original_structure = map_slp_labels(
-                        slp_labels = copy.deepcopy(data_dict["SLP"]), # type: ignore
-                        slp_label_mapping = slp_label_mapping
-                    )
-                    original_signal_length = len(copy.deepcopy(actual_original_structure))
-                else:
-                    original_signal_length = int(np.ceil(signal_length_seconds * slp_frequency))
+                actual_original_structure = map_slp_labels(
+                    slp_labels = copy.deepcopy(data_dict["SLP"]), # type: ignore
+                    slp_label_mapping = slp_label_mapping
+                )
+                original_signal_length = len(copy.deepcopy(actual_original_structure))
 
                 start_time = -stride_seconds
                 upper_bound = 0
@@ -2194,52 +2092,38 @@ def main_model_predicting_stage(
                     predictions_from_combined_classes.append(values[np.argmax(counts)])
                 predictions_from_combined_classes = np.array(predictions_from_combined_classes)
 
-                if actual_results_available:
-                    if slp_duration_seconds == resolution_seconds:
-                        slp = actual_original_structure
+                if slp_duration_seconds == resolution_seconds:
+                    slp = actual_original_structure
 
-                        if len(slp) != len(predictions_from_combined_probabilities):
-                            raise ValueError("Length of actual sleep stages and predicted sleep stages do not match after rescaling.")
-                    else:
-                        slp = scale_classification_signal(
-                            signal = actual_original_structure, # type: ignore
-                            signal_frequency = slp_frequency,
-                            target_frequency = 1/resolution_seconds
-                        )
-
-                        if len(slp) != len(predictions_from_combined_probabilities):
-                            crop_to = min(len(slp), len(predictions_from_combined_probabilities))
-                            slp = slp[:crop_to]
-                            mean_combined_prediction_probabilities = mean_combined_prediction_probabilities[:crop_to]
-                            predictions_from_combined_probabilities = predictions_from_combined_probabilities[:crop_to]
-                            predictions_from_combined_classes = predictions_from_combined_classes[:crop_to]
-
-
-                    # save results to new dictionary
-                    results = {
-                        "Predicted_Probabilities": mean_combined_prediction_probabilities,
-                        "Predicted": predictions_from_combined_probabilities,
-                        "Predicted_2": predictions_from_combined_classes,
-                        "Actual": slp,
-                    }
+                    if len(slp) != len(predictions_from_combined_probabilities):
+                        raise ValueError("Length of actual sleep stages and predicted sleep stages do not match after rescaling.")
                 else:
-                    # save results to existing dictionary
-                    results = copy.deepcopy(data_dict)
-                    results["SLP_prediction_probability"] = mean_combined_prediction_probabilities
-                    results["SLP_from_prob"] = predictions_from_combined_probabilities
-                    results["SLP_prediction_classes"] = combined_predicted_classes
-                    results["SLP_from_class"] = predictions_from_combined_classes
-                    results["SLP"] = predictions_from_combined_probabilities
-                    
+                    slp = scale_classification_signal(
+                        signal = actual_original_structure, # type: ignore
+                        signal_frequency = slp_frequency,
+                        target_frequency = 1/resolution_seconds
+                    )
+
+                    if len(slp) != len(predictions_from_combined_probabilities):
+                        crop_to = min(len(slp), len(predictions_from_combined_probabilities))
+                        slp = slp[:crop_to]
+                        mean_combined_prediction_probabilities = mean_combined_prediction_probabilities[:crop_to]
+                        predictions_from_combined_probabilities = predictions_from_combined_probabilities[:crop_to]
+                        predictions_from_combined_classes = predictions_from_combined_classes[:crop_to]
+
+
+                # save results to new dictionary
+                results = {
+                    "Predicted_Probabilities": mean_combined_prediction_probabilities,
+                    "Predicted": predictions_from_combined_probabilities,
+                    "Predicted_2": predictions_from_combined_classes,
+                    "Actual": slp,
+                }    
                 
                 pickle.dump(results, results_file)
             
             except:
                 unpredictable_signals.append(data_dict["ID"]) # type: ignore
-
-                if not actual_results_available:
-                    results = copy.deepcopy(data_dict)
-                    pickle.dump(results, results_file)
 
                 continue
 
@@ -2630,7 +2514,7 @@ def main_model_predicting_stage_inference(
         print(unpredictable_signals)
 
 
-def main_model_predicting_apnea_validation_set(
+def main_model_predicting_apnea_validation_set_uniform_length(
         path_to_model_state: str,
         path_to_data_directory: str,
         pid: str,
@@ -2725,7 +2609,7 @@ def main_model_predicting_apnea_validation_set(
 
     # determine if data contains sleep phases
     if not "SLP" in data_manager.load(0): # type: ignore
-        raise ValueError("The apnea validation dataset must contain actual sleep phases for comparison.")
+        raise ValueError("The apnea validation dataset must contain actual apnea events for comparison.")
 
     """
     --------------------------------
@@ -3027,7 +2911,7 @@ def better_int(value):
         raise ValueError("Value cannot be converted to int without loss of information.")
 
 
-def main_model_predicting_apnea(
+def main_model_predicting_apnea_validation_set_original_length(
         path_to_model_state: str,
         path_to_data_directory: str,
         pid: str,
@@ -3123,9 +3007,8 @@ def main_model_predicting_apnea(
     slp_frequency = data_manager.database_configuration["SLP_frequency"]
 
     # determine if data contains sleep phases
-    actual_results_available = False
-    if "SLP" in data_manager.load(0): # type: ignore
-        actual_results_available = True
+    if not "SLP" in data_manager.load(0): # type: ignore
+        raise ValueError("The apnea validation dataset must contain actual apnea events for comparison.")
 
     """
     --------------------------------
@@ -3217,11 +3100,10 @@ def main_model_predicting_apnea(
     """
 
     # prepare path that stores results, if necessary
-    if actual_results_available:
-        if os.path.exists(path_to_save_results):
-            os.remove(path_to_save_results)
-        else:
-            create_directories_along_path(path_to_save_results)
+    if os.path.exists(path_to_save_results):
+        os.remove(path_to_save_results)
+    else:
+        create_directories_along_path(path_to_save_results)
 
     """
     ------------------------
@@ -3257,14 +3139,11 @@ def main_model_predicting_apnea(
                 strided_prediction_probabilities = [[] for i in range(total_duration)]
                 strided_predicted_classes = [[] for _ in range(total_duration)]
 
-                # if actual_results_available:
-                #     actual_original_structure = map_slp_labels(
-                #         slp_labels = copy.deepcopy(data_dict["SLP"]), # type: ignore
-                #         slp_label_mapping = slp_label_mapping
-                #     )
-                #     original_signal_length = len(copy.deepcopy(actual_original_structure))
-                # else:
-                #     original_signal_length = int(np.ceil(signal_length_seconds * slp_frequency))
+                # actual_original_structure = map_slp_labels(
+                #     slp_labels = copy.deepcopy(data_dict["SLP"]), # type: ignore
+                #     slp_label_mapping = slp_label_mapping
+                # )
+                # original_signal_length = len(copy.deepcopy(actual_original_structure))
 
                 start_time = -stride_seconds
                 upper_bound = 0
@@ -3435,121 +3314,94 @@ def main_model_predicting_apnea(
                     predictions_from_combined_classes.append(values[np.argmax(counts)])
                 predictions_from_combined_classes = np.array(predictions_from_combined_classes)
 
-                if actual_results_available:
-                    slp = []
-                    original_signal_length = len(data_dict["SLP"])
-                    stepsize_seconds = better_int(resolution_seconds * slp_frequency)
-                    for lower_border in range(0, original_signal_length, stepsize_seconds):
-                        upper_border = lower_border + stepsize_seconds
-                        if upper_border > original_signal_length:
-                            upper_border = original_signal_length
+                slp = []
+                original_signal_length = len(data_dict["SLP"])
+                stepsize_seconds = better_int(resolution_seconds * slp_frequency)
+                for lower_border in range(0, original_signal_length, stepsize_seconds):
+                    upper_border = lower_border + stepsize_seconds
+                    if upper_border > original_signal_length:
+                        upper_border = original_signal_length
 
-                        this_slp = final_data_preprocessing(
-                            signal = copy.deepcopy(data_dict["SLP"][lower_border:upper_border]),
-                            signal_id = "SLP_apnea_predict",
-                            slp_label_mapping = slp_label_mapping,
-                            target_frequency = slp_frequency,
-                            signal_length_seconds = signal_length_seconds,
-                            pad_with = pad_target_with,
-                            reshape_to_overlapping_windows = False,
-                            **common_window_reshape_params,
-                            normalize = False, # SLP is not normalized
-                            datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
-                            transform = target_transform
-                        )
+                    this_slp = final_data_preprocessing(
+                        signal = copy.deepcopy(data_dict["SLP"][lower_border:upper_border]),
+                        signal_id = "SLP_apnea_predict",
+                        slp_label_mapping = slp_label_mapping,
+                        target_frequency = slp_frequency,
+                        signal_length_seconds = signal_length_seconds,
+                        pad_with = pad_target_with,
+                        reshape_to_overlapping_windows = False,
+                        **common_window_reshape_params,
+                        normalize = False, # SLP is not normalized
+                        datatype_mappings = [(np.int64, np.int32), (np.float64, np.float32)],
+                        transform = target_transform
+                    )
 
-                        slp.append(this_slp[0])
-                    
-                    slp = np.array(slp)
+                    slp.append(this_slp[0])
+                
+                slp = np.array(slp)
 
-                    for i in range(1, len(slp)-1):
-                        if slp[i] != 0: 
-                            # if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
-                            #     predictions_from_combined_probabilities[i-1] = 0
-                            #     if predictions_from_combined_probabilities[i] == 0:
-                            #         predictions_from_combined_probabilities[i] = slp[i]
-                            # if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
-                            #     predictions_from_combined_probabilities[i+1] = 0
-                            #     if predictions_from_combined_probabilities[i] == 0:
-                            #         predictions_from_combined_probabilities[i] = slp[i]
-                            
-                            # if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
-                            #     predictions_from_combined_classes[i-1] = 0
-                            #     if predictions_from_combined_classes[i] == 0:
-                            #         predictions_from_combined_classes[i] = slp[i]
-                            # if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
-                            #     predictions_from_combined_classes[i+1] = 0
-                            #     if predictions_from_combined_classes[i] == 0:
-                            #         predictions_from_combined_classes[i] = slp[i]
+                for i in range(1, len(slp)-1):
+                    if slp[i] != 0: 
+                        # if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
+                        #     predictions_from_combined_probabilities[i-1] = 0
+                        #     if predictions_from_combined_probabilities[i] == 0:
+                        #         predictions_from_combined_probabilities[i] = slp[i]
+                        # if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
+                        #     predictions_from_combined_probabilities[i+1] = 0
+                        #     if predictions_from_combined_probabilities[i] == 0:
+                        #         predictions_from_combined_probabilities[i] = slp[i]
+                        
+                        # if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
+                        #     predictions_from_combined_classes[i-1] = 0
+                        #     if predictions_from_combined_classes[i] == 0:
+                        #         predictions_from_combined_classes[i] = slp[i]
+                        # if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
+                        #     predictions_from_combined_classes[i+1] = 0
+                        #     if predictions_from_combined_classes[i] == 0:
+                        #         predictions_from_combined_classes[i] = slp[i]
 
-                            if predictions_from_combined_probabilities[i] == 0:
-                                if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
-                                    predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i-1]
-                                    predictions_from_combined_probabilities[i-1] = 0
-                                if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
-                                    predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i+1]
-                                    predictions_from_combined_probabilities[i+1] = 0
+                        if predictions_from_combined_probabilities[i] == 0:
+                            if predictions_from_combined_probabilities[i-1] != 0 and slp[i-1] == 0:
+                                predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i-1]
+                                predictions_from_combined_probabilities[i-1] = 0
+                            if predictions_from_combined_probabilities[i+1] != 0 and slp[i+1] == 0:
+                                predictions_from_combined_probabilities[i] = predictions_from_combined_probabilities[i+1]
+                                predictions_from_combined_probabilities[i+1] = 0
 
-                            if predictions_from_combined_classes[i] == 0:
-                                if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
-                                    predictions_from_combined_classes[i] = predictions_from_combined_classes[i-1]
-                                    predictions_from_combined_classes[i-1] = 0
-                                if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
-                                    predictions_from_combined_classes[i] = predictions_from_combined_classes[i+1]
-                                    predictions_from_combined_classes[i+1] = 0
-                    
-                    # next_blocked = False
-                    # for i in range(1, len(slp)):
-                    #     if next_blocked:
-                    #         next_blocked = False
-                    #         continue
-                    #     if slp[i-1] == 0 and slp[i] == 0:
-                    #         if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
-                    #             predictions_from_combined_probabilities[i] = 0
-                    #             next_blocked = True
-                    #         if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
-                    #             predictions_from_combined_classes[i] = 0
-                    #             next_blocked = True
+                        if predictions_from_combined_classes[i] == 0:
+                            if predictions_from_combined_classes[i-1] != 0 and slp[i-1] == 0:
+                                predictions_from_combined_classes[i] = predictions_from_combined_classes[i-1]
+                                predictions_from_combined_classes[i-1] = 0
+                            if predictions_from_combined_classes[i+1] != 0 and slp[i+1] == 0:
+                                predictions_from_combined_classes[i] = predictions_from_combined_classes[i+1]
+                                predictions_from_combined_classes[i+1] = 0
+                
+                # next_blocked = False
+                # for i in range(1, len(slp)):
+                #     if next_blocked:
+                #         next_blocked = False
+                #         continue
+                #     if slp[i-1] == 0 and slp[i] == 0:
+                #         if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
+                #             predictions_from_combined_probabilities[i] = 0
+                #             next_blocked = True
+                #         if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
+                #             predictions_from_combined_classes[i] = 0
+                #             next_blocked = True
 
-                    # save results to new dictionary
-                    results = {
-                        "Predicted_Probabilities": mean_combined_prediction_probabilities,
-                        "Predicted": predictions_from_combined_probabilities,
-                        "Predicted_2": predictions_from_combined_classes,
-                        "Actual": slp,
-                        "Actual_in_seconds": data_dict["SLP"]
-                    }
-
-                else:
-                    # next_blocked = False
-                    # for i in range(1, len(predictions_from_combined_classes)):
-                    #     if next_blocked:
-                    #         next_blocked = False
-                    #         continue
-                    #     if predictions_from_combined_probabilities[i-1] != 0 and predictions_from_combined_probabilities[i] != 0:
-                    #         predictions_from_combined_probabilities[i] = 0
-                    #         next_blocked = True
-                    #     if predictions_from_combined_classes[i-1] != 0 and predictions_from_combined_classes[i] != 0:
-                    #         predictions_from_combined_classes[i] = 0
-                    #         next_blocked = True
-
-                    # save results to existing dictionary
-                    results = copy.deepcopy(data_dict)
-                    results["SLP_prediction_probability"] = mean_combined_prediction_probabilities
-                    results["SLP_from_prob"] = predictions_from_combined_probabilities
-                    results["SLP_prediction_classes"] = combined_predicted_classes
-                    results["SLP_from_class"] = predictions_from_combined_classes
-                    results["SLP"] = predictions_from_combined_probabilities
-                    
+                # save results to new dictionary
+                results = {
+                    "Predicted_Probabilities": mean_combined_prediction_probabilities,
+                    "Predicted": predictions_from_combined_probabilities,
+                    "Predicted_2": predictions_from_combined_classes,
+                    "Actual": slp,
+                    "Actual_in_seconds": data_dict["SLP"]
+                }
                 
                 pickle.dump(results, results_file)
             
             except:
                 unpredictable_signals.append(data_dict["ID"]) # type: ignore
-
-                if not actual_results_available:
-                    results = copy.deepcopy(data_dict)
-                    pickle.dump(results, results_file)
 
                 continue
 
@@ -4234,13 +4086,77 @@ Each functionality requires specific functions to be called in the correct order
 operations is executed within the following functions.
 """
 
-
-def run_ssg_model_training(
+def run_dataset_preprocessing(
         path_to_model_directory: str,
-        path_to_shhs_directory: str,
+        path_to_shhs_directory_uniform_length: str,
+        path_to_gif_directory_uniform_length: str,
+        path_to_shhs_directory_original_length: str,
+        path_to_gif_directory_original_length: str,
+        task: str, # "stage" or "apnea"
+    ):
+    """
+    """
+
+    """
+    -----------------------------
+    Check if Paths already exist
+    -----------------------------
+    """
+
+    # check if processed data already exists
+    if os.path.exists(path_to_shhs_directory_uniform_length) or os.path.exists(path_to_shhs_directory_original_length):
+        raise SystemError("You are attempting to process and save SHHS data to an existing directory. The existing data may have been used to train and validate a model. Overwriting it must be done manually by User.")
+    
+    if os.path.exists(path_to_gif_directory_uniform_length) or os.path.exists(path_to_gif_directory_original_length):
+        raise SystemError("You are attempting to process and save CHB data to an existing directory. The existing data may have been used to train and validate a model. Overwriting it must be done manually by User.")
+    
+    """
+    -------------------
+    Preprocessing Data
+    -------------------
+    """
+
+    if task == "stage":
+        
+        # process SHHS data
+        Process_SHHS_SSG_Dataset(
+            path_to_shhs_dataset = original_shhs_data_path,
+            path_to_save_processed_data_original_length = path_to_shhs_directory_original_length,
+            path_to_save_processed_data_uniform_length = path_to_shhs_directory_uniform_length,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            )
+
+        # process GIF data
+        Process_GIF_SSG_Dataset(
+            path_to_gif_dataset = original_gif_ssg_data_path,
+            path_to_save_processed_data_original_length = path_to_gif_directory_original_length,
+            path_to_save_processed_data_uniform_length = path_to_gif_directory_uniform_length,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file
+            )
+        
+    elif task == "apnea":
+        
+        # process GIF data
+        Process_GIF_SAE_Dataset(
+            path_to_gif_dataset = original_gif_sae_data_path,
+            path_to_save_processed_data_original_length = path_to_gif_directory_original_length,
+            path_to_save_processed_data_uniform_length = path_to_gif_directory_uniform_length,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file
+        )
+    
+    else:
+        raise ValueError(f"Unknown task: {task}. Choose \"stage\" or \"apnea\".")
+    
+
+
+
+def run_model_training(
+        path_to_model_directory: str,
         path_to_gif_directory: str,
-        neural_network_hyperparameters_shhs: dict,
         neural_network_hyperparameters_gif: dict,
+        task: str, # "stage" or "apnea"
+        path_to_shhs_directory: str = "",
+        neural_network_hyperparameters_shhs: dict = {},
     ):
     """
     Corresponds to the 1st main functionality: Processing datasets and training the neural network model.
@@ -4272,86 +4188,27 @@ def run_ssg_model_training(
     """
 
     """
-    ------------------------
-    Preprocessing SHHS Data
-    ------------------------
-    """
-
-    # check if processed data already exists
-    user_response = "y"
-    if os.path.exists(path_to_shhs_directory):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are attempting to process and save SHHS data to an existing directory. " +
-                "The existing data may have been used to train and validate a model. " +
-                "Overwriting it may prevent accurate assessment of the model's performance, " + 
-                "as the validation pid will change. Do you want to overwrite? (y/n)", 
-            allowed_responses = ["y", "n"]
-        )
-
-        if user_response == "y":
-            clean_and_remove_directory(path_to_shhs_directory)
-
-    # process SHHS data
-    if user_response == "y":
-        Process_SHHS_SSG_Dataset(
-            path_to_shhs_dataset = original_shhs_data_path,
-            path_to_save_processed_data = path_to_shhs_directory,
-            path_to_project_configuration = path_to_model_directory + project_configuration_file,
-            )
-    
-    """
-    -----------------------
-    Preprocessing GIF Data
-    -----------------------
-    """
-
-    # check if processed data already exists
-    user_response = "y"
-    if os.path.exists(path_to_gif_directory):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are attempting to process and save GIF data to an existing directory. " +
-                "The existing data may have been used to train and validate a model. " +
-                "Overwriting it may prevent accurate assessment of the model's performance, " + 
-                "as the validation pid will change. Do you want to overwrite? (y/n)", 
-            allowed_responses = ["y", "n"]
-        )
-
-        if user_response == "y":
-            clean_and_remove_directory(path_to_gif_directory)
-
-    # process GIF data
-    if user_response == "y":
-        Process_GIF_SSG_Dataset(
-            path_to_gif_dataset = original_gif_ssg_data_path,
-            path_to_save_processed_data = path_to_gif_directory,
-            path_to_project_configuration = path_to_model_directory + project_configuration_file
-            )
-    
-    """
-    ------------------------------
-    Training Network on SHHS Data
-    ------------------------------
+    -----------------------------
+    Check if Paths already exist
+    -----------------------------
     """
 
     # check if model state already exists
-    user_response = "y"
     if os.path.exists(path_to_model_directory + model_state_after_shhs_file):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are attempting to train the neural network on SHHS data and save its " +
-                "final model state to an existing path. The existing model may have been used for further " +
-                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
-                "from it. Do you want to overwrite? (y/n)", 
-            allowed_responses = ["y", "n"]
-        )
+        raise SystemError("You are attempting to train the neural network on SHHS data and save its final model state to an existing path. The existing model state may have been used for further analysis. Overwriting it must be done manually by User.")
 
-        if user_response == "y":
-            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file])
+    if os.path.exists(path_to_model_directory + model_state_after_shhs_gif_file):
+        raise SystemError("You are attempting to train the neural network on CHB data and save its final model state to an existing path. The existing model state may have been used for further analysis. Overwriting it must be done manually by User.")
+    
+    """
+    -----------------
+    Training Network
+    -----------------
+    """
 
-    # train neural network on SHHS data
-    if user_response == "y":
+    if task == "stage":
+        
+        # train neural network on SHHS data
         main_model_training_stage(
             neural_network_hyperparameters = neural_network_hyperparameters_shhs,
             path_to_training_data_directory = path_to_shhs_directory,
@@ -4362,29 +4219,7 @@ def run_ssg_model_training(
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_shhs_file,
             )
 
-    """
-    -----------------------------
-    Training Network on GIF Data
-    -----------------------------
-    """
-
-    # check if model state already exists
-    user_response = "y"
-    if os.path.exists(path_to_model_directory + model_state_after_shhs_gif_file):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are attempting to train the neural network on GIF data and save its " +
-                "final model state to an existing path. The existing model may have been used for further " +
-                "analysis. Overwriting it will replace the model state and all subsequent results derived " +
-                "from it. Do you want to overwrite? (y/n)", 
-            allowed_responses = ["y", "n"]
-        )
-
-        if user_response == "y":
-            delete_directory_files(directory_path = path_to_model_directory, keep_files = [project_configuration_file, model_state_after_shhs_file])
-
-    # train neural network on GIF data
-    if user_response == "y":
+        # train neural network on GIF data
         main_model_training_stage(
             neural_network_hyperparameters = neural_network_hyperparameters_gif,
             path_to_training_data_directory = path_to_gif_directory,
@@ -4394,9 +4229,25 @@ def run_ssg_model_training(
             paths_to_validation_data_directories = [path_to_shhs_directory, path_to_gif_directory],
             path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
             )
+    
+    elif task == "apnea":
+        
+        # train neural network on GIF data
+        main_model_training_apnea(
+            neural_network_hyperparameters = neural_network_hyperparameters_gif,
+            path_to_training_data_directory = path_to_gif_directory,
+            path_to_project_configuration = path_to_model_directory + project_configuration_file,
+            path_to_model_state = None,
+            path_to_updated_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
+            paths_to_validation_data_directories = [path_to_gif_directory],
+            path_to_loss_per_epoch = path_to_model_directory + loss_per_epoch_gif_file,
+            )
+    
+    else:
+        raise ValueError(f"Unknown task: {task}. Choose \"stage\" or \"apnea\".")
 
 
-def run_model_performance_evaluation_SSG(
+def run_model_performance_evaluation_stage(
         path_to_model_directory: str,
         path_to_splitted_shhs_directory: str,
         path_to_complete_shhs_directory: str,
@@ -4466,7 +4317,7 @@ def run_model_performance_evaluation_SSG(
     delete_files([shhs_splitted_validation_pid_results_path, shhs_complete_validation_pid_results_path])
 
     # make predictions for the splitted data
-    main_model_predicting_stage_validation_set(
+    main_model_predicting_stage_validation_set_uniform_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_splitted_shhs_directory,
         pid = "validation",
@@ -4475,7 +4326,7 @@ def run_model_performance_evaluation_SSG(
     )
 
     # make predictions for the complete data
-    main_model_predicting_stage(
+    main_model_predicting_stage_validation_set_original_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_complete_shhs_directory,
         pid = "validation",
@@ -4552,7 +4403,7 @@ def run_model_performance_evaluation_SSG(
     # remove predictions if they already exist
     delete_files([gif_splitted_validation_pid_results_path, gif_complete_validation_pid_results_path])
     # make predictions for the splitted data
-    main_model_predicting_stage_validation_set(
+    main_model_predicting_stage_validation_set_uniform_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_splitted_gif_directory,
         pid = "validation",
@@ -4561,7 +4412,7 @@ def run_model_performance_evaluation_SSG(
     )
 
     # make predictions for the complete data
-    main_model_predicting_stage(
+    main_model_predicting_stage_validation_set_original_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_complete_gif_directory,
         pid = "validation",
@@ -4620,7 +4471,7 @@ def run_model_performance_evaluation_SSG(
     )
 
 
-def run_model_performance_evaluation_SAE(
+def run_model_performance_evaluation_apnea(
         path_to_model_directory: str,
         path_to_splitted_gif_directory: str,
         path_to_complete_gif_directory: str,
@@ -4682,8 +4533,9 @@ def run_model_performance_evaluation_SAE(
 
     # remove predictions if they already exist
     delete_files([gif_splitted_validation_pid_results_path, gif_complete_validation_pid_results_path])
+    
     # make predictions for the splitted data
-    main_model_predicting_apnea_validation_set(
+    main_model_predicting_apnea_validation_set_uniform_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_splitted_gif_directory,
         pid = "validation",
@@ -4692,7 +4544,7 @@ def run_model_performance_evaluation_SAE(
     )
 
     # make predictions for the complete data
-    main_model_predicting_apnea(
+    main_model_predicting_apnea_validation_set_original_length(
         path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
         path_to_data_directory = path_to_complete_gif_directory,
         pid = "validation",
@@ -4751,153 +4603,104 @@ def run_model_performance_evaluation_SAE(
     )
 
 
-def run_model_predicting(
+def run_model_performance_evaluation(
         path_to_model_directory: str,
-        path_to_unknown_dataset: str,
-        path_to_processed_unknown_dataset: str,
+        path_to_shhs_directory_uniform_length: str,
+        path_to_gif_directory_uniform_length: str,
+        path_to_shhs_directory_original_length: str,
+        path_to_gif_directory_original_length: str,
+        task: str, # "stage" or "apnea"
     ):
     """
-    Corresponds to the 3rd main functionality: Applying the trained neural network model to new data.
-
-    Make sure that all files, you want to predict the sleep stages for, have a different name.
-
-    In order to do that, this function will first process the unknown dataset and save the results to a 
-    pkl-file. Then, the trained model will be used to predict the sleep stages for the unknown dataset
-    and save the results to the same pkl-file. The processing caused the signals to be split into overlapping
-    parts that fit the neural networks requirements. Therefore, all signals will be reconstructed to their
-    original form (causing to have multiple predictions for the overlapping parts).
-
-    Most of the parameters are hardcoded in the functions called below. This ensures that the results of
-    the predictions for different models are stored analogously. 
-
-    ATTENTION:  This function was designed to predict sleep stages for the NAKO dataset. However, this does
-                not mean that it is limited to this dataset.
-    
-                For more information on how the unknown dataset must be formatted to be processable, please 
-                refer to the Process_NAKO_Dataset function in dataset_processing.py. If your dataset is 
-                formatted differently, you may need to create a new function, analogous to the one mentioned
-                above, to process your dataset.
-
-                For more information on how the predictions are saved, please refer to the 
-                main_model_predicting function in this file.
-
-
-    RETURNS:
-    ------------------------------
-    None
-
-    ARGUMENTS:
-    ------------------------------
-    path_to_model_directory: str
-        the path to the directory where all results are stored
-    path_to_unknown_dataset: str
-        the path to the file where the unknown dataset is stored
-    path_to_processed_unknown_dataset: str
-        the path to the file where the processed unknown dataset and the predictions are stored
     """
 
-    """
-    ---------------------------
-    Preprocessing Unknown Data
-    ---------------------------
-    """
-
-    # check if processed data already exists
-    user_response = "y"
-    if os.path.exists(path_to_processed_unknown_dataset):
-        # ask the user if they want to overwrite
-        user_response = retrieve_user_response(
-            message = "ATTENTION: You are about to process and save NAKO data to an existing path. " +
-                "The existing file may contain results from a previous prediction using a different file " +
-                "path but the same file name. Only overwrite if you intend to reprocess older results. " +
-                "(This must be done even if you only intend to repredict the sleep stages.)" + 
-                "Do you want to proceed? (y/n)",
-            allowed_responses = ["y", "n"]
+    if task == "stage":
+        run_model_performance_evaluation_stage(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_shhs_directory = path_to_shhs_directory_uniform_length,
+            path_to_complete_shhs_directory = path_to_shhs_directory_original_length,
+            path_to_splitted_gif_directory = path_to_gif_directory_uniform_length,
+            path_to_complete_gif_directory = path_to_gif_directory_original_length,
         )
+    elif task == "apnea":
+        run_model_performance_evaluation_apnea(
+            path_to_model_directory = path_to_model_directory,
+            path_to_splitted_gif_directory = path_to_gif_directory_uniform_length,
+            path_to_complete_gif_directory = path_to_gif_directory_original_length,
+        )
+    else:
+        raise ValueError(f"Unknown task: {task}. Choose \"stage\" or \"apnea\".")
 
-        if user_response == "y":
-            delete_files([path_to_processed_unknown_dataset])
-        else:
-            return
 
-    # process unknown dataset
-    Process_NAKO_Dataset(
-        path_to_nako_dataset = path_to_unknown_dataset,
-        path_to_save_processed_data = path_to_processed_unknown_dataset,
-        path_to_project_configuration = path_to_model_directory + project_configuration_file,
-    )
+def run_inference(
+        path_to_model_state: str,
+        path_to_data_directory: str,
+        path_to_project_configuration: str,
+        path_to_save_results: str,
+        task: str,
+        inference = False,
+        data_length = None,
+):
 
-    """
-    ------------------------
-    Predicting Sleep Phases
-    ------------------------
-    """
-
-    # main_model_predicting(
-    #     path_to_model_state = path_to_model_directory + model_state_after_shhs_gif_file,
-    #     path_to_processed_data = path_to_processed_unknown_dataset,
-    #     path_to_project_configuration = path_to_model_directory + project_configuration_file,
-    # )
-
-    """
-    ------------------------
-    Reverse Data Alteration
-    ------------------------
-    """
+    if task == "stage":
+        main_model_predicting_stage_inference(
+            path_to_model_state = path_to_model_state,
+            path_to_data_directory = path_to_data_directory,
+            path_to_project_configuration = path_to_project_configuration,
+            path_to_save_results = path_to_save_results,
+            inference = inference,
+            results_key = "SLP",
+            data_length = data_length
+        )
     
-    # data_manager = SleepDataManager(file_path = path_to_processed_unknown_dataset)
-
-    # reverse signal split
-    # data_manager.reverse_signal_split()
-
-    # crop padded signals
-    # data_manager.crop_predicted_signals()
-
-
-if False:
+    elif task == "apnea":
+        main_model_predicting_apnea_inference(
+            path_to_model_state = path_to_model_state,
+            path_to_data_directory = path_to_data_directory,
+            path_to_project_configuration = path_to_project_configuration,
+            path_to_save_results = path_to_save_results,
+            inference = inference,
+            results_key = "SAE",
+            data_length = data_length
+        )
+    else:
+        raise ValueError(f"Unknown task: {task}. Choose \"stage\" or \"apnea\".")
     
-    """
-    ===============
-    Set File Paths
-    ===============
-    """
 
-    # Create directory to store configurations and results
-    model_directory_path = "Neural_Network/"
-    create_directories_along_path(model_directory_path)
-    
-    shhs_directory_path = model_directory_path + "SHHS_Data/"
-    gif_directory_path = model_directory_path + "GIF_Data/"
+if __name__ == "__main__":
+
+    # error codes defined by synchronizability according to kantelhardt
+    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
+    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
+    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
+    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
+    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
 
     """
-    ==========================
-    Set Project Configuration
-    ==========================
+    ===============================
+    Project Configuration Examples
+    ===============================
+
+    To create a neural network me must first set all configurations to our liking. A detailed explanation on
+    each setting parameter can be found at the start of main.py and in the corresponding files.
+    Below are a few examples.
     """
 
-    sampling_frequency_parameters = {
+    project_configuration_for_single_output_stage_classification = {
+        #
+        # sampling frequency parameters
+        #
         "RRI_frequency": 4,
         "MAD_frequency": 1,
         "SLP_frequency": 1/30,
-    }
-
-    signal_cropping_parameters = {
-        "signal_length_seconds": 36000,
-        "shift_length_seconds_interval": (3600, 7200)
-    }
-
-    padding_parameters = {
+        # 
+        # padding parameters
+        #
         "pad_feature_with": 0,
-        "pad_target_with": 0
-    }
-
-    value_mapping_parameters = {
-        "rri_inlier_interval": (None, None), # (0.3, 2)
-        "mad_inlier_interval": (None, None),
-        "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0},
-    }
-
-    pid_distribution_parameters = {
+        "pad_target_with": 0,
+        # 
+        # pid distribution parameters
+        #
         "train_size": 0.8,
         "validation_size": 0.2,
         "test_size": None,
@@ -4907,49 +4710,220 @@ if False:
         "equally_distribute_signal_durations": True,
         "stratify_by_target": False,
         "consider_targets_for_stratification": [],
-    }
-
-    dataset_class_transform_parameters = {
+        #
+        # dataset class transform parameters
+        #
         "feature_transform": custom_transform,
         "target_transform": None,
-    }
-
-    window_reshape_parameters = {
-        "reshape_to_overlapping_windows": True,
         #
-        "windows_per_signal": 1197,
-        "window_duration_seconds": 120,
-        "overlap_seconds": 90,
-        "priority_order": [3, 2, 1, 0],
-    }
-
-    signal_normalization_parameters = {
+        # filter parameters
+        #
+        "shhs_filter_ids": [],
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5,
+        #
+        # labeling parameters
+        #
+        "number_target_classes": 4, # 5
+        "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0}, # {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifact": 0}
+        #
+        # sample structure parameters
+        #
+        "signal_length_seconds": 180,
+        "shift_length_seconds_interval": (180, 180),
+        "reshape_to_overlapping_windows": False,
+        "rri_datapoints": 720, # RRI_frequency * signal_length_seconds
+        "mad_datapoints": 180, # MAD_frequency * signal_length_seconds
+        "shhs_min_duration_hours": 0,
+        "gif_min_duration_hours": 0,
+        #
+        # signal processing parameters
+        #
+        "rri_inlier_interval": (0.3, 2),
+        "mad_inlier_interval": (None, None),
         "normalize_rri": True,
         "normalize_mad": True,
-        #
-        "normalization_technique": "z-score",
+        # if normalize_rri and normalize_mad are False, do not add normalization_technique and normalization_mode
+        "normalization_technique": "z-score", # "z-score" or "min-max"
         "normalization_mode": "local",
+        #
+        # network parameters
+        #
+        "neural_network_model": ShortSequenceModel,
+        "rri_convolutional_channels": [1, 8, 16, 32, 64],
+        "mad_convolutional_channels": [1, 8, 16, 32, 64],
+        "max_pooling_layers": 5,
+        "fully_connected_features": 128,
     }
 
-    neural_network_model_parameters = {
-        "neural_network_model": LongSequenceModel,
-        "number_target_classes": 4,
+    project_configuration_for_multi_output_stage_classification = {
+        #
+        # sampling frequency parameters
+        #
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1/30,
+        # 
+        # padding parameters
+        #
+        "pad_feature_with": 0,
+        "pad_target_with": 0,
+        # 
+        # pid distribution parameters
+        #
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": None,
+        "shuffle": True,
+        "join_splitted_parts": True,
+        "equally_distribute_signal_durations": True,
+        "stratify_by_target": False,
+        "consider_targets_for_stratification": [],
+        #
+        # dataset class transform parameters
+        #
+        "feature_transform": custom_transform,
+        "target_transform": None,
+        #
+        # filter parameters
+        #
+        "shhs_filter_ids": [],
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5,
+        #
+        # labeling parameters
+        #
+        "number_target_classes": 4, # 5
+        "target_classes": {"wake": 0, "LS": 1, "DS": 2, "REM": 3, "artifact": 0}, # {"wake": 1, "LS": 2, "DS": 3, "REM": 4, "artifact": 0}
+        "priority_order": [3, 2, 1, 0], # [4, 3, 2, 1, 0]
+        #
+        # sample structure parameters
+        #
+        "signal_length_seconds": 36000,
+        "shift_length_seconds_interval": (3600, 7200),
+        "reshape_to_overlapping_windows": True,
+        "window_duration_seconds": 120,
+        "overlap_seconds": 90,
+        "windows_per_signal": 1197,
+        "datapoints_per_rri_window": 480, # RRI_frequency * window_duration_seconds
+        "datapoints_per_mad_window": 120, # MAD_frequency * window_duration_seconds
+        "shhs_min_duration_hours": 7,
+        "gif_min_duration_hours": 7,
+        #
+        # signal processing parameters
+        #
+        "rri_inlier_interval": (0.3, 2),
+        "mad_inlier_interval": (None, None),
+        "normalize_rri": True,
+        "normalize_mad": True,
+        # if normalize_rri and normalize_mad are False, do not add normalization_technique and normalization_mode
+        "normalization_technique": "z-score", # "z-score" or "min-max"
+        "normalization_mode": "local", # "local" or "global"
+        #
+        # network parameters
+        #
+        "neural_network_model": LongSequenceResidualModel, # LongSequenceModel
         "rri_convolutional_channels": [1, 8, 16, 32, 64],
         "mad_convolutional_channels": [1, 8, 16, 32, 64],
         "max_pooling_layers": 5,
         "fully_connected_features": 128,
         "convolution_dilations": [2, 4, 8, 16, 32],
-        #
-        "datapoints_per_rri_window": int(sampling_frequency_parameters["RRI_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-        "datapoints_per_mad_window": int(sampling_frequency_parameters["MAD_frequency"] * window_reshape_parameters["window_duration_seconds"]),
-        "windows_per_signal": window_reshape_parameters["windows_per_signal"],
-        #
-        # "rri_datapoints": int(sampling_frequency_parameters["RRI_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
-        # "mad_datapoints": int(sampling_frequency_parameters["MAD_frequency"] * sampling_frequency_parameters["signal_length_seconds"]),
     }
 
-    neural_network_hyperparameters_shhs = {
+    project_configuration_for_single_output_apnea_detection = {
+        #
+        # sampling frequency parameters
+        #
+        "RRI_frequency": 4,
+        "MAD_frequency": 1,
+        "SLP_frequency": 1,
+        # 
+        # padding parameters
+        #
+        "pad_feature_with": 0,
+        "pad_target_with": 0,
+        # 
+        # pid distribution parameters
+        #
+        "train_size": 0.8,
+        "validation_size": 0.2,
+        "test_size": None,
+        "random_state": None,
+        "shuffle": True,
+        "join_splitted_parts": True,
+        "equally_distribute_signal_durations": True,
+        "stratify_by_target": True,
+        "consider_targets_for_stratification": ["Obstructive Apnea", "Central Apnea", "Mixed Apnea", "Hypopnea"],
+        #
+        # dataset class transform parameters
+        #
+        "feature_transform": custom_transform,
+        "target_transform": None,
+        #
+        # filter parameters
+        #
+        "gif_filter_ids": gif_error_code_4 + gif_error_code_5 + ["SL067"],
+        #
+        # labeling parameters
+        #
+        "number_target_classes": 2, # 5 sleep stages: wake, LS, DS, REM, artifact
+        "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 1, "Obstructive Hypopnea": 1, "Central Hypopnea": 1},
+        # "number_target_classes": 3, # 5 sleep stages: wake, LS, DS, REM, artifact
+        # "target_classes": {"Normal": 0, "Apnea": 1, "Obstructive Apnea": 1, "Central Apnea": 1, "Mixed Apnea": 1, "Hypopnea": 2, "Obstructive Hypopnea": 2, "Central Hypopnea": 2},
+        # "number_target_classes": 5, # 5 sleep stages: wake, LS, DS, REM, artifact
+        # "target_classes": {"Normal": 0, "Mixed Apnea": 3, "Apnea": 3, "Obstructive Apnea": 1, "Central Apnea": 2, "Hypopnea": 4, "Obstructive Hypopnea": 4, "Central Hypopnea": 4},
+        #
+        # sample structure parameters
+        #
+        "signal_length_seconds": 60,
+        "shift_length_seconds_interval": (15, 15),
+        "reshape_to_overlapping_windows": False,
+        "rri_datapoints": 240, # RRI_frequency * signal_length_seconds
+        "mad_datapoints": 60, # MAD_frequency * signal_length_seconds
+        "gif_min_duration_hours": 0,
+        #
+        # signal processing parameters
+        #
+        "rri_inlier_interval": (0.3, 2),
+        "mad_inlier_interval": (None, None),
+        "normalize_rri": True,
+        "normalize_mad": True,
+        # if normalize_rri and normalize_mad are False, do not add normalization_technique and normalization_mode
+        "normalization_technique": "z-score", # "z-score" or "min-max"
+        "normalization_mode": "local",
+        #
+        # network parameters
+        #
+        "neural_network_model": ShortSequenceModel,
+        "rri_convolutional_channels": [1, 8, 16, 32, 64],
+        "mad_convolutional_channels": [1, 8, 16, 32, 64],
+        "max_pooling_layers": 5,
+        "fully_connected_features": 128,
+    }
+
+    single_output_neural_network_hyperparameters_shhs = {
+        "batch_size": 128, # 4.2h for 120s data | 1.5M (1484839) / 128 => 11601 steps per epoch
+        "number_epochs": 20,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 2,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
+        }
+    }
+
+    single_output_neural_network_hyperparameters_gif = {
         "batch_size": 8,
+        "number_epochs": 20,
+        "lr_scheduler_parameters": {
+            "number_updates_to_max_lr": 2,
+            "start_learning_rate": 1 * 1e-5,
+            "max_learning_rate": 1 * 1e-3,
+            "end_learning_rate": 1 * 1e-6
+        }
+    }
+
+    multi_output_neural_network_hyperparameters_shhs = {
+        "batch_size": 8, # 80h for 10h data | 7K (6712) / 8 => 839 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
@@ -4959,8 +4933,8 @@ if False:
         }
     }
 
-    neural_network_hyperparameters_gif = {
-        "batch_size": 8,
+    multi_output_neural_network_hyperparameters_gif = {
+        "batch_size": 4, # 40h for 10h data | 584 / 4 => 146 steps per epoch
         "number_epochs": 40,
         "lr_scheduler_parameters": {
             "number_updates_to_max_lr": 4,
@@ -4970,36 +4944,35 @@ if False:
         }
     }
 
-    filter_shhs_data_parameters = {
-        "shhs_min_duration_hours": 7,
-        "shhs_filter_ids": []
-    }
+    """
+    ===============
+    Set File Paths
+    ===============
 
-    gif_error_code_1 = ["SL007", "SL010", "SL012", "SL014", "SL022", "SL026", "SL039", "SL044", "SL049", "SL064", "SL070", "SL146", "SL150", "SL261", "SL266", "SL296", "SL303", "SL306", "SL342", "SL350", "SL410", "SL411", "SL416"]
-    gif_error_code_2 = ["SL032", "SL037", "SL079", "SL088", "SL114", "SL186", "SL255", "SL328", "SL336", "SL341", "SL344", "SL424"]
-    gif_error_code_3 = ["SL001", "SL004", "SL011", "SL025", "SL027", "SL034", "SL055", "SL057", "SL073", "SL075", "SL076", "SL083", "SL085", "SL087", "SL089", "SL096", "SL111", "SL116", "SL126", "SL132", "SL138", "SL141", "SL151", "SL157", "SL159", "SL166", "SL173", "SL174", "SL176", "SL178", "SL179", "SL203", "SL207", "SL208", "SL210", "SL211", "SL214", "SL217", "SL218", "SL221", "SL228", "SL229", "SL236", "SL237", "SL240", "SL245", "SL250", "SL252", "SL269", "SL286", "SL293", "SL294", "SL315", "SL348", "SL382", "SL384", "SL386", "SL389", "SL397", "SL406", "SL408", "SL418", "SL422", "SL428"]
-    gif_error_code_4 = ["SL061", "SL066", "SL091", "SL105", "SL202", "SL204", "SL205", "SL216", "SL305", "SL333", "SL349", "SL430", "SL439", "SL440"]
-    gif_error_code_5 = ["SL016", "SL040", "SL145", "SL199", "SL246", "SL268", "SL290", "SL316", "SL332", "SL365", "SL392", "SL426", "SL433", "SL438"]
+    In the process of training and testing the network a lot files are created. Therefore, we create
+    a separate directory for each network.
+    """
 
-    filter_gif_data_parameters = {
-        "gif_min_duration_hours": 7,
-        "gif_filter_ids": gif_error_code_4 + gif_error_code_5
-    }
+    model_directory_path = "Networks/Neural_Network/"
+    
+    shhs_data_directory_path_original_length = model_directory_path + "SHHS_Original_Length/"
+    gif_data_directory_path_original_length = model_directory_path + "CHB_Original_Length/"
 
-    project_configuration = dict()
-    project_configuration.update(sampling_frequency_parameters)
-    project_configuration.update(signal_cropping_parameters)
-    project_configuration.update(padding_parameters)
-    project_configuration.update(value_mapping_parameters)
-    project_configuration.update(pid_distribution_parameters)
-    project_configuration.update(window_reshape_parameters)
-    project_configuration.update(signal_normalization_parameters)
-    project_configuration.update(dataset_class_transform_parameters)
-    project_configuration.update(neural_network_model_parameters)
-    project_configuration.update(filter_shhs_data_parameters)
-    project_configuration.update(filter_gif_data_parameters)
+    shhs_data_directory_path_uniform_length = model_directory_path + "SHHS_Uniform_Length/"
+    gif_data_directory_path_uniform_length = model_directory_path + "CHB_Uniform_Length/"
 
-    del sampling_frequency_parameters, signal_cropping_parameters, padding_parameters, value_mapping_parameters, pid_distribution_parameters, dataset_class_transform_parameters, window_reshape_parameters, signal_normalization_parameters, neural_network_model_parameters, filter_shhs_data_parameters, filter_gif_data_parameters, gif_error_code_1, gif_error_code_2, gif_error_code_3, gif_error_code_4, gif_error_code_5
+    # Create directory to store configurations and results
+    create_directories_along_path(model_directory_path)
+
+
+    """
+    ==========================
+    Set Project Configuration
+    ==========================
+    """
+
+    project_configuration = copy.deepcopy(project_configuration_for_single_output_stage_classification)
+    task = "stage" # "stage" or "apnea"
 
     check_project_configuration(project_configuration)
 
@@ -5007,20 +4980,38 @@ if False:
         os.remove(model_directory_path + project_configuration_file)
     save_to_pickle(project_configuration, model_directory_path + project_configuration_file)
 
-    del project_configuration
+    """
+    ===========================
+    Perform Data Preprocessing
+    ===========================
+    """
+
+    # pay attention to the modeling task (sleep stage classification or sleep apnea detection)
+    run_dataset_preprocessing(
+        path_to_model_directory = model_directory_path,
+        path_to_shhs_directory_uniform_length = shhs_data_directory_path_uniform_length,
+        path_to_gif_directory_uniform_length = gif_data_directory_path_uniform_length,
+        path_to_shhs_directory_original_length = shhs_data_directory_path_original_length,
+        path_to_gif_directory_original_length = gif_data_directory_path_original_length,
+        task = task,
+    )
 
     """
     ==============================
     Training Neural Network Model
     ==============================
+
+    In this step, we create our dataset and train our network using the training pid.
     """
 
-    run_ssg_model_training(
+    # pay attention that you choose the appropriate hyperparameters based on the kind of model (single-output or multi-output)
+    run_model_training(
         path_to_model_directory = model_directory_path,
-        path_to_shhs_directory = shhs_directory_path,
-        path_to_gif_directory = gif_directory_path,
-        neural_network_hyperparameters_shhs = neural_network_hyperparameters_shhs,
-        neural_network_hyperparameters_gif = neural_network_hyperparameters_gif,
+        task = task,
+        path_to_shhs_directory = shhs_data_directory_path_uniform_length,
+        path_to_gif_directory = gif_data_directory_path_uniform_length,
+        neural_network_hyperparameters_shhs = single_output_neural_network_hyperparameters_shhs,
+        neural_network_hyperparameters_gif = single_output_neural_network_hyperparameters_gif,
     )
 
     """
@@ -5029,59 +5020,30 @@ if False:
     ===========================
     """
 
-    run_model_performance_evaluation_SSG(
+    run_model_performance_evaluation(
         path_to_model_directory = model_directory_path,
-        path_to_splitted_shhs_directory = shhs_directory_path,
-        path_to_complete_shhs_directory = shhs_directory_path,
-        path_to_splitted_gif_directory = gif_directory_path,
-        path_to_complete_gif_directory = gif_directory_path,
+        path_to_shhs_directory_uniform_length = shhs_data_directory_path_uniform_length,
+        path_to_gif_directory_uniform_length = gif_data_directory_path_uniform_length,
+        path_to_shhs_directory_original_length = shhs_data_directory_path_original_length,
+        path_to_gif_directory_original_length = gif_data_directory_path_original_length,
+        task = task,
     )
 
     """
-    ===========================================
-    Predict Sleep Phases for Non-Training Data
-    ===========================================
+    ========================================
+    Inference (Apply Model to Unknown Data)
+    ========================================
     """
 
-    unknown_dataset_paths = ["/Volumes/NaKo-UniHalle/RRI_and_MAD/NAKO-33a.pkl"]
+    nako_unknown_data_path = "Processed_NAKO/NAKO-609.pkl"
+    nako_results_path = "Inference_Results/NAKO-609.pkl"
 
-    # predict sleep stages for unknown data
-    for unknown_dataset_path in unknown_dataset_paths:
-        processed_unknown_dataset_path = "Processed_NAKO/" + os.path.split(unknown_dataset_path)[1]
-
-        run_model_predicting(
-            path_to_model_directory = model_directory_path,
-            path_to_unknown_dataset = unknown_dataset_path,
-            path_to_processed_unknown_dataset = processed_unknown_dataset_path,
-        )
-    
-    """
-    =========================
-    Access Predicted Results
-    =========================
-    """
-
-    results_data_manager = BigDataManager(directory_path = processed_unknown_dataset_path)
-    
-    # accessing random datapoint
-    random_datapoint = results_data_manager.load(random.randint(0, len(results_data_manager) - 1))
-    
-    # access predicted results of random datapoint (2D arrays, provide more information on sleep stage likelihood)
-    slp_predicted_probability = random_datapoint["SLP_predicted_probability"] # type: ignore
-    slp_predicted = random_datapoint["SLP_predicted"] # type: ignore
-
-    # summarize predicted results (1D arrays, provide final sleep stage prediction)
-    slp_predicted_probability_summarized = summarize_predicted_signal(predicted_signal = slp_predicted_probability, mode = "probability")
-    slp_predicted_summarized = summarize_predicted_signal(predicted_signal = slp_predicted, mode = "majority")
-
-
-# IDEAS: max conv channels for mad
-
-# compare different predictions for same time point depending on input signal (after splitting because of length)
-# > 2s, < 1/3s rauswerfen
-
-# remove class function to turn signal into wi dows in sleepdatamanager class
-
-# why predicted freuqency = 1/30?
-# why does accuracy not match? slp stage is reversed to 1/30, meaning one value becomes 4
-# make function that performs all data transformations and use this witin predicting and training
+    run_inference(
+        path_to_model_state = model_directory_path + model_state_after_shhs_gif_file,
+        path_to_data_directory = nako_unknown_data_path,
+        path_to_project_configuration = model_directory_path + project_configuration_file,
+        path_to_save_results = nako_results_path,
+        task = task,
+        inference = True,
+        data_length = None,
+    )
